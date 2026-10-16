@@ -12,9 +12,14 @@ import type {
   BoardUser,
   ChangeEvent,
   CreateBoardOptions,
+  DeleteOptions,
+  ElementPatch,
   ElementRecord,
+  MutateOptions,
   PageRecord,
+  PartialElement,
   PermissionHook,
+  UpdateOptions,
 } from './index.js';
 
 type Equal<A, B> =
@@ -84,5 +89,27 @@ export type Tests = [
   Expect<Equal<CreateBoardOptions['user'], BoardUser | null | undefined>>,
   Expect<Equal<CreateBoardOptions['limits'], Partial<BoardLimits> | undefined>>,
   Expect<Equal<CreateBoardOptions['permissions'], PermissionHook | undefined>>,
+  // BOARD-205: Uji tipe mutasi (create, update, delete)
+  Expect<
+    Equal<
+      Parameters<Board['create']>,
+      [element: PartialElement<Record<string, unknown>>, options?: MutateOptions]
+    >
+  >,
+  Expect<Equal<ReturnType<Board['create']>, Readonly<ElementRecord<unknown>> | undefined>>,
+  Expect<
+    Equal<
+      Parameters<Board['update']>,
+      [id: string, patch: ElementPatch<Record<string, unknown>>, options?: UpdateOptions]
+    >
+  >,
+  Expect<Equal<ReturnType<Board['update']>, Readonly<ElementRecord<unknown>> | undefined>>,
+  Expect<
+    Equal<Parameters<Board['delete']>, [ids: string | Iterable<string>, options?: DeleteOptions]>
+  >,
+  Expect<Equal<ReturnType<Board['delete']>, readonly string[]>>,
+  Expect<Equal<UpdateOptions['force'], boolean | undefined>>,
+  Expect<Equal<DeleteOptions['force'], boolean | undefined>>,
+  Expect<Equal<PartialElement<{ text: string }>['props'], Partial<{ text: string }> | undefined>>,
+  Expect<Equal<ElementPatch<{ text: string }>['props'], Partial<{ text: string }> | undefined>>,
 ];
-

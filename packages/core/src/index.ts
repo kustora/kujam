@@ -6,11 +6,7 @@
 
 import { deepClone } from './clone.js';
 import { createCommandRegistry, type BoardCommands } from './commands.js';
-import {
-  createElementRegistry,
-  type ElementRegistry,
-  type ResolveResult,
-} from './elements.js';
+import { createElementRegistry, type ElementRegistry, type ResolveResult } from './elements.js';
 import {
   createEmitter,
   reportUnhandled,
@@ -41,6 +37,17 @@ import {
   type BoardInputEvent,
   type BoardTools,
 } from './tools.js';
+import {
+  createElementRecord,
+  deleteElementRecords,
+  updateElementRecord,
+  type DeleteOptions,
+  type ElementPatch,
+  type MutateOptions,
+  type MutationContext,
+  type PartialElement,
+  type UpdateOptions,
+} from './mutate.js';
 import type { BoardDocument, CameraState, ElementRecord } from './types.js';
 import { CURRENT_SCHEMA_VERSION } from './types.js';
 import { InvalidDocumentError, validateDocument } from './validate.js';
@@ -129,6 +136,13 @@ export {
   type TransactOptions,
   type Transaction,
 } from './store.js';
+export {
+  type DeleteOptions,
+  type ElementPatch,
+  type MutateOptions,
+  type PartialElement,
+  type UpdateOptions,
+} from './mutate.js';
 
 /**
  * Bahasa UI yang didukung package.
@@ -301,8 +315,38 @@ export interface Board {
    * Melempar {@link InvalidDocumentError} bila tidak valid (state tidak berubah).
    */
   loadDocument(doc: BoardDocument): void;
+  /**
+   * Membuat elemen baru dengan nilai bawaan dan menyimpannya ke dokumen (BOARD-205).
+   *
+   * @returns Record elemen baru, atau `undefined` bila ditolak (misalnya props tidak lolos
+   *   skema tipe atau batas maksimum elemen tercapai).
+   * @beta
+   */
+  create<P = Record<string, unknown>>(
+    element: PartialElement<P>,
+    options?: MutateOptions,
+  ): Readonly<ElementRecord<P>> | undefined;
+  /**
+   * Memperbarui elemen yang sudah ada dengan patch sebagian (BOARD-205). Props digabung per kunci.
+   *
+   * @returns Record elemen yang diperbarui, atau `undefined` bila elemen tidak ditemukan, sedang
+   *   terkunci (tanpa `force`), atau props baru tidak lolos skema tipe.
+   * @beta
+   */
+  update<P = Record<string, unknown>>(
+    id: string,
+    patch: ElementPatch<P>,
+    options?: UpdateOptions,
+  ): Readonly<ElementRecord<P>> | undefined;
+  /**
+   * Menghapus elemen beserta anak-anak (frame/grup) dan binding yang menempel (BOARD-205).
+   *
+   * @returns Daftar ID record yang berhasil dihapus.
+   * @beta
+   */
+  delete(ids: string | Iterable<string>, options?: DeleteOptions): readonly string[];
   /** Record elemen dengan ID tersebut, atau `undefined` bila tidak ada atau bukan elemen. */
-  getElement(id: string): Readonly<ElementRecord> | undefined;
+  getElement<P = Record<string, unknown>>(id: string): Readonly<ElementRecord<P>> | undefined;
   /**
    * Menjalankan `fn` sebagai satu transaksi dan mengembalikan hasilnya.
    *
@@ -600,7 +644,11 @@ function resolveLimits(limits: unknown): Readonly<BoardLimits> {
       DEFAULT_BOARD_LIMITS.maxDocumentBytes,
     ),
     maxElements: checkInt('maxElements', limits.maxElements, DEFAULT_BOARD_LIMITS.maxElements),
-    maxDrawPoints: checkInt('maxDrawPoints', limits.maxDrawPoints, DEFAULT_BOARD_LIMITS.maxDrawPoints),
+    maxDrawPoints: checkInt(
+      'maxDrawPoints',
+      limits.maxDrawPoints,
+      DEFAULT_BOARD_LIMITS.maxDrawPoints,
+    ),
   });
 }
 
@@ -696,6 +744,17 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     if (disposed) throw new Error('Papan sudah di-dispose.');
   }
 
+  const mutationCtx: MutationContext = {
+    getDocument: () => store.getDocument(),
+    getElement: (id) => board.getElement(id),
+    transact: (fn, txOpts) => store.transact(fn, txOpts),
+    elements,
+    limits,
+    createId: () => board.createId(),
+    emitError,
+    assertUsable,
+  };
+
   const board: Board = {
     readOnly,
     locale,
@@ -707,6 +766,18 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     get disposed(): boolean {
       return disposed;
     },
+    create(element, opts) {
+      assertUsable();
+      return createElementRecord(mutationCtx, element, opts);
+    },
+    update(id, patch, opts) {
+      assertUsable();
+      return updateElementRecord(mutationCtx, id, patch, opts);
+    },
+    delete(ids, opts) {
+      assertUsable();
+      return deleteElementRecords(mutationCtx, ids, opts);
+    },
     getDocument(): Readonly<BoardDocument> {
       return store.getDocument();
     },
@@ -717,9 +788,9 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       tools.reset();
       store.replaceDocument(owned, 'load');
     },
-    getElement(id: string): Readonly<ElementRecord> | undefined {
+    getElement<P = Record<string, unknown>>(id: string): Readonly<ElementRecord<P>> | undefined {
       const rec = store.getRecord(id);
-      return rec?.kind === 'element' ? rec : undefined;
+      return rec?.kind === 'element' ? (rec as unknown as Readonly<ElementRecord<P>>) : undefined;
     },
     transact<T>(fn: (tx: Transaction) => T, txOptions?: TransactOptions): T {
       assertUsable();
