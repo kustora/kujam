@@ -5,6 +5,7 @@
  */
 
 import { deepClone } from './clone.js';
+import { createCommandRegistry, type BoardCommands } from './commands.js';
 import {
   createEmitter,
   reportUnhandled,
@@ -31,6 +32,14 @@ export { InvalidDocumentError, validateDocument, type ValidationResult } from '.
 export * from './schema.js';
 export * from './elements.js';
 export * from './geometry.js';
+export {
+  CommandError,
+  defineCommand,
+  type AnyCommandDefinition,
+  type BoardCommands,
+  type CommandDefinition,
+  type CommandErrorCode,
+} from './commands.js';
 export { createId, DEFAULT_ID_LENGTH, type IdGenerator } from './ids.js';
 export { compareIndex, indexAbove, indexBelow, indexBetween, indicesBetween } from './indexing.js';
 export type {
@@ -190,12 +199,22 @@ export interface Board {
    * `canUndo`/`canRedo` dipancarkan lewat event `history`.
    */
   readonly history: BoardHistory;
+  /**
+   * Menjalankan perintah terdaftar (BOARD-503).
+   *
+   * @returns `true` bila perintah dijalankan, `false` bila `isEnabled` menolak.
+   * @throws {@link CommandError} berkode `unknown-command` bila ID tidak terdaftar, atau `Error`
+   *   setelah `dispose`. Error dari `isEnabled` atau `run` diteruskan apa adanya.
+   */
+  run(id: string, args?: unknown): boolean;
+  /** Registri perintah papan ini: sumber command palette dan shortcut. */
+  readonly commands: BoardCommands;
   /** Mode baca saja (lihat {@link CreateBoardOptions.readOnly}). */
   readonly readOnly: boolean;
   readonly locale: BoardLocale;
   /**
-   * Melepas semua listener dan mengosongkan riwayat. Setelahnya `transact`, `loadDocument`,
-   * `undo`, dan `redo` melempar error.
+   * Melepas semua listener, perintah, dan riwayat. Setelahnya `transact`, `loadDocument`,
+   * `undo`, `redo`, dan `run` melempar error.
    */
   dispose(): void;
 }
@@ -306,8 +325,9 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     onStateChange: (state) => events.emit('history', state),
   });
   let camera: CameraState = Object.freeze({ x: 0, y: 0, zoom: 1 });
+  const commands = createCommandRegistry(() => board);
 
-  return {
+  const board: Board = {
     readOnly,
     locale,
     getDocument(): Readonly<BoardDocument> {
@@ -341,6 +361,11 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       return history.redo();
     },
     history: history.api,
+    run(id: string, args?: unknown): boolean {
+      if (disposed) throw new Error('Papan sudah di-dispose.');
+      return commands.run(id, args);
+    },
+    commands: commands.api,
     getCamera(): Readonly<CameraState> {
       return camera;
     },
@@ -360,8 +385,10 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     dispose(): void {
       disposed = true;
       events.clear();
+      commands.clear();
       history.dispose();
       store.dispose();
     },
   };
+  return board;
 }
