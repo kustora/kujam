@@ -44,4 +44,3 @@ export function Board({ board, className, style }: BoardProps): ReactElement {
     />
   );
 }
-

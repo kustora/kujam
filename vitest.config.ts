@@ -31,7 +31,14 @@ export default defineConfig({
           environment: 'node',
         },
       },
+      {
+        // BOARD-102/106/107: bukti aturan build dan lint bekerja terhadap fixture pelanggaran.
+        test: {
+          name: 'tooling',
+          include: ['tooling/**/*.test.ts'],
+          environment: 'node',
+        },
+      },
     ],
   },
 });
-

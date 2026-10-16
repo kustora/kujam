@@ -1,0 +1,13 @@
+# BOARD-114: keluaran build, cakupan, cache, dan berkas yang dihasilkan alat.
+dist/
+coverage/
+.turbo/
+node_modules/
+pnpm-lock.yaml
+*.tsbuildinfo
+playwright-report/
+test-results/
+
+# Baseline screenshot Playwright (BOARD-104).
+**/__screenshots__/
+**/*-snapshots/

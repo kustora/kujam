@@ -66,4 +66,3 @@ export function mountRenderer(board: Board, container: HTMLElement): BoardView {
     },
   };
 }
-

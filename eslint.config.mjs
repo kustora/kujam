@@ -1,3 +1,6 @@
+import { existsSync, readdirSync } from 'node:fs';
+import { URL } from 'node:url';
+
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
@@ -27,9 +30,50 @@ const FORBIDDEN_DOMAIN_TERMS_REGEX = [
 // API platform yang kebetulan memuat istilah di atas dan boleh dipakai.
 const ALLOWED_IDENTIFIERS_REGEX = '^(postMessage|onmessage)$';
 
+// BOARD-106: package @kujam/* yang boleh diimpor oleh tiap package, mengikuti kolom
+// "Bergantung pada" di tabel package PRD. Arahnya satu: core <- renderer <- ui/react/vue/export;
+// shapes, sync-yjs, storage-*, dan server hanya bersandar pada core. Package baru wajib
+// didaftarkan di sini; bila tidak, memuat konfigurasi ini melempar error.
+const KUJAM_ALLOWED_IMPORTS = {
+  core: [],
+  renderer: ['core'],
+  shapes: ['core'],
+  'sync-yjs': ['core'],
+  'storage-memory': ['core'],
+  'storage-indexeddb': ['core'],
+  'storage-http': ['core'],
+  server: ['core'],
+  ui: ['core', 'renderer'],
+  react: ['core', 'renderer'],
+  vue: ['core', 'renderer'],
+  export: ['core', 'renderer'],
+};
+
+const packagesDir = new URL('./packages/', import.meta.url);
+const unregisteredPackages = readdirSync(packagesDir, { withFileTypes: true })
+  .filter(
+    (entry) =>
+      entry.isDirectory() && existsSync(new URL(`${entry.name}/package.json`, packagesDir)),
+  )
+  .map((entry) => entry.name)
+  .filter((name) => !Object.hasOwn(KUJAM_ALLOWED_IMPORTS, name));
+if (unregisteredPackages.length > 0) {
+  throw new Error(
+    `BOARD-106: package berikut belum terdaftar di KUJAM_ALLOWED_IMPORTS (eslint.config.mjs): ${unregisteredPackages.join(', ')}`,
+  );
+}
+
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/node_modules/**', '**/.turbo/**', '**/coverage/**', 'docs/**'],
+    ignores: [
+      '**/dist/**',
+      '**/node_modules/**',
+      '**/.turbo/**',
+      '**/coverage/**',
+      'docs/**',
+      // BOARD-106: contoh pelanggaran sengaja; dilint oleh tooling/architecture.test.ts.
+      'tooling/fixtures/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
@@ -53,7 +97,8 @@ export default tseslint.config(
     },
   },
   {
-    // BOARD-106: @kujam/core tidak boleh mengimpor package @kujam/* lain atau menyentuh DOM globals
+    // BOARD-106: @kujam/core harus bebas DOM. Pemeriksaan lengkapnya ada di typecheck
+    // (`lib: ["ES2022"]` tanpa `dom`); aturan ini memberi pesan yang jelas untuk kasus umum.
     files: ['packages/core/src/**/*.ts'],
     rules: {
       'no-restricted-globals': [
@@ -71,44 +116,27 @@ export default tseslint.config(
           message: 'BOARD-106: @kujam/core harus bebas DOM.',
         },
       ],
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              group: ['@kujam/*'],
-              message:
-                'BOARD-106: @kujam/core adalah lapisan paling dalam dan tidak boleh mengimpor package @kujam/* lain.',
-            },
-          ],
-        },
-      ],
     },
   },
-  {
-    // BOARD-106: @kujam/renderer hanya boleh mengimpor @kujam/core, tidak boleh mengimpor lapisan luar
-    files: ['packages/renderer/src/**/*.ts'],
+  // BOARD-106: arah impor antar-lapisan, satu blok per package.
+  ...Object.entries(KUJAM_ALLOWED_IMPORTS).map(([pkg, allowed]) => ({
+    files: [`packages/${pkg}/src/**/*.{ts,tsx}`],
     rules: {
       'no-restricted-imports': [
         'error',
         {
           patterns: [
             {
-              group: [
-                '@kujam/ui',
-                '@kujam/react',
-                '@kujam/vue',
-                '@kujam/export',
-                '@kujam/server',
-                '@kujam/sync-yjs',
-                '@kujam/storage-*',
-              ],
+              // Pola gaya gitignore: larang semua @kujam/*, lalu buka yang diizinkan.
+              group: ['@kujam/*', ...allowed.map((dep) => `!@kujam/${dep}`)],
               message:
-                'BOARD-106: @kujam/renderer tidak boleh mengimpor lapisan luar (ui, react, vue, export, server, sync, storage).',
+                allowed.length === 0
+                  ? 'BOARD-106: @kujam/core adalah lapisan paling dalam dan tidak boleh mengimpor package @kujam/* lain.'
+                  : `BOARD-106: @kujam/${pkg} hanya boleh mengimpor ${allowed.map((dep) => `@kujam/${dep}`).join(', ')}; lapisan dalam tidak boleh mengimpor lapisan luar.`,
             },
           ],
         },
       ],
     },
-  },
+  })),
 );

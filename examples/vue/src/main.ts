@@ -9,4 +9,3 @@ createApp({
     return h(Board, { board });
   },
 }).mount('#app');
-

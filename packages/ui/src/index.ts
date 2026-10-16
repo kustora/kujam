@@ -32,4 +32,3 @@ export function mountDefaultUi(options: MountUiOptions): { unmount(): void } {
     },
   };
 }
-

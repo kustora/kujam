@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["*.ts", "../packages/core/tsup.config.ts"],
+  "exclude": ["fixtures"]
+}

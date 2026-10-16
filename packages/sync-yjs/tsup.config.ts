@@ -9,4 +9,3 @@ export default defineConfig({
   treeshake: true,
   external: ['@kujam/core', 'yjs', 'y-protocols', 'y-indexeddb'],
 });
-

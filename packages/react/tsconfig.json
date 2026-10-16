@@ -11,4 +11,3 @@
   "exclude": ["dist", "node_modules", "src/**/*.test.ts", "src/**/*.test.tsx"],
   "references": [{ "path": "../core" }, { "path": "../renderer" }]
 }
-

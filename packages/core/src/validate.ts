@@ -189,3 +189,19 @@ export class InvalidDocumentError extends Error {
     this.errors = errors;
   }
 }
+
+/**
+ * Memvalidasi struktur satu record (dipakai store saat record ditulis dalam transaksi).
+ * Mengembalikan daftar pesan error; kosong berarti valid.
+ *
+ * @internal
+ */
+export function validateRecordShape(rec: unknown): string[] {
+  const errors: string[] = [];
+  const id = isPlainObject(rec) && typeof rec.id === 'string' ? rec.id : '';
+  if (isPlainObject(rec) && id === '') {
+    errors.push('Record wajib memiliki id berupa string tidak kosong.');
+  }
+  validateRecord(id, rec, errors);
+  return errors;
+}

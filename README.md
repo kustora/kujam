@@ -73,4 +73,3 @@ pnpm lint
    - `@kujam/renderer` hanya bergantung pada `@kujam/core` dan tidak mengimpor lapisan luar (`ui`, `react`, `vue`, `export`, `server`, `sync-yjs`, `storage-*`).
 3. **Agnostik Domain (`BOARD-107`):**
    - ESLint menolak identifier beristilah domain aplikasi (`post`, `task`, `brand`, `approval`, `campaign`, `kampanye`, `tayang`) di dalam `packages/*/src`.
-

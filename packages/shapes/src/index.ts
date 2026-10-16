@@ -49,4 +49,3 @@ export const DEFAULT_TOOL_IDS = [
  * @public
  */
 export type DefaultToolId = (typeof DEFAULT_TOOL_IDS)[number];
-

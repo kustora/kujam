@@ -6,4 +6,3 @@ if (container) {
   const board = createBoard({ locale: 'id' });
   mountRenderer(board, container);
 }
-

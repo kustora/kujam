@@ -15,11 +15,16 @@ export const CURRENT_SCHEMA_VERSION = 1;
  * @public
  */
 export interface ElementRecord<P = Record<string, unknown>> {
+  /** ID unik, dibuat di klien (lihat `createId`). */
   id: string;
   kind: 'element';
+  /** Tipe elemen, misalnya `'sticky'`, `'draw'`, `'geo'`, atau tipe kustom. */
   type: string;
+  /** ID page tempat elemen berada. */
   pageId: string;
+  /** ID frame atau grup induk, atau `null` bila langsung di page. */
   parentId: string | null;
+  /** Fractional index untuk urutan lapisan (lihat `indexBetween`). */
   index: string;
   x: number;
   y: number;
@@ -27,8 +32,11 @@ export interface ElementRecord<P = Record<string, unknown>> {
   w: number;
   h: number;
   locked: boolean;
+  /** Opasitas 0 sampai 1. */
   opacity: number;
+  /** Isi khusus per tipe, divalidasi skema tipe. */
   props: P;
+  /** Bebas untuk pemakai; package tidak pernah membaca atau mengubah isinya. */
   meta: Record<string, unknown>;
 }
 
@@ -42,6 +50,7 @@ export interface BindingRecord {
   kind: 'binding';
   fromId: string;
   toId: string;
+  /** Posisi relatif 0..1 di tepi elemen tujuan. */
   anchor: { x: number; y: number };
 }
 
@@ -54,7 +63,9 @@ export interface PageRecord {
   id: string;
   kind: 'page';
   name: string;
+  /** Fractional index untuk urutan page. */
   index: string;
+  /** Bebas untuk pemakai; package tidak pernah membaca atau mengubah isinya. */
   meta: Record<string, unknown>;
 }
 
@@ -69,6 +80,7 @@ export interface AssetRecord {
   mimeType: string;
   w: number;
   h: number;
+  /** Bebas untuk pemakai; package tidak pernah membaca atau mengubah isinya. */
   meta: Record<string, unknown>;
 }
 
@@ -85,8 +97,11 @@ export type BoardRecord = ElementRecord | BindingRecord | PageRecord | AssetReco
  * @public
  */
 export interface BoardDocument {
+  /** Versi skema; naik setiap ada migrasi. Lihat {@link CURRENT_SCHEMA_VERSION}. */
   schemaVersion: number;
+  /** Bebas untuk pemakai; package tidak pernah membaca atau mengubah isinya. */
   meta: Record<string, unknown>;
+  /** Kumpulan record datar, dikunci dengan `id` record. */
   records: Record<string, BoardRecord>;
 }
 

@@ -31,4 +31,3 @@ PRD Package Canvas Jam memakai `@board/*` sebagai nama sementara untuk keluarga 
 
 - Seluruh referensi `@board/*` di implementasi kode menggunakan `@kujam/*`.
 - Aturan lint `BOARD-106` (arah impor & bebas DOM di `@kujam/core`) dan `BOARD-107` (larangan istilah domain Tayang di `packages/*/src`) ditegakkan otomatis sejak commit pertama.
-

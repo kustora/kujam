@@ -17,4 +17,3 @@ Untuk menjaga agar permukaan API `@kujam/*` tetap stabil, agnostik terhadap doma
    - Perubahan pada simbol `@public` wajib disetujui pemilik teknis.
    - Perubahan pada simbol `@internal` cukup disetujui satu reviewer.
    - Tidak boleh ada istilah spesifik domain Tayang (`post`, `task`, `brand`, `approval`, `campaign`, `kampanye`, `tayang`) di dalam `packages/*/src`.
-
