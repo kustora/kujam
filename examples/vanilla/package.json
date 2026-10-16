@@ -1,0 +1,22 @@
+{
+  "name": "@kujam/example-vanilla",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Contoh penggunaan @kujam/core + @kujam/renderer dengan Vanilla JS/TS",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@kujam/core": "workspace:*",
+    "@kujam/renderer": "workspace:*",
+    "@kujam/shapes": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^6.2.0"
+  }
+}
+

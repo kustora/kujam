@@ -1,0 +1,46 @@
+{
+  "name": "kujam-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Keluarga package whiteboard agnostik @kujam/* (Canvas Jam)",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@10.6.5",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "playground": "pnpm --filter @kujam/playground dev",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:core": "vitest run --project core",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "turbo run typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write \"**/*.{ts,tsx,vue,js,mjs,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,vue,js,mjs,json,md}\"",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "clean": "turbo run clean && rm -rf node_modules/.cache .turbo coverage"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.28.1",
+    "@eslint/js": "^9.21.0",
+    "@types/node": "^22.13.5",
+    "@vitest/coverage-v8": "^3.0.7",
+    "eslint": "^9.21.0",
+    "prettier": "^3.5.2",
+    "tsup": "^8.4.0",
+    "turbo": "^2.4.4",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.25.0",
+    "vitest": "^3.0.7"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

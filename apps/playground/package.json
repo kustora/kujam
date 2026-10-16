@@ -1,0 +1,30 @@
+{
+  "name": "@kujam/playground",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Playground pengembangan dan debugging untuk keluarga package @kujam/* (BOARD-2401)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@kujam/core": "workspace:*",
+    "@kujam/export": "workspace:*",
+    "@kujam/react": "workspace:*",
+    "@kujam/renderer": "workspace:*",
+    "@kujam/shapes": "workspace:*",
+    "@kujam/storage-indexeddb": "workspace:*",
+    "@kujam/storage-memory": "workspace:*",
+    "@kujam/sync-yjs": "workspace:*",
+    "@kujam/ui": "workspace:*",
+    "@kujam/vue": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^6.2.0"
+  }
+}
+

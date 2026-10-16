@@ -1,0 +1,5 @@
+# BOARD-002 / BOARD-101c: Pemilik teknis package @kujam/*
+* @riziq
+/packages/*/src/ @riziq
+/docs/adr/ @riziq
+

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "fixed": [
+    [
+      "@kujam/core",
+      "@kujam/renderer",
+      "@kujam/shapes",
+      "@kujam/sync-yjs",
+      "@kujam/storage-memory",
+      "@kujam/storage-indexeddb",
+      "@kujam/storage-http",
+      "@kujam/ui",
+      "@kujam/react",
+      "@kujam/vue",
+      "@kujam/export",
+      "@kujam/server"
+    ]
+  ],
+  "linked": [],
+  "access": "restricted",
+  "baseBranch": "main",
+  "updateInternalDependencies": "patch",
+  "ignore": [
+    "@kujam/playground",
+    "@kujam/example-vanilla",
+    "@kujam/example-react",
+    "@kujam/example-vue"
+  ]
+}
+

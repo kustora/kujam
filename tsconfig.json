@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.base.json",
+  "files": [],
+  "references": [
+    { "path": "./packages/core" },
+    { "path": "./packages/renderer" },
+    { "path": "./packages/shapes" },
+    { "path": "./packages/sync-yjs" },
+    { "path": "./packages/storage-memory" },
+    { "path": "./packages/storage-indexeddb" },
+    { "path": "./packages/storage-http" },
+    { "path": "./packages/ui" },
+    { "path": "./packages/react" },
+    { "path": "./packages/vue" },
+    { "path": "./packages/export" },
+    { "path": "./packages/server" }
+  ]
+}
+

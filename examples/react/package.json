@@ -1,0 +1,26 @@
+{
+  "name": "@kujam/example-react",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Contoh penggunaan @kujam/react dengan React 19",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@kujam/core": "workspace:*",
+    "@kujam/react": "workspace:*",
+    "@kujam/shapes": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "vite": "^6.2.0"
+  }
+}
+

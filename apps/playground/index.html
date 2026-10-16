@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@kujam/* Developer Playground</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body,
+      #app {
+        width: 100%;
+        height: 100%;
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
+        background: #0f172a;
+        color: #f8fafc;
+        overflow: hidden;
+      }
+      .playground-shell {
+        display: grid;
+        grid-template-rows: 48px 1fr;
+        grid-template-columns: 260px 1fr 300px;
+        grid-template-areas:
+          'topbar topbar topbar'
+          'left canvas right';
+        width: 100%;
+        height: 100%;
+      }
+      .playground-shell[data-bare='true'] {
+        grid-template-rows: 1fr;
+        grid-template-columns: 1fr;
+        grid-template-areas: 'canvas';
+      }
+      .playground-shell[data-bare='true'] .topbar,
+      .playground-shell[data-bare='true'] .panel-left,
+      .playground-shell[data-bare='true'] .panel-right {
+        display: none;
+      }
+      .topbar {
+        grid-area: topbar;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        background: #1e293b;
+        border-bottom: 1px solid #334155;
+        font-size: 13px;
+      }
+      .panel-left {
+        grid-area: left;
+        background: #1e293b;
+        border-right: 1px solid #334155;
+        padding: 16px;
+        overflow-y: auto;
+        font-size: 13px;
+      }
+      .canvas-stage {
+        grid-area: canvas;
+        position: relative;
+        background: radial-gradient(#334155 1px, transparent 1px);
+        background-size: 20px 20px;
+        background-color: #0f172a;
+      }
+      .panel-right {
+        grid-area: right;
+        background: #1e293b;
+        border-left: 1px solid #334155;
+        padding: 16px;
+        overflow-y: auto;
+        font-size: 12px;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 9999px;
+        background: #3b82f6;
+        color: #fff;
+        font-weight: 600;
+        font-size: 11px;
+      }
+      pre {
+        margin-top: 8px;
+        padding: 10px;
+        border-radius: 6px;
+        background: #0f172a;
+        border: 1px solid #334155;
+        color: #93c5fd;
+        overflow-x: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
+
