@@ -6,7 +6,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       include: ['packages/*/src/**/*.ts'],
-      exclude: ['**/*.test.ts', '**/*.spec.ts'],
+      exclude: ['**/*.test.ts', '**/*.test-d.ts', '**/*.spec.ts'],
       thresholds: {
         'packages/core/src/**/*.ts': {
           lines: 90,

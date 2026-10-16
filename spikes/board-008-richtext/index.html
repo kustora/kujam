@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BOARD-008 Editor Lab</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 24px;
+        background: #f6f5f2;
+      }
+      #editor {
+        background: #fff3a3;
+        width: 320px;
+        min-height: 160px;
+        padding: 12px;
+        border-radius: 4px;
+      }
+      #editor .ql-editor {
+        outline: none;
+        white-space: pre-wrap;
+      }
+      pre {
+        font-size: 12px;
+        max-width: 640px;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="editor"></div>
+    <pre id="out"></pre>
+    <script type="module" src="/src/page.ts"></script>
+  </body>
+</html>

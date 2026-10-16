@@ -121,6 +121,6 @@ Opsi kecil yang langsung disertakan karena dibutuhkan untuk batas keamanan (BOAR
 
 ## Konsekuensi
 
-- BOARD-203 bisa dimulai. Kode prototipe dipindah ke `packages/core/src/schema/`, lalu ditambah tes unit (cakupan 90%), TSDoc, dan tag `@public`. Tipe internal `_check`, `_t`, dan `_opt` diberi tag `@internal` atau disembunyikan di laporan API.
+- BOARD-203 bisa dimulai. Kode prototipe dipindah ke `packages/core/src/schema.ts`, lalu ditambah tes unit (cakupan 90%), TSDoc, dan tag `@public`. Tipe internal `_check`, `_t`, dan `_opt` diberi tag `@internal` atau disembunyikan di laporan API.
 - Tim memelihara sekitar 200 baris kode validasi sendiri. Tambahan primitif harus lewat review pemilik agar ukuran tetap di bawah 3 KB. Ukurannya diawasi anggaran bundle BOARD-2103.
 - Folder `spikes/board-007-schema/` boleh dihapus setelah BOARD-203 selesai.

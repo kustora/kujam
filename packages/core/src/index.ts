@@ -12,6 +12,7 @@ import { InvalidDocumentError, validateDocument } from './validate.js';
 export * from './types.js';
 export { deepClone } from './clone.js';
 export { InvalidDocumentError, validateDocument, type ValidationResult } from './validate.js';
+export * from './schema.js';
 
 /**
  * Bahasa UI yang didukung package.
