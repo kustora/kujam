@@ -1,5 +1,3 @@
-// Uji tipe untuk BOARD-201 & BOARD-211: bentuk tipe dokumen & antarmuka papan sesuai PRD.
-// Diperiksa oleh `tsc --noEmit`.
 import type {
   AssetAdapter,
   AssetRecord,
@@ -10,6 +8,8 @@ import type {
   BoardRecord,
   BoardResolvers,
   BoardUser,
+  Bounds,
+  BoxBounds,
   ChangeEvent,
   CreateBoardOptions,
   DeleteOptions,
@@ -19,8 +19,17 @@ import type {
   PageRecord,
   PartialElement,
   PermissionHook,
+  QueryFilter,
+  RectBounds,
+  SpatialIndex,
   UpdateOptions,
 } from './index.js';
+
+declare module './index.js' {
+  interface BoardElementTypes {
+    'custom-sticky': { note: string; priority: number };
+  }
+}
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
@@ -112,4 +121,22 @@ export type Tests = [
   Expect<Equal<DeleteOptions['force'], boolean | undefined>>,
   Expect<Equal<PartialElement<{ text: string }>['props'], Partial<{ text: string }> | undefined>>,
   Expect<Equal<ElementPatch<{ text: string }>['props'], Partial<{ text: string }> | undefined>>,
+  // BOARD-206 & BOARD-607: Uji tipe baca (query, spatial, typed props via declaration merging)
+  Expect<Equal<Parameters<Board['query']>, [filter?: QueryFilter]>>,
+  Expect<Equal<ReturnType<Board['query']>, readonly Readonly<ElementRecord<unknown>>[]>>,
+  Expect<Equal<Board['spatial'], SpatialIndex>>,
+  Expect<Equal<Bounds, BoxBounds | RectBounds>>,
+  Expect<
+    Equal<typeof _customEl, Readonly<ElementRecord<{ note: string; priority: number }>> | undefined>
+  >,
+  Expect<
+    Equal<
+      typeof _customQuery,
+      readonly Readonly<ElementRecord<{ note: string; priority: number }>>[]
+    >
+  >,
 ];
+
+declare const _dummyBoard: Board;
+declare const _customEl: ReturnType<typeof _dummyBoard.getElement<'custom-sticky'>>;
+declare const _customQuery: ReturnType<typeof _dummyBoard.query<'custom-sticky'>>;

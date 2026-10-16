@@ -48,6 +48,8 @@ import {
   type PartialElement,
   type UpdateOptions,
 } from './mutate.js';
+import { createSpatialIndex, type SpatialIndex } from './spatial.js';
+import { queryElements, type QueryFilter } from './query.js';
 import type { BoardDocument, CameraState, ElementRecord } from './types.js';
 import { CURRENT_SCHEMA_VERSION } from './types.js';
 import { InvalidDocumentError, validateDocument } from './validate.js';
@@ -143,6 +145,47 @@ export {
   type PartialElement,
   type UpdateOptions,
 } from './mutate.js';
+export {
+  computeElementAABB,
+  createSpatialIndex,
+  isBoxBounds,
+  isRectBounds,
+  normalizeBounds,
+  type Bounds,
+  type BoxBounds,
+  type RectBounds,
+  type SpatialIndex,
+} from './spatial.js';
+export { queryElements, type QueryFilter } from './query.js';
+
+/**
+ * Peta global tipe elemen ke tipe props untuk declaration merging (BOARD-607).
+ *
+ * @example
+ * ```ts
+ * declare module '@kujam/core' {
+ *   interface BoardElementTypes {
+ *     'custom-card': { title: string; count: number };
+ *   }
+ * }
+ * ```
+ * @public
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface BoardElementTypes {}
+
+/**
+ * Tipe pembantu untuk merefleksikan props dari nama tipe elemen terdaftar atau fallback generik (BOARD-607).
+ *
+ * @public
+ */
+export type ResolveElementProps<T> = T extends keyof BoardElementTypes
+  ? BoardElementTypes[T]
+  : unknown extends T
+    ? T
+    : T extends Record<string, unknown>
+      ? T
+      : Record<string, unknown>;
 
 /**
  * Bahasa UI yang didukung package.
@@ -322,10 +365,10 @@ export interface Board {
    *   skema tipe atau batas maksimum elemen tercapai).
    * @beta
    */
-  create<P = Record<string, unknown>>(
-    element: PartialElement<P>,
+  create<T = Record<string, unknown>>(
+    element: PartialElement<ResolveElementProps<T>>,
     options?: MutateOptions,
-  ): Readonly<ElementRecord<P>> | undefined;
+  ): Readonly<ElementRecord<ResolveElementProps<T>>> | undefined;
   /**
    * Memperbarui elemen yang sudah ada dengan patch sebagian (BOARD-205). Props digabung per kunci.
    *
@@ -333,11 +376,11 @@ export interface Board {
    *   terkunci (tanpa `force`), atau props baru tidak lolos skema tipe.
    * @beta
    */
-  update<P = Record<string, unknown>>(
+  update<T = Record<string, unknown>>(
     id: string,
-    patch: ElementPatch<P>,
+    patch: ElementPatch<ResolveElementProps<T>>,
     options?: UpdateOptions,
-  ): Readonly<ElementRecord<P>> | undefined;
+  ): Readonly<ElementRecord<ResolveElementProps<T>>> | undefined;
   /**
    * Menghapus elemen beserta anak-anak (frame/grup) dan binding yang menempel (BOARD-205).
    *
@@ -346,7 +389,19 @@ export interface Board {
    */
   delete(ids: string | Iterable<string>, options?: DeleteOptions): readonly string[];
   /** Record elemen dengan ID tersebut, atau `undefined` bila tidak ada atau bukan elemen. */
-  getElement<P = Record<string, unknown>>(id: string): Readonly<ElementRecord<P>> | undefined;
+  getElement<T = Record<string, unknown>>(
+    id: string,
+  ): Readonly<ElementRecord<ResolveElementProps<T>>> | undefined;
+  /**
+   * Mencari elemen dalam dokumen berdasarkan filter tipe, page, parent, dan batas spasial (BOARD-206).
+   *
+   * @typeParam T - Nama tipe elemen terdaftar di {@link BoardElementTypes} atau tipe props kustom.
+   * @returns Daftar record elemen yang cocok, terurut deterministik dari lapisan terbawah ke teratas.
+   * @public
+   */
+  query<T = Record<string, unknown>>(
+    filter?: QueryFilter,
+  ): readonly Readonly<ElementRecord<ResolveElementProps<T>>>[];
   /**
    * Menjalankan `fn` sebagai satu transaksi dan mengembalikan hasilnya.
    *
@@ -493,6 +548,12 @@ export interface Board {
    * @public
    */
   readonly disposed: boolean;
+  /**
+   * Indeks spasial R-tree (rbush) untuk pencarian area dan culling viewport (BOARD-404, BOARD-206).
+   *
+   * @public
+   */
+  readonly spatial: SpatialIndex;
   /**
    * Menjalankan teardown plugin dalam urutan terbalik lalu melepas semua listener, perintah, tool,
    * dan riwayat. Aman dipanggil lebih dari sekali. Setelahnya `transact`, `loadDocument`, `undo`,
@@ -703,12 +764,39 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     events.emit('error', Object.freeze({ code, message, cause, eventType }));
   }
 
+  const elements = createElementRegistry();
+  const spatial = createSpatialIndex((el) => {
+    const def = elements.get(el.type);
+    return def?.geometry ? def.geometry(el as never) : undefined;
+  });
+
   const store = createRecordStore(
     options.document ? toOwnedDocument(options.document) : createEmptyDocument(),
     {
       freeze,
       readOnly,
       onChange: (event) => {
+        // Perbarui indeks spasial secara inkremental (BOARD-404, BOARD-206)
+        if (event.origin === 'load') {
+          spatial.clear();
+          spatial.load(
+            Object.values(store.getDocument().records).filter(
+              (r): r is ElementRecord => r.kind === 'element',
+            ),
+          );
+        } else {
+          for (const rec of Object.values(event.added)) {
+            if (rec.kind === 'element') spatial.insert(rec);
+          }
+          for (const update of Object.values(event.updated)) {
+            if (update.after.kind === 'element') spatial.update(update.after);
+            else if (update.before.kind === 'element') spatial.remove(update.before.id);
+          }
+          for (const rec of Object.values(event.removed)) {
+            if (rec.kind === 'element') spatial.remove(rec.id);
+          }
+        }
+
         // Transaksi interaksi tool dicatat sebagai satu langkah saat interaksi selesai.
         if (interaction.capturing) interaction.observe(event);
         // Riwayat diperbarui dulu agar listener `change` membaca canUndo/canRedo yang baru.
@@ -718,12 +806,18 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       },
     },
   );
+
+  // Inisialisasi indeks spasial dari dokumen awal
+  spatial.load(
+    Object.values(store.getDocument().records).filter(
+      (r): r is ElementRecord => r.kind === 'element',
+    ),
+  );
   const history = createLocalHistory(store, {
     limit: historyLimit,
     onStateChange: (state) => events.emit('history', state),
   });
   let camera: CameraState = Object.freeze({ x: 0, y: 0, zoom: 1 });
-  const elements = createElementRegistry();
   const commands = createCommandRegistry(() => board);
   const interaction = createInteraction(store, history);
   const tools = createToolRuntime({
@@ -783,15 +877,33 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     },
     loadDocument(doc: BoardDocument): void {
       assertUsable();
-      const owned = toOwnedDocument(doc);
+      let currentDoc = doc;
+      for (const plugin of plugins.api.list()) {
+        if (plugin.migrations) {
+          let step = plugin.migrations[currentDoc.schemaVersion];
+          while (typeof step === 'function') {
+            const prevVersion = currentDoc.schemaVersion;
+            currentDoc = step(currentDoc);
+            if (currentDoc.schemaVersion === prevVersion) break;
+            step = plugin.migrations[currentDoc.schemaVersion];
+          }
+        }
+      }
+      const owned = toOwnedDocument(currentDoc);
       // Diff interaksi yang berlangsung tidak berlaku untuk dokumen baru.
       tools.reset();
+      history.api.clear();
       store.replaceDocument(owned, 'load');
     },
-    getElement<P = Record<string, unknown>>(id: string): Readonly<ElementRecord<P>> | undefined {
+    getElement(id: string) {
       const rec = store.getRecord(id);
-      return rec?.kind === 'element' ? (rec as unknown as Readonly<ElementRecord<P>>) : undefined;
+      return rec?.kind === 'element' ? (rec as never) : undefined;
     },
+    query(filter) {
+      assertUsable();
+      return queryElements(store.getDocument(), spatial, filter) as never;
+    },
+    spatial,
     transact<T>(fn: (tx: Transaction) => T, txOptions?: TransactOptions): T {
       assertUsable();
       return store.transact(fn, txOptions);
@@ -865,6 +977,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
         plugins.dispose();
       } finally {
         disposed = true;
+        spatial.clear();
         events.clear();
         commands.clear();
         tools.clear();
