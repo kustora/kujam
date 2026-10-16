@@ -1,0 +1,444 @@
+{
+  "label": "pw-webkit",
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Safari/605.1.15",
+  "dpr": 2,
+  "viewport": {
+    "w": 1440,
+    "h": 900
+  },
+  "refreshMs": 16.66,
+  "elementCount": 5000,
+  "cardCount": 300,
+  "durationMs": 6000,
+  "modes": [
+    {
+      "mode": "canvas",
+      "loadMs": 65.5,
+      "jsHeapMB": null,
+      "memorySource": "tidak tersedia di browser ini"
+    },
+    {
+      "mode": "canvas-nocull",
+      "loadMs": 32.8,
+      "jsHeapMB": null,
+      "memorySource": "tidak tersedia di browser ini"
+    },
+    {
+      "mode": "svg",
+      "loadMs": 116.6,
+      "jsHeapMB": null,
+      "memorySource": "tidak tersedia di browser ini"
+    },
+    {
+      "mode": "canvas+html",
+      "loadMs": 42.7,
+      "jsHeapMB": null,
+      "memorySource": "tidak tersedia di browser ini"
+    },
+    {
+      "mode": "canvas+html-nolod",
+      "loadMs": 67,
+      "jsHeapMB": null,
+      "memorySource": "tidak tersedia di browser ini"
+    },
+    {
+      "mode": "canvas+html",
+      "loadMs": 60.1,
+      "jsHeapMB": null,
+      "memorySource": "tidak tersedia di browser ini"
+    },
+    {
+      "mode": "canvas+html-nolod",
+      "loadMs": 66.6,
+      "jsHeapMB": null,
+      "memorySource": "tidak tersedia di browser ini"
+    },
+    {
+      "mode": "canvas+html",
+      "loadMs": 50,
+      "jsHeapMB": null,
+      "memorySource": "tidak tersedia di browser ini"
+    },
+    {
+      "mode": "canvas+html-nowc",
+      "loadMs": 49.9,
+      "jsHeapMB": null,
+      "memorySource": "tidak tersedia di browser ini"
+    },
+    {
+      "mode": "canvas+html-cull",
+      "loadMs": 66.9,
+      "jsHeapMB": null,
+      "memorySource": "tidak tersedia di browser ini"
+    },
+    {
+      "mode": "canvas+html-zoomhide",
+      "loadMs": 66.9,
+      "jsHeapMB": null,
+      "memorySource": "tidak tersedia di browser ini"
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "canvas/pan-z1",
+      "frames": 360,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.38,
+        "p99": 17.68,
+        "max": 18.32
+      },
+      "scriptMs": {
+        "p50": 0.36,
+        "p95": 0.62,
+        "max": 0.92
+      },
+      "longFramePct": 0,
+      "avgDrawn": 57
+    },
+    {
+      "name": "canvas/zoom-sweep",
+      "frames": 360,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.44,
+        "p99": 17.72,
+        "max": 18.42
+      },
+      "scriptMs": {
+        "p50": 0.88,
+        "p95": 4.64,
+        "max": 5.56
+      },
+      "longFramePct": 0,
+      "avgDrawn": 1320
+    },
+    {
+      "name": "canvas/fit-all",
+      "frames": 360,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17,
+        "p99": 17.68,
+        "max": 18.48
+      },
+      "scriptMs": {
+        "p50": 4.26,
+        "p95": 5.32,
+        "max": 6.76
+      },
+      "longFramePct": 0,
+      "avgDrawn": 5000
+    },
+    {
+      "name": "canvas-nocull/pan-z1",
+      "frames": 360,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.16,
+        "p99": 17.66,
+        "max": 17.74
+      },
+      "scriptMs": {
+        "p50": 3.94,
+        "p95": 4.68,
+        "max": 5.02
+      },
+      "longFramePct": 0,
+      "avgDrawn": 5000
+    },
+    {
+      "name": "svg/pan-z1",
+      "frames": 231,
+      "avgFps": 38.6,
+      "frameMs": {
+        "p50": 25.82,
+        "p95": 27,
+        "p99": 27.68,
+        "max": 29.32
+      },
+      "scriptMs": {
+        "p50": 0.02,
+        "p95": 0.04,
+        "max": 0.04
+      },
+      "longFramePct": 100,
+      "avgDrawn": 5000
+    },
+    {
+      "name": "svg/zoom-sweep",
+      "frames": 192,
+      "avgFps": 32,
+      "frameMs": {
+        "p50": 29.6,
+        "p95": 39.6,
+        "p99": 55.48,
+        "max": 79.28
+      },
+      "scriptMs": {
+        "p50": 0.02,
+        "p95": 0.04,
+        "max": 0.06
+      },
+      "longFramePct": 100,
+      "avgDrawn": 5000
+    },
+    {
+      "name": "svg/fit-all",
+      "frames": 171,
+      "avgFps": 28.6,
+      "frameMs": {
+        "p50": 34.68,
+        "p95": 37.78,
+        "p99": 48.46,
+        "max": 48.72
+      },
+      "scriptMs": {
+        "p50": 0.02,
+        "p95": 0.04,
+        "max": 0.08
+      },
+      "longFramePct": 100,
+      "avgDrawn": 5000
+    },
+    {
+      "name": "html/pan-z1",
+      "frames": 360,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.38,
+        "p99": 17.78,
+        "max": 20.6
+      },
+      "scriptMs": {
+        "p50": 0.36,
+        "p95": 0.66,
+        "max": 0.86
+      },
+      "longFramePct": 0.3,
+      "avgDrawn": 353
+    },
+    {
+      "name": "html/pan-z035-lod",
+      "frames": 359,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.34,
+        "p99": 17.74,
+        "max": 18.4
+      },
+      "scriptMs": {
+        "p50": 1.5,
+        "p95": 2.22,
+        "max": 2.72
+      },
+      "longFramePct": 0,
+      "avgDrawn": 512
+    },
+    {
+      "name": "html/pan-z035-nolod",
+      "frames": 361,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.58,
+        "p99": 17.78,
+        "max": 20.38
+      },
+      "scriptMs": {
+        "p50": 1.16,
+        "p95": 1.9,
+        "max": 2.5
+      },
+      "longFramePct": 0.3,
+      "avgDrawn": 659
+    },
+    {
+      "name": "html/zoom-sweep-lod",
+      "frames": 358,
+      "avgFps": 59.8,
+      "frameMs": {
+        "p50": 16.68,
+        "p95": 17.7,
+        "p99": 17.86,
+        "max": 50.28
+      },
+      "scriptMs": {
+        "p50": 0.58,
+        "p95": 2.72,
+        "max": 17.86
+      },
+      "longFramePct": 0.3,
+      "avgDrawn": 617
+    },
+    {
+      "name": "html/zoom-sweep-nolod",
+      "frames": 353,
+      "avgFps": 58.8,
+      "frameMs": {
+        "p50": 16.68,
+        "p95": 18.66,
+        "p99": 37.94,
+        "max": 51.68
+      },
+      "scriptMs": {
+        "p50": 0.5,
+        "p95": 2.36,
+        "max": 3.1
+      },
+      "longFramePct": 4.5,
+      "avgDrawn": 634
+    },
+    {
+      "name": "html/zoom-steps-lod",
+      "frames": 360,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.66,
+        "p99": 17.84,
+        "max": 17.98
+      },
+      "scriptMs": {
+        "p50": 0.38,
+        "p95": 0.68,
+        "max": 0.92
+      },
+      "longFramePct": 0,
+      "avgDrawn": 364
+    },
+    {
+      "name": "html-nowc/zoom-sweep",
+      "frames": 359,
+      "avgFps": 59.8,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.66,
+        "p99": 17.8,
+        "max": 37.08
+      },
+      "scriptMs": {
+        "p50": 0.38,
+        "p95": 2.9,
+        "max": 26.92
+      },
+      "longFramePct": 0.3,
+      "avgDrawn": 619
+    },
+    {
+      "name": "html-nowc/zoom-steps",
+      "frames": 360,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.66,
+        "p99": 17.74,
+        "max": 18.52
+      },
+      "scriptMs": {
+        "p50": 0.28,
+        "p95": 0.48,
+        "max": 0.82
+      },
+      "longFramePct": 0,
+      "avgDrawn": 364
+    },
+    {
+      "name": "html-cull/pan-z1",
+      "frames": 361,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.66,
+        "p99": 17.74,
+        "max": 18.02
+      },
+      "scriptMs": {
+        "p50": 2.58,
+        "p95": 3.62,
+        "max": 4.64
+      },
+      "longFramePct": 0,
+      "avgDrawn": 101
+    },
+    {
+      "name": "html-cull/zoom-sweep",
+      "frames": 359,
+      "avgFps": 59.8,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.64,
+        "p99": 17.76,
+        "max": 49.72
+      },
+      "scriptMs": {
+        "p50": 2.36,
+        "p95": 3.56,
+        "max": 5.92
+      },
+      "longFramePct": 0.3,
+      "avgDrawn": 479
+    },
+    {
+      "name": "html-cull/zoom-steps",
+      "frames": 359,
+      "avgFps": 59.8,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.66,
+        "p99": 19.48,
+        "max": 39.18
+      },
+      "scriptMs": {
+        "p50": 2.36,
+        "p95": 3.62,
+        "max": 4.36
+      },
+      "longFramePct": 0.8,
+      "avgDrawn": 122
+    },
+    {
+      "name": "html-zoomhide/zoom-sweep",
+      "frames": 360,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.58,
+        "p99": 17.74,
+        "max": 25.58
+      },
+      "scriptMs": {
+        "p50": 0.62,
+        "p95": 2.72,
+        "max": 3.92
+      },
+      "longFramePct": 0.3,
+      "avgDrawn": 460
+    },
+    {
+      "name": "html-zoomhide/zoom-steps",
+      "frames": 356,
+      "avgFps": 59.3,
+      "frameMs": {
+        "p50": 16.68,
+        "p95": 17.64,
+        "p99": 36,
+        "max": 47.08
+      },
+      "scriptMs": {
+        "p50": 0.6,
+        "p95": 3.44,
+        "max": 17.56
+      },
+      "longFramePct": 2.8,
+      "avgDrawn": 104
+    }
+  ],
+  "finishedAt": "2026-10-16T13:54:00.957Z"
+}

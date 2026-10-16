@@ -1,0 +1,300 @@
+{
+  "label": "pw-webkit",
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Safari/605.1.15",
+  "dpr": 2,
+  "viewport": {
+    "w": 1440,
+    "h": 900
+  },
+  "refreshMs": 16.68,
+  "elementCount": 5000,
+  "cardCount": 300,
+  "durationMs": 6000,
+  "modes": [
+    {
+      "mode": "canvas+html",
+      "loadMs": 83.9,
+      "jsHeapMB": null,
+      "memorySource": "tidak tersedia di browser ini"
+    },
+    {
+      "mode": "canvas+html-nolod",
+      "loadMs": 66.8,
+      "jsHeapMB": null,
+      "memorySource": "tidak tersedia di browser ini"
+    },
+    {
+      "mode": "canvas+html",
+      "loadMs": 85.1,
+      "jsHeapMB": null,
+      "memorySource": "tidak tersedia di browser ini"
+    },
+    {
+      "mode": "canvas+html-nolod",
+      "loadMs": 49.9,
+      "jsHeapMB": null,
+      "memorySource": "tidak tersedia di browser ini"
+    },
+    {
+      "mode": "canvas+html",
+      "loadMs": 49.6,
+      "jsHeapMB": null,
+      "memorySource": "tidak tersedia di browser ini"
+    },
+    {
+      "mode": "canvas+html-nowc",
+      "loadMs": 66.7,
+      "jsHeapMB": null,
+      "memorySource": "tidak tersedia di browser ini"
+    },
+    {
+      "mode": "canvas+html-cull",
+      "loadMs": 49.9,
+      "jsHeapMB": null,
+      "memorySource": "tidak tersedia di browser ini"
+    },
+    {
+      "mode": "canvas+html-zoomhide",
+      "loadMs": 49.9,
+      "jsHeapMB": null,
+      "memorySource": "tidak tersedia di browser ini"
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "html/pan-z1",
+      "frames": 360,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.62,
+        "p99": 17.7,
+        "max": 21.66
+      },
+      "scriptMs": {
+        "p50": 0.34,
+        "p95": 0.56,
+        "max": 0.82
+      },
+      "longFramePct": 0.3,
+      "avgDrawn": 353
+    },
+    {
+      "name": "html/pan-z035-lod",
+      "frames": 360,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.6,
+        "p99": 17.66,
+        "max": 24.34
+      },
+      "scriptMs": {
+        "p50": 1.3,
+        "p95": 1.74,
+        "max": 2.32
+      },
+      "longFramePct": 0.3,
+      "avgDrawn": 512
+    },
+    {
+      "name": "html/pan-z035-nolod",
+      "frames": 360,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.56,
+        "p99": 18.3,
+        "max": 22.82
+      },
+      "scriptMs": {
+        "p50": 1,
+        "p95": 1.34,
+        "max": 3.3
+      },
+      "longFramePct": 0.3,
+      "avgDrawn": 659
+    },
+    {
+      "name": "html/zoom-sweep-lod",
+      "frames": 357,
+      "avgFps": 59.5,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.6,
+        "p99": 17.78,
+        "max": 81.74
+      },
+      "scriptMs": {
+        "p50": 0.52,
+        "p95": 2.72,
+        "max": 23.86
+      },
+      "longFramePct": 0.6,
+      "avgDrawn": 619
+    },
+    {
+      "name": "html/zoom-sweep-nolod",
+      "frames": 350,
+      "avgFps": 58.3,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 21.76,
+        "p99": 42.74,
+        "max": 71.46
+      },
+      "scriptMs": {
+        "p50": 0.5,
+        "p95": 2.14,
+        "max": 3.2
+      },
+      "longFramePct": 5.4,
+      "avgDrawn": 633
+    },
+    {
+      "name": "html/zoom-steps-lod",
+      "frames": 360,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.32,
+        "p99": 17.66,
+        "max": 17.82
+      },
+      "scriptMs": {
+        "p50": 0.3,
+        "p95": 0.7,
+        "max": 1.84
+      },
+      "longFramePct": 0,
+      "avgDrawn": 364
+    },
+    {
+      "name": "html-nowc/zoom-sweep",
+      "frames": 360,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.44,
+        "p99": 17.72,
+        "max": 33
+      },
+      "scriptMs": {
+        "p50": 0.38,
+        "p95": 3.12,
+        "max": 23.66
+      },
+      "longFramePct": 0.3,
+      "avgDrawn": 619
+    },
+    {
+      "name": "html-nowc/zoom-steps",
+      "frames": 360,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.42,
+        "p99": 17.7,
+        "max": 17.82
+      },
+      "scriptMs": {
+        "p50": 0.28,
+        "p95": 0.5,
+        "max": 0.68
+      },
+      "longFramePct": 0,
+      "avgDrawn": 364
+    },
+    {
+      "name": "html-cull/pan-z1",
+      "frames": 360,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.34,
+        "p99": 17.72,
+        "max": 20.94
+      },
+      "scriptMs": {
+        "p50": 2.4,
+        "p95": 3.68,
+        "max": 4.34
+      },
+      "longFramePct": 0.3,
+      "avgDrawn": 101
+    },
+    {
+      "name": "html-cull/zoom-sweep",
+      "frames": 359,
+      "avgFps": 59.8,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.42,
+        "p99": 17.7,
+        "max": 43.02
+      },
+      "scriptMs": {
+        "p50": 2.24,
+        "p95": 3.32,
+        "max": 6.96
+      },
+      "longFramePct": 0.3,
+      "avgDrawn": 479
+    },
+    {
+      "name": "html-cull/zoom-steps",
+      "frames": 360,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.68,
+        "p95": 17.26,
+        "p99": 17.64,
+        "max": 17.76
+      },
+      "scriptMs": {
+        "p50": 2.7,
+        "p95": 3.7,
+        "max": 4.3
+      },
+      "longFramePct": 0,
+      "avgDrawn": 122
+    },
+    {
+      "name": "html-zoomhide/zoom-sweep",
+      "frames": 360,
+      "avgFps": 60,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.46,
+        "p99": 17.66,
+        "max": 26.48
+      },
+      "scriptMs": {
+        "p50": 0.72,
+        "p95": 2.9,
+        "max": 3.6
+      },
+      "longFramePct": 0.3,
+      "avgDrawn": 460
+    },
+    {
+      "name": "html-zoomhide/zoom-steps",
+      "frames": 357,
+      "avgFps": 59.5,
+      "frameMs": {
+        "p50": 16.66,
+        "p95": 17.48,
+        "p99": 33.26,
+        "max": 45.82
+      },
+      "scriptMs": {
+        "p50": 0.62,
+        "p95": 3.56,
+        "max": 19.48
+      },
+      "longFramePct": 2.8,
+      "avgDrawn": 105
+    }
+  ],
+  "finishedAt": "2026-10-16T13:51:28.307Z"
+}

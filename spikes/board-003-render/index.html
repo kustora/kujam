@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>BOARD-003 Render Bench</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        font-family: system-ui, sans-serif;
+        background: #f6f5f2;
+      }
+      #stage {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+        touch-action: none;
+      }
+      #stage > canvas,
+      #stage > svg,
+      #stage > .html-layer {
+        position: absolute;
+        inset: 0;
+      }
+      .html-layer {
+        transform-origin: 0 0;
+        pointer-events: none;
+        will-change: transform;
+      }
+      .card {
+        position: absolute;
+        box-sizing: border-box;
+        width: 240px;
+        height: 150px;
+        padding: 10px;
+        background: #fff;
+        border: 1px solid #d8d4cc;
+        border-radius: 10px;
+        box-shadow: 0 2px 6px rgb(0 0 0 / 0.12);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 13px;
+        color: #222;
+      }
+      .card .thumb {
+        height: 62px;
+        border-radius: 6px;
+      }
+      .card .title {
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .card .meta {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: #666;
+        font-size: 12px;
+      }
+      .card .badge {
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: #e8f0fe;
+        color: #1a56c4;
+      }
+      .card .avatar {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #c9a;
+        margin-left: auto;
+      }
+      #panel {
+        position: fixed;
+        top: 8px;
+        left: 8px;
+        z-index: 10;
+        background: rgb(255 255 255 / 0.95);
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 12px;
+        max-width: min(560px, calc(100vw - 32px));
+      }
+      #panel select,
+      #panel button,
+      #panel input {
+        font-size: 12px;
+      }
+      #panel pre {
+        margin: 6px 0 0;
+        max-height: 50vh;
+        overflow: auto;
+        white-space: pre-wrap;
+      }
+      body.running #panel .controls {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="stage"></div>
+    <div id="panel">
+      <div class="controls">
+        <b>BOARD-003</b>
+        <button id="run-all">Jalankan semua</button>
+        <label>label <input id="label" size="16" /></label>
+        <span id="fps"></span>
+      </div>
+      <pre id="out"></pre>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
