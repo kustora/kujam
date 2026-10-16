@@ -6,6 +6,7 @@
 
 import { deepClone } from './clone.js';
 import { createCommandRegistry, type BoardCommands } from './commands.js';
+import { createElementRegistry, type ElementRegistry } from './elements.js';
 import {
   createEmitter,
   reportUnhandled,
@@ -22,6 +23,11 @@ import {
 } from './history.js';
 import { createId as createRandomId, type IdGenerator } from './ids.js';
 import { createInteraction } from './interaction.js';
+import {
+  createPluginRuntime,
+  type AnyPluginDefinition,
+  type BoardPlugins,
+} from './plugins.js';
 import { createRecordStore, type TransactOptions, type Transaction } from './store.js';
 import {
   createToolRuntime,
@@ -39,6 +45,28 @@ export { InvalidDocumentError, validateDocument, type ValidationResult } from '.
 export * from './schema.js';
 export * from './elements.js';
 export * from './geometry.js';
+export {
+  definePlugin,
+  PluginError,
+  resolvePluginOrder,
+  type AnyPluginDefinition,
+  type BoardPlugins,
+  type BoardUser,
+  type DocumentSavedHook,
+  type PermissionAction,
+  type PermissionHook,
+  type PluginBrushDefinition,
+  type PluginCommandMapEntry,
+  type PluginCommandsInput,
+  type PluginDefinition,
+  type PluginDocumentMigration,
+  type PluginErrorCode,
+  type PluginExporter,
+  type PluginMigrations,
+  type PluginSetup,
+  type PluginTeardown,
+  type PluginToolbarItem,
+} from './plugins.js';
 export {
   CommandError,
   defineCommand,
@@ -127,6 +155,11 @@ export const DEFAULT_ZOOM_RANGE: Readonly<ZoomRange> = Object.freeze({ min: 0.1,
  */
 export interface CreateBoardOptions {
   document?: BoardDocument;
+  /**
+   * Daftar plugin yang dipasang secara deterministik berdasarkan urutan dan `dependsOn`
+   * (BOARD-602). Misalnya `[defaultElements, defaultTools]`.
+   */
+  plugins?: Iterable<AnyPluginDefinition>;
   /**
    * Mode baca saja. Perubahan dokumen lokal ditolak; kamera dan seleksi tetap bisa diubah,
    * dan `loadDocument` tetap diizinkan untuk menerima dokumen dari server.
@@ -244,6 +277,10 @@ export interface Board {
   run(id: string, args?: unknown): boolean;
   /** Registri perintah papan ini: sumber command palette dan shortcut. */
   readonly commands: BoardCommands;
+  /** Registri tipe elemen papan ini (BOARD-601, BOARD-602). */
+  readonly elements: ElementRegistry;
+  /** Registri plugin yang terpasang di papan ini sesuai urutan pemasangan (BOARD-602). */
+  readonly plugins: BoardPlugins;
   /**
    * Registri tool papan ini (BOARD-501).
    *
@@ -289,8 +326,9 @@ export interface Board {
   readonly readOnly: boolean;
   readonly locale: BoardLocale;
   /**
-   * Melepas semua listener, perintah, tool, dan riwayat. Setelahnya `transact`, `loadDocument`,
-   * `undo`, `redo`, `run`, `setTool`, dan `dispatch` melempar error.
+   * Menjalankan teardown plugin dalam urutan terbalik lalu melepas semua listener, perintah, tool,
+   * dan riwayat. Aman dipanggil lebih dari sekali. Setelahnya `transact`, `loadDocument`, `undo`,
+   * `redo`, `run`, `setTool`, dan `dispatch` melempar error.
    */
   dispose(): void;
 }
@@ -405,6 +443,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     onStateChange: (state) => events.emit('history', state),
   });
   let camera: CameraState = Object.freeze({ x: 0, y: 0, zoom: 1 });
+  const elements = createElementRegistry();
   const commands = createCommandRegistry(() => board);
   const interaction = createInteraction(store, history);
   const tools = createToolRuntime({
@@ -412,6 +451,13 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     interaction,
     defaultTool,
     onToolChange: (id, previous) => events.emit('tool', Object.freeze({ id, previous })),
+  });
+  const plugins = createPluginRuntime({
+    getBoard: () => board,
+    elements,
+    tools: tools.api,
+    commands: commands.api,
+    plugins: options.plugins,
   });
 
   function assertUsable(): void {
@@ -464,6 +510,8 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       return commands.run(id, args);
     },
     commands: commands.api,
+    elements,
+    plugins: plugins.api,
     tools: tools.api,
     setTool(id: string): void {
       assertUsable();
@@ -499,13 +547,20 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       events.emit('camera', Object.freeze({ camera, previous }));
     },
     dispose(): void {
-      disposed = true;
-      events.clear();
-      commands.clear();
-      tools.clear();
-      history.dispose();
-      store.dispose();
+      if (disposed) return;
+      try {
+        plugins.dispose();
+      } finally {
+        disposed = true;
+        events.clear();
+        commands.clear();
+        tools.clear();
+        history.dispose();
+        store.dispose();
+      }
     },
   };
+
+  plugins.install();
   return board;
 }

@@ -1,9 +1,9 @@
 /**
  * Kontrak elemen (`defineElement`) dan registri tipe elemen (BOARD-601).
  *
- * Elemen bawaan (`@kujam/shapes`) dan elemen kustom memakai API yang sama. Registri berdiri
- * sendiri, belum tersambung ke `createBoard`: pemasangan lewat plugin milik BOARD-602/211,
- * validasi `create`/`update` milik BOARD-205, dan migrasi props saat memuat milik BOARD-702.
+ * Elemen bawaan (`@kujam/shapes`) dan elemen kustom memakai API yang sama. Dipasang ke
+ * `createBoard({ plugins })` lewat `definePlugin` (BOARD-602); validasi `create`/`update` milik
+ * BOARD-205, dan migrasi props saat memuat milik BOARD-702.
  */
 
 import type { Geometry } from './geometry.js';
@@ -656,7 +656,9 @@ export interface ElementRegistry {
  * @public
  */
 export function createElementRegistry(
-  definitions: Iterable<AnyElementDefinition> = [],
+  definitions:
+    | Iterable<AnyElementDefinition>
+    | { readonly elements?: Iterable<AnyElementDefinition> } = [],
 ): ElementRegistry {
   const byType = new Map<string, AnyElementDefinition>();
 
@@ -682,6 +684,13 @@ export function createElementRegistry(
     },
   };
 
-  for (const definition of definitions) registry.register(definition);
+  const items: Iterable<AnyElementDefinition> =
+    definitions !== null &&
+    typeof definitions === 'object' &&
+    Symbol.iterator in definitions
+      ? (definitions as Iterable<AnyElementDefinition>)
+      : ((definitions as { readonly elements?: Iterable<AnyElementDefinition> } | null)?.elements ??
+          []);
+  for (const definition of items) registry.register(definition);
   return registry;
 }

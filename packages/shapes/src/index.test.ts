@@ -1,5 +1,7 @@
 import {
+  createBoard,
   createElementRegistry,
+  PluginError,
   validate,
   type AnyElementDefinition,
   type ElementCanvasContext,
@@ -10,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_ELEMENT_TYPES,
   defaultElements,
+  defaultTools,
   drawElement,
   EMPTY_RICH_TEXT,
   GEO_KINDS,
@@ -70,20 +73,36 @@ const lod = { zoom: 1, compact: false };
 const ctx = (locale: string): ElementContext => ({ locale, emit: () => {} });
 const rich = (text: string): RichText => [{ insert: `${text}\n` }];
 
-describe('defaultElements', () => {
+describe('defaultElements dan defaultTools', () => {
+  it('merupakan plugin biasa yang dipasang lewat createBoard({ plugins }) (BOARD-602)', () => {
+    expect(defaultElements.id).toBe('default-elements');
+    expect(defaultTools.id).toBe('default-tools');
+    expect(Object.isFrozen(defaultElements)).toBe(true);
+    expect(Object.isFrozen(defaultTools)).toBe(true);
+
+    const board = createBoard({ plugins: [defaultElements, defaultTools] });
+    expect(board.plugins.list().map((p) => p.id)).toEqual(['default-elements', 'default-tools']);
+    expect(board.elements.list().map((d) => d.type)).toEqual([...DEFAULT_ELEMENT_TYPES]);
+    expect(board.plugins.has('default-elements')).toBe(true);
+    expect(board.plugins.has('default-tools')).toBe(true);
+
+    expect(() => createBoard({ plugins: [defaultElements, defaultElements] })).toThrow(PluginError);
+    board.dispose();
+  });
+
   it('urutan dan tipe sama dengan DEFAULT_ELEMENT_TYPES', () => {
-    expect(defaultElements.map((d) => d.type)).toEqual([...DEFAULT_ELEMENT_TYPES]);
+    expect(defaultElements.elements.map((d) => d.type)).toEqual([...DEFAULT_ELEMENT_TYPES]);
   });
 
   it('semua bisa didaftarkan ke registri lewat API publik', () => {
-    const registry = createElementRegistry(defaultElements as readonly AnyElementDefinition[]);
+    const registry = createElementRegistry(defaultElements);
     expect(registry.list().map((d) => d.type)).toEqual([...DEFAULT_ELEMENT_TYPES]);
     expect(() => registry.register(stickyElement as AnyElementDefinition)).toThrowError(
       /sudah terdaftar/,
     );
   });
 
-  it.each(defaultElements.map((d) => [d.type, d] as const))(
+  it.each(defaultElements.elements.map((d) => [d.type, d] as const))(
     '%s: defaults lengkap dan lolos skema props',
     (_type, def) => {
       expect(validate(def.props, def.defaults)).toMatchObject({ ok: true });

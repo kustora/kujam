@@ -1,12 +1,14 @@
 /**
  * `@kujam/shapes` — Elemen dan tool bawaan untuk papan `@kujam/core`.
  *
- * Semua elemen bawaan didefinisikan dengan `defineElement` dari `@kujam/core`, API yang sama
- * dengan elemen kustom, tanpa jalur pintas internal (BOARD-601).
+ * Semua elemen dan tool bawaan didefinisikan dengan `defineElement`, `defineTool`, dan
+ * `definePlugin` dari `@kujam/core` — API publik yang sama dengan plugin kustom, tanpa jalur
+ * pintas internal (BOARD-601, BOARD-602).
  *
  * @packageDocumentation
  */
 
+import { definePlugin } from '@kujam/core';
 import { drawElement } from './elements/draw.js';
 import { geoElement } from './elements/geo.js';
 import { stickyElement } from './elements/sticky.js';
@@ -28,17 +30,31 @@ export {
 } from './richtext.js';
 
 /**
- * Definisi elemen bawaan rilis 0.1, siap didaftarkan ke registri
- * (`createElementRegistry(defaultElements)`). Konektor, frame, gambar, dan grup menyusul di 0.2
- * (BOARD-1101, BOARD-1105, BOARD-1103, BOARD-1104). Menjadi plugin biasa di BOARD-602.
+ * Plugin elemen bawaan rilis 0.1 (`sticky`, `draw`, `text`, `geo`), siap dipasang lewat
+ * `createBoard({ plugins: [defaultElements, defaultTools] })` atau `createElementRegistry(defaultElements)`.
+ * Konektor, frame, gambar, dan grup menyusul di 0.2 (BOARD-1101, BOARD-1105, BOARD-1103, BOARD-1104).
  *
- * @beta
+ * @public
  */
-export const defaultElements = [stickyElement, drawElement, textElement, geoElement] as const;
+export const defaultElements = definePlugin({
+  id: 'default-elements',
+  elements: Object.freeze([stickyElement, drawElement, textElement, geoElement] as const),
+});
+
+/**
+ * Plugin tool bawaan, siap dipasang lewat `createBoard({ plugins: [defaultElements, defaultTools] })`.
+ * Implementasi state machine tool bawaan diisi oleh BOARD-502 (`select`, `hand`) dan BOARD-E10.
+ *
+ * @public
+ */
+export const defaultTools = definePlugin({
+  id: 'default-tools',
+  tools: Object.freeze([] as const),
+});
 
 /**
  * Daftar jenis elemen bawaan yang disediakan oleh `@kujam/shapes`, sama urutannya dengan
- * {@link defaultElements}.
+ * `defaultElements.elements`.
  *
  * @public
  */
