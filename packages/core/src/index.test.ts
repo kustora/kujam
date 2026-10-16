@@ -1,15 +1,25 @@
-import { describe, expect, it } from 'vitest';
+import v8 from 'node:v8';
+import vm from 'node:vm';
+import { describe, expect, it, vi } from 'vitest';
 import {
   CURRENT_SCHEMA_VERSION,
+  DEFAULT_BOARD_LIMITS,
   DEFAULT_ZOOM_RANGE,
   InvalidDocumentError,
+  ReadOnlyBoardError,
   createBoard,
   createEmptyDocument,
   deepClone,
+  definePlugin,
   validateDocument,
+  type AssetAdapter,
+  type Board,
   type BoardDocument,
+  type BoardLimits,
+  type BoardUser,
   type CameraState,
   type ElementRecord,
+  type PermissionHook,
 } from './index.js';
 
 describe('@kujam/core (pure Node environment)', () => {
@@ -274,3 +284,355 @@ describe('deepClone', () => {
     expect(board.getDocument().meta.thumbnail).toEqual(new Uint8Array([1]));
   });
 });
+
+describe('BOARD-211: opsi createBoard dan properti board', () => {
+  it('menerima opsi lengkap dan mengeksposnya di board', () => {
+    const mockResolver = (id: string) => ({ status: 'ready' as const, data: { id } });
+    const mockAssetAdapter: AssetAdapter = {
+      resolve: (assetId: string) => `https://assets.example.com/${assetId}`,
+      upload: (file: unknown) => `asset-${String(file)}`,
+    };
+    const user: BoardUser = {
+      id: 'user-42',
+      name: 'Budi',
+      color: '#00ff00',
+      meta: { role: 'editor' },
+    };
+    const customLimits: Partial<BoardLimits> = {
+      maxElements: 2_000,
+      maxDrawPoints: 1_000,
+    };
+    const permission: PermissionHook = (_action, _el, _u) => true;
+
+    const board = createBoard({
+      resolvers: { item: mockResolver },
+      assets: mockAssetAdapter,
+      user,
+      limits: customLimits,
+      permissions: permission,
+      readOnly: false,
+      locale: 'en',
+    });
+
+    expect(board.resolvers.item).toBe(mockResolver);
+    expect(board.assets?.resolve('test-1')).toBe('https://assets.example.com/test-1');
+    expect(board.user).toEqual({
+      id: 'user-42',
+      name: 'Budi',
+      color: '#00ff00',
+      meta: { role: 'editor' },
+    });
+    expect(board.limits).toEqual({
+      maxDocumentBytes: DEFAULT_BOARD_LIMITS.maxDocumentBytes,
+      maxElements: 2_000,
+      maxDrawPoints: 1_000,
+    });
+    expect(board.permissions).toBe(permission);
+    expect(board.readOnly).toBe(false);
+    expect(board.locale).toBe('en');
+    expect(board.disposed).toBe(false);
+
+    board.dispose();
+    expect(board.disposed).toBe(true);
+  });
+
+  it('menerima assets tanpa upload dan user minimal hanya dengan id', () => {
+    const board = createBoard({
+      assets: { resolve: () => 'asset-url' },
+      user: { id: 'u-simple' },
+    });
+    expect(board.assets?.resolve('test')).toBe('asset-url');
+    expect(board.assets?.upload).toBeUndefined();
+    expect(board.user).toEqual({ id: 'u-simple', meta: {} });
+    expect(board.user?.name).toBeUndefined();
+    expect(board.user?.color).toBeUndefined();
+    board.dispose();
+  });
+
+  it('memakai nilai bawaan yang aman saat opsi tidak diberikan', () => {
+    const board = createBoard();
+    expect(board.resolvers).toEqual({});
+    expect(board.assets).toBeNull();
+    expect(board.user).toBeNull();
+    expect(board.limits).toEqual(DEFAULT_BOARD_LIMITS);
+    expect(board.permissions).toBeNull();
+    expect(board.readOnly).toBe(false);
+    expect(board.locale).toBe('id');
+    expect(board.disposed).toBe(false);
+    board.dispose();
+  });
+
+  it('menolak options yang bukan objek', () => {
+    expect(() => createBoard(null as unknown as object)).toThrow(TypeError);
+    expect(() => createBoard(123 as unknown as object)).toThrow(TypeError);
+    expect(() => createBoard('invalid' as unknown as object)).toThrow(TypeError);
+    expect(() => createBoard([] as unknown as object)).toThrow(TypeError);
+  });
+
+  it('menolak readOnly yang bukan boolean', () => {
+    expect(() => createBoard({ readOnly: 'true' as unknown as boolean })).toThrow(TypeError);
+    expect(() => createBoard({ readOnly: 1 as unknown as boolean })).toThrow(TypeError);
+  });
+
+  it('menolak resolvers yang bukan objek atau resolver yang bukan fungsi', () => {
+    expect(() => createBoard({ resolvers: null as unknown as object })).toThrow(TypeError);
+    expect(() => createBoard({ resolvers: 'invalid' as unknown as object })).toThrow(TypeError);
+    expect(() =>
+      createBoard({ resolvers: { item: 123 as unknown as () => never } }),
+    ).toThrow(TypeError);
+  });
+
+  it('menolak assets yang bukan objek atau tanpa method resolve fungsi', () => {
+    expect(() => createBoard({ assets: 'invalid' as unknown as AssetAdapter })).toThrow(TypeError);
+    expect(() => createBoard({ assets: {} as unknown as AssetAdapter })).toThrow(TypeError);
+    expect(() =>
+      createBoard({ assets: { resolve: 'not-a-fn' as unknown as AssetAdapter['resolve'] } }),
+    ).toThrow(TypeError);
+    expect(() =>
+      createBoard({
+        assets: {
+          resolve: () => null,
+          upload: 'not-a-fn' as unknown as NonNullable<AssetAdapter['upload']>,
+        },
+      }),
+    ).toThrow(TypeError);
+  });
+
+  it('menolak user yang tidak valid', () => {
+    expect(() => createBoard({ user: 'invalid' as unknown as BoardUser })).toThrow(TypeError);
+    expect(() => createBoard({ user: {} as unknown as BoardUser })).toThrow(TypeError);
+    expect(() => createBoard({ user: { id: '' } as unknown as BoardUser })).toThrow(TypeError);
+    expect(() =>
+      createBoard({ user: { id: 'u1', name: 123 as unknown as string } as unknown as BoardUser }),
+    ).toThrow(TypeError);
+    expect(() =>
+      createBoard({ user: { id: 'u1', color: 123 as unknown as string } as unknown as BoardUser }),
+    ).toThrow(TypeError);
+    expect(() =>
+      createBoard({ user: { id: 'u1', meta: 'invalid' as unknown as Record<string, unknown> } }),
+    ).toThrow(TypeError);
+  });
+
+  it('menolak limits yang bukan objek atau bernilai non-integer / < 1', () => {
+    expect(() => createBoard({ limits: 'invalid' as unknown as Partial<BoardLimits> })).toThrow(
+      TypeError,
+    );
+    expect(() => createBoard({ limits: { maxElements: 0 } })).toThrow(RangeError);
+    expect(() => createBoard({ limits: { maxElements: -5 } })).toThrow(RangeError);
+    expect(() => createBoard({ limits: { maxElements: 1.5 } })).toThrow(RangeError);
+    expect(() => createBoard({ limits: { maxDocumentBytes: 0 } })).toThrow(RangeError);
+    expect(() => createBoard({ limits: { maxDrawPoints: -1 } })).toThrow(RangeError);
+  });
+
+  it('menolak permissions yang bukan fungsi', () => {
+    expect(() =>
+      createBoard({ permissions: 'invalid' as unknown as PermissionHook }),
+    ).toThrow(TypeError);
+    expect(() => createBoard({ permissions: 123 as unknown as PermissionHook })).toThrow(TypeError);
+  });
+
+  it('menguji opsi createId kustom dan validasi hasilnya', () => {
+    const custom = createBoard({ createId: () => 'my-custom-id' });
+    expect(custom.createId()).toBe('my-custom-id');
+
+    const empty = createBoard({ createId: () => '' });
+    expect(() => empty.createId()).toThrow(TypeError);
+
+    expect(() => createBoard({ createId: 123 as unknown as () => string })).toThrow(TypeError);
+  });
+
+  it('menolak defaultTool yang bukan string', () => {
+    expect(() => createBoard({ defaultTool: 123 as unknown as string })).toThrow(TypeError);
+  });
+
+  it('mengekspos getter tool, toolState, cursor, dan registri subkomponen', () => {
+    const board = createBoard();
+    expect(board.tool).toBeNull();
+    expect(board.toolState).toBeNull();
+    expect(board.cursor).toBe('default');
+    expect(board.commands).toBeDefined();
+    expect(board.elements).toBeDefined();
+    expect(board.plugins).toBeDefined();
+    expect(board.tools).toBeDefined();
+    expect(board.history).toBeDefined();
+    board.dispose();
+  });
+
+  it('memancarkan event error dengan kode listener-error bila listener melempar', () => {
+    const board = createBoard();
+    let caught: { code: string; message: string } | null = null;
+    board.on('error', (err) => {
+      caught = err;
+    });
+
+    board.on('camera', () => {
+      throw new Error('error di listener kamera');
+    });
+
+    board.setCamera({ x: 10 });
+    expect(caught?.code).toBe('listener-error');
+    board.dispose();
+  });
+
+  it('memanggil reportUnhandled bila listener melempar tanpa listener error', () => {
+    const board = createBoard();
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    board.on('camera', () => {
+      throw new Error('error tanpa listener error');
+    });
+    board.setCamera({ x: 123 });
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+    board.dispose();
+  });
+});
+
+describe('BOARD-211: readOnly: true', () => {
+  it('menolak semua transaksi lokal dengan ReadOnlyBoardError', () => {
+    const board = createBoard({ readOnly: true });
+
+    expect(() => {
+      board.transact((tx) => {
+        tx.put(makeElement({ id: 'el:readonly-1' }));
+      });
+    }).toThrow(ReadOnlyBoardError);
+
+    expect(board.undo()).toBe(false);
+    expect(board.redo()).toBe(false);
+  });
+
+  it('tetap mengizinkan perubahan kamera saat readOnly', () => {
+    const board = createBoard({ readOnly: true });
+    let fired = false;
+    board.on('camera', () => {
+      fired = true;
+    });
+
+    board.setCamera({ x: 50, y: 100, zoom: 2 });
+    expect(board.getCamera()).toEqual({ x: 50, y: 100, zoom: 2 });
+    expect(fired).toBe(true);
+  });
+
+  it('tetap mengizinkan loadDocument saat readOnly', () => {
+    const board = createBoard({ readOnly: true });
+    const newDoc = createEmptyDocument();
+    newDoc.records['el:incoming'] = makeElement({ id: 'el:incoming' });
+
+    board.loadDocument(newDoc);
+    expect(board.getElement('el:incoming')).toBeDefined();
+    expect(board.getDocument().records['el:incoming']).toBeDefined();
+  });
+});
+
+describe('BOARD-211: board.dispose()', () => {
+  it('aman dipanggil lebih dari sekali (idempoten)', () => {
+    const board = createBoard();
+    expect(board.disposed).toBe(false);
+
+    board.dispose();
+    expect(board.disposed).toBe(true);
+
+    // Panggilan kedua tidak melempar error
+    expect(() => board.dispose()).not.toThrow();
+    expect(board.disposed).toBe(true);
+  });
+
+  it('melempar error pada operasi yang memerlukan papan aktif setelah dispose', () => {
+    const board = createBoard();
+    board.dispose();
+
+    expect(() => board.transact(() => {})).toThrow('Papan sudah di-dispose.');
+    expect(() => board.loadDocument(createEmptyDocument())).toThrow('Papan sudah di-dispose.');
+    expect(() => board.undo()).toThrow('Papan sudah di-dispose.');
+    expect(() => board.redo()).toThrow('Papan sudah di-dispose.');
+    expect(() => board.run('some-command')).toThrow('Papan sudah di-dispose.');
+    expect(() => board.setTool('select')).toThrow('Papan sudah di-dispose.');
+    expect(() =>
+      board.dispatch({
+        type: 'pointer-down',
+        point: { x: 0, y: 0 },
+        modifiers: { alt: false, shift: false, meta: false, ctrl: false },
+        pointerId: 1,
+        button: 0,
+        kind: 'mouse',
+      }),
+    ).toThrow('Papan sudah di-dispose.');
+  });
+
+  it('melepas semua listener event dan on() mengembalikan noop unregister setelah dispose', () => {
+    const board = createBoard();
+    let changeCalls = 0;
+    board.on('change', () => {
+      changeCalls++;
+    });
+
+    board.dispose();
+
+    // Mendaftarkan listener baru setelah dispose mengembalikan noop unlisten
+    let afterCalls = 0;
+    const unsub = board.on('change', () => {
+      afterCalls++;
+    });
+    expect(typeof unsub).toBe('function');
+    unsub();
+    expect(changeCalls).toBe(0);
+    expect(afterCalls).toBe(0);
+  });
+
+  it('menjalankan teardown plugin dalam urutan terbalik saat dispose', () => {
+    const teardownOrder: string[] = [];
+
+    const pluginA = definePlugin({
+      id: 'plugin-a',
+      setup() {
+        return () => {
+          teardownOrder.push('plugin-a');
+        };
+      },
+    });
+
+    const pluginB = definePlugin({
+      id: 'plugin-b',
+      dependsOn: ['plugin-a'],
+      setup() {
+        return () => {
+          teardownOrder.push('plugin-b');
+        };
+      },
+    });
+
+    const board = createBoard({ plugins: [pluginA, pluginB] });
+    expect(board.plugins.list().map((p) => p.id)).toEqual(['plugin-a', 'plugin-b']);
+
+    board.dispose();
+    expect(teardownOrder).toEqual(['plugin-b', 'plugin-a']);
+  });
+
+  it('membuat dan membuang 100 board tidak menahan memori (uji kebocoran)', async () => {
+    v8.setFlagsFromString('--expose_gc');
+    const gc = vm.runInNewContext('gc') as (() => void) | undefined;
+    expect(typeof gc).toBe('function');
+
+    function createAndDisposeBoards(count: number): WeakRef<Board>[] {
+      const list: WeakRef<Board>[] = [];
+      for (let i = 0; i < count; i++) {
+        const b = createBoard();
+        b.on('change', () => {});
+        b.on('camera', () => {});
+        b.setCamera({ x: i, y: i });
+        b.dispose();
+        list.push(new WeakRef(b));
+      }
+      return list;
+    }
+
+    const refs = createAndDisposeBoards(100);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    gc!();
+    gc!();
+
+    const aliveCount = refs.filter((r) => r.deref() !== undefined).length;
+    expect(aliveCount).toBe(0);
+  });
+});
+
