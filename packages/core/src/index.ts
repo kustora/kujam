@@ -21,7 +21,14 @@ import {
   type HistoryOptions,
 } from './history.js';
 import { createId as createRandomId, type IdGenerator } from './ids.js';
+import { createInteraction } from './interaction.js';
 import { createRecordStore, type TransactOptions, type Transaction } from './store.js';
+import {
+  createToolRuntime,
+  DEFAULT_TOOL_ID,
+  type BoardInputEvent,
+  type BoardTools,
+} from './tools.js';
 import type { BoardDocument, CameraState, ElementRecord } from './types.js';
 import { CURRENT_SCHEMA_VERSION } from './types.js';
 import { InvalidDocumentError, validateDocument } from './validate.js';
@@ -40,6 +47,25 @@ export {
   type CommandDefinition,
   type CommandErrorCode,
 } from './commands.js';
+export {
+  DEFAULT_TOOL_ID,
+  defineTool,
+  HAND_TOOL_ID,
+  ToolError,
+  type AnyToolDefinition,
+  type BoardInputEvent,
+  type BoardTools,
+  type InputModifiers,
+  type PointerKind,
+  type ToolContext,
+  type ToolDefinition,
+  type ToolErrorCode,
+  type ToolKeyEvent,
+  type ToolPinchEvent,
+  type ToolPointerEvent,
+  type ToolStateDefinition,
+  type ToolWheelEvent,
+} from './tools.js';
 export { createId, DEFAULT_ID_LENGTH, type IdGenerator } from './ids.js';
 export { compareIndex, indexAbove, indexBelow, indexBetween, indicesBetween } from './indexing.js';
 export type {
@@ -128,6 +154,13 @@ export interface CreateBoardOptions {
   createId?: IdGenerator;
   /** Opsi riwayat undo lokal, misalnya `{ limit: 50 }`. Bawaan 200 langkah. */
   history?: HistoryOptions;
+  /**
+   * Tool tujuan saat Esc ditekan di state awal dan setelah tool `oneShot` selesai. Bawaan
+   * {@link DEFAULT_TOOL_ID} (`'select'`). Board mulai tanpa tool aktif; panggil `setTool`.
+   *
+   * @beta
+   */
+  defaultTool?: string;
 }
 
 /**
@@ -184,13 +217,15 @@ export interface Board {
    * undo lanjut ke langkah sebelumnya.
    *
    * @returns `true` bila ada perubahan yang diterapkan, `false` bila tidak ada yang bisa di-undo
-   *   (termasuk selalu pada papan `readOnly`, karena riwayatnya selalu kosong).
+   *   (termasuk selalu pada papan `readOnly`, karena riwayatnya selalu kosong). Bila tool sedang
+   *   di tengah interaksi, undo hanya membatalkan interaksi itu dan mengembalikan `true`.
    * @throws `Error` bila dipanggil di dalam `transact` atau setelah `dispose`.
    */
   undo(): boolean;
   /**
    * Menerapkan ulang langkah yang terakhir di-undo, sebagai transaksi berasal `'redo'`. Aturan
-   * konflik, nilai kembali, dan error sama dengan {@link Board.undo}.
+   * konflik, nilai kembali, dan error sama dengan {@link Board.undo}. Interaksi tool yang sedang
+   * berlangsung dibatalkan dulu.
    */
   redo(): boolean;
   /**
@@ -209,12 +244,53 @@ export interface Board {
   run(id: string, args?: unknown): boolean;
   /** Registri perintah papan ini: sumber command palette dan shortcut. */
   readonly commands: BoardCommands;
+  /**
+   * Registri tool papan ini (BOARD-501).
+   *
+   * @beta
+   */
+  readonly tools: BoardTools;
+  /**
+   * Mengaktifkan tool. Interaksi tool sebelumnya dibatalkan (rollback). Memancarkan event `tool`
+   * bila tool berganti.
+   *
+   * @throws `ToolError` berkode `unknown-tool` bila ID tidak terdaftar.
+   * @beta
+   */
+  setTool(id: string): void;
+  /**
+   * ID tool aktif, atau `null` bila belum ada.
+   *
+   * @beta
+   */
+  readonly tool: string | null;
+  /**
+   * State tool aktif (misalnya `'idle'`), atau `null` bila belum ada tool aktif.
+   *
+   * @beta
+   */
+  readonly toolState: string | null;
+  /**
+   * Kursor CSS untuk state tool saat ini. Renderer membacanya setelah `dispatch`.
+   *
+   * @beta
+   */
+  readonly cursor: string;
+  /**
+   * Mengirim event input ternormalisasi dari renderer ke tool aktif.
+   *
+   * @returns `true` bila event ditangani (renderer sebaiknya memanggil `preventDefault`).
+   * @throws `Error` setelah `dispose`. Error dari handler tool diteruskan setelah interaksinya
+   *   di-rollback.
+   * @beta
+   */
+  dispatch(event: BoardInputEvent): boolean;
   /** Mode baca saja (lihat {@link CreateBoardOptions.readOnly}). */
   readonly readOnly: boolean;
   readonly locale: BoardLocale;
   /**
-   * Melepas semua listener, perintah, dan riwayat. Setelahnya `transact`, `loadDocument`,
-   * `undo`, `redo`, dan `run` melempar error.
+   * Melepas semua listener, perintah, tool, dan riwayat. Setelahnya `transact`, `loadDocument`,
+   * `undo`, `redo`, `run`, `setTool`, dan `dispatch` melempar error.
    */
   dispose(): void;
 }
@@ -284,6 +360,8 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
 
   const freeze = options.freezeSnapshots !== false;
   const generateId = resolveIdGenerator(options.createId);
+  const defaultTool = options.defaultTool ?? DEFAULT_TOOL_ID;
+  if (typeof defaultTool !== 'string') throw new TypeError('Opsi defaultTool wajib berupa string.');
   const historyLimit = resolveHistoryLimit(options.history);
   let disposed = false;
 
@@ -313,8 +391,10 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       freeze,
       readOnly,
       onChange: (event) => {
+        // Transaksi interaksi tool dicatat sebagai satu langkah saat interaksi selesai.
+        if (interaction.capturing) interaction.observe(event);
         // Riwayat diperbarui dulu agar listener `change` membaca canUndo/canRedo yang baru.
-        history.observe(event);
+        else history.observe(event);
         events.emit('change', event);
         history.flush();
       },
@@ -326,6 +406,17 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   });
   let camera: CameraState = Object.freeze({ x: 0, y: 0, zoom: 1 });
   const commands = createCommandRegistry(() => board);
+  const interaction = createInteraction(store, history);
+  const tools = createToolRuntime({
+    getBoard: () => board,
+    interaction,
+    defaultTool,
+    onToolChange: (id, previous) => events.emit('tool', Object.freeze({ id, previous })),
+  });
+
+  function assertUsable(): void {
+    if (disposed) throw new Error('Papan sudah di-dispose.');
+  }
 
   const board: Board = {
     readOnly,
@@ -334,7 +425,10 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       return store.getDocument();
     },
     loadDocument(doc: BoardDocument): void {
-      store.replaceDocument(toOwnedDocument(doc), 'load');
+      const owned = toOwnedDocument(doc);
+      // Diff interaksi yang berlangsung tidak berlaku untuk dokumen baru.
+      tools.reset();
+      store.replaceDocument(owned, 'load');
     },
     getElement(id: string): Readonly<ElementRecord> | undefined {
       const rec = store.getRecord(id);
@@ -355,17 +449,39 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       return id;
     },
     undo(): boolean {
+      assertUsable();
+      if (tools.busy) return tools.cancel();
       return history.undo();
     },
     redo(): boolean {
+      assertUsable();
+      tools.cancel();
       return history.redo();
     },
     history: history.api,
     run(id: string, args?: unknown): boolean {
-      if (disposed) throw new Error('Papan sudah di-dispose.');
+      assertUsable();
       return commands.run(id, args);
     },
     commands: commands.api,
+    tools: tools.api,
+    setTool(id: string): void {
+      assertUsable();
+      tools.setTool(id);
+    },
+    get tool() {
+      return tools.tool;
+    },
+    get toolState() {
+      return tools.state;
+    },
+    get cursor() {
+      return tools.cursor;
+    },
+    dispatch(event: BoardInputEvent): boolean {
+      assertUsable();
+      return tools.dispatch(event);
+    },
     getCamera(): Readonly<CameraState> {
       return camera;
     },
@@ -386,6 +502,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       disposed = true;
       events.clear();
       commands.clear();
+      tools.clear();
       history.dispose();
       store.dispose();
     },

@@ -76,6 +76,16 @@ export interface LocalHistory {
   observe(event: ChangeEvent): void;
   /** Memanggil `onStateChange` bila `canUndo`/`canRedo` berubah sejak laporan terakhir. */
   flush(): void;
+  /**
+   * Memesan nomor urut untuk langkah yang baru dicatat nanti (interaksi tool, BOARD-501).
+   * Perubahan pihak lain sesudah nomor ini dianggap konflik saat langkahnya di-undo.
+   */
+  reserveSeq(): number;
+  /**
+   * Mencatat diff gabungan sebagai satu langkah lokal dengan nomor urut yang sudah dipesan,
+   * lalu membuang tumpukan redo (seperti transaksi lokal biasa).
+   */
+  record(diff: ChangeEvent, seq: number): void;
   dispose(): void;
 }
 
@@ -142,8 +152,8 @@ export function createLocalHistory(store: RecordStore, options: LocalHistoryOpti
   let reported: HistoryEvent = { canUndo: false, canRedo: false };
   let disposed = false;
 
-  function push(stack: Entry[], diff: ChangeEvent): void {
-    stack.push({ diff, seq: ++seq });
+  function push(stack: Entry[], diff: ChangeEvent, entrySeq = ++seq): void {
+    stack.push({ diff, seq: entrySeq });
     while (stack.length > limit) stack.shift();
   }
 
@@ -229,6 +239,13 @@ export function createLocalHistory(store: RecordStore, options: LocalHistoryOpti
       }
     },
     flush,
+    reserveSeq: () => ++seq,
+    record(diff, entrySeq) {
+      if (disposed) return;
+      push(undoStack, diff, entrySeq);
+      redoStack.length = 0;
+      flush();
+    },
     dispose() {
       disposed = true;
       clear();

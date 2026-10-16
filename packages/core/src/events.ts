@@ -51,8 +51,8 @@ export interface SelectionEvent {
  * @beta
  */
 export interface ToolEvent {
-  /** ID tool yang kini aktif. */
-  readonly id: string;
+  /** ID tool yang kini aktif, atau `null` bila tidak ada tool aktif (tool aktif dilepas). */
+  readonly id: string | null;
   /** ID tool sebelumnya, atau `null` bila belum ada tool aktif. */
   readonly previous: string | null;
 }
@@ -130,7 +130,7 @@ export interface BoardEventMap {
   /** Kamera berubah lewat `setCamera`. */
   camera: CameraEvent;
   /**
-   * Tool aktif berganti. Belum ada sumbernya di rilis ini (BOARD-501).
+   * Tool aktif berganti lewat `setTool`, Esc, tool `oneShot`, atau spasi (BOARD-501).
    *
    * @beta
    */
