@@ -142,6 +142,8 @@ export interface RecordStore {
   getDocument(): BoardDocument;
   getRecord(id: string): BoardRecord | undefined;
   transact<T>(fn: (tx: Transaction) => T, options?: TransactOptions): T;
+  /** Apakah sebuah transaksi sedang berjalan (`fn` belum selesai). */
+  inTransaction(): boolean;
   /** Mengganti seluruh dokumen (sudah divalidasi) sebagai satu transaksi. */
   replaceDocument(doc: BoardDocument, origin: ChangeOrigin): void;
   dispose(): void;
@@ -318,6 +320,9 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
     getDocument,
     getRecord(id) {
       return records.get(id);
+    },
+    inTransaction() {
+      return active !== null;
     },
     transact<T>(fn: (tx: Transaction) => T, txOptions: TransactOptions = {}): T {
       assertUsable();

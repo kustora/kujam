@@ -5,14 +5,22 @@
  */
 
 import { deepClone } from './clone.js';
-import { createEmitter, type Listener, type Unsubscribe } from './events.js';
-import { createId as createRandomId, type IdGenerator } from './ids.js';
 import {
-  createRecordStore,
-  type ChangeEvent,
-  type TransactOptions,
-  type Transaction,
-} from './store.js';
+  createEmitter,
+  reportUnhandled,
+  type BoardErrorCode,
+  type BoardEventMap,
+  type Listener,
+  type Unsubscribe,
+} from './events.js';
+import {
+  createLocalHistory,
+  resolveHistoryLimit,
+  type BoardHistory,
+  type HistoryOptions,
+} from './history.js';
+import { createId as createRandomId, type IdGenerator } from './ids.js';
+import { createRecordStore, type TransactOptions, type Transaction } from './store.js';
 import type { BoardDocument, CameraState, ElementRecord } from './types.js';
 import { CURRENT_SCHEMA_VERSION } from './types.js';
 import { InvalidDocumentError, validateDocument } from './validate.js';
@@ -21,9 +29,27 @@ export * from './types.js';
 export { deepClone } from './clone.js';
 export { InvalidDocumentError, validateDocument, type ValidationResult } from './validate.js';
 export * from './schema.js';
+export * from './elements.js';
+export * from './geometry.js';
 export { createId, DEFAULT_ID_LENGTH, type IdGenerator } from './ids.js';
 export { compareIndex, indexAbove, indexBelow, indexBetween, indicesBetween } from './indexing.js';
-export type { Listener, Unsubscribe } from './events.js';
+export type {
+  ActionEvent,
+  BoardErrorCode,
+  BoardErrorEvent,
+  BoardEventMap,
+  CameraEvent,
+  Listener,
+  SelectionEvent,
+  ToolEvent,
+  Unsubscribe,
+} from './events.js';
+export {
+  DEFAULT_HISTORY_LIMIT,
+  type BoardHistory,
+  type HistoryEvent,
+  type HistoryOptions,
+} from './history.js';
 export {
   CHANGE_ORIGINS,
   ReadOnlyBoardError,
@@ -91,17 +117,8 @@ export interface CreateBoardOptions {
    * untuk tes deterministik.
    */
   createId?: IdGenerator;
-}
-
-/**
- * Peta nama event ke isi event untuk `board.on`. Event lain (`selection`, `camera`, `tool`,
- * `action`, `error`) menyusul di BOARD-207.
- *
- * @public
- */
-export interface BoardEventMap {
-  /** Satu event per transaksi yang menghasilkan perubahan bersih, dan per `loadDocument`. */
-  change: ChangeEvent;
+  /** Opsi riwayat undo lokal, misalnya `{ limit: 50 }`. Bawaan 200 langkah. */
+  history?: HistoryOptions;
 }
 
 /**
@@ -135,7 +152,12 @@ export interface Board {
    * @throws {@link ReadOnlyBoardError} bila papan `readOnly` dan origin `'local'`.
    */
   transact<T>(fn: (tx: Transaction) => T, options?: TransactOptions): T;
-  /** Mendengarkan event papan. Mengembalikan fungsi untuk berhenti mendengarkan. */
+  /**
+   * Mendengarkan event papan (lihat {@link BoardEventMap}). Mengembalikan fungsi untuk berhenti
+   * mendengarkan. Listener yang melempar tidak menghentikan listener lain dan tidak membuat
+   * pemanggil (misalnya `transact`) melempar; error-nya dipancarkan sebagai event `error`
+   * berkode `listener-error`.
+   */
   on<K extends keyof BoardEventMap>(type: K, listener: Listener<BoardEventMap[K]>): Unsubscribe;
   /** Membuat ID record baru memakai opsi `createId` (bawaan nanoid). */
   createId(): string;
@@ -143,12 +165,38 @@ export interface Board {
   getCamera(): Readonly<CameraState>;
   /**
    * Mengubah kamera. Nilai yang tidak berhingga diabaikan, dan zoom dijepit ke `zoomRange`.
+   * Memancarkan event `camera` bila kamera benar-benar berubah.
    */
   setCamera(patch: Partial<CameraState>): void;
+  /**
+   * Membatalkan langkah lokal terakhir: kebalikan diff-nya diterapkan sebagai transaksi berasal
+   * `'undo'` dengan label transaksi aslinya. Record yang sudah diubah pihak lain (misalnya
+   * `remote`) sejak langkah itu dilewati; langkah yang tidak bisa dibalik sama sekali dibuang dan
+   * undo lanjut ke langkah sebelumnya.
+   *
+   * @returns `true` bila ada perubahan yang diterapkan, `false` bila tidak ada yang bisa di-undo
+   *   (termasuk selalu pada papan `readOnly`, karena riwayatnya selalu kosong).
+   * @throws `Error` bila dipanggil di dalam `transact` atau setelah `dispose`.
+   */
+  undo(): boolean;
+  /**
+   * Menerapkan ulang langkah yang terakhir di-undo, sebagai transaksi berasal `'redo'`. Aturan
+   * konflik, nilai kembali, dan error sama dengan {@link Board.undo}.
+   */
+  redo(): boolean;
+  /**
+   * Status riwayat undo. Hanya transaksi berasal `'local'` yang dicatat; perubahan lokal baru
+   * membuang tumpukan redo; `loadDocument` dan migrasi mengosongkan riwayat. Perubahan
+   * `canUndo`/`canRedo` dipancarkan lewat event `history`.
+   */
+  readonly history: BoardHistory;
   /** Mode baca saja (lihat {@link CreateBoardOptions.readOnly}). */
   readonly readOnly: boolean;
   readonly locale: BoardLocale;
-  /** Melepas semua listener. Setelahnya `transact` dan `loadDocument` melempar error. */
+  /**
+   * Melepas semua listener dan mengosongkan riwayat. Setelahnya `transact`, `loadDocument`,
+   * `undo`, dan `redo` melempar error.
+   */
   dispose(): void;
 }
 
@@ -217,13 +265,46 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
 
   const freeze = options.freezeSnapshots !== false;
   const generateId = resolveIdGenerator(options.createId);
-  const events = createEmitter<BoardEventMap>();
+  const historyLimit = resolveHistoryLimit(options.history);
   let disposed = false;
+
+  const events = createEmitter<BoardEventMap>((type, error) => {
+    const message = `Listener event "${String(type)}" melempar error.`;
+    // Error dari listener `error` sendiri, atau tanpa listener `error`, tidak dipancarkan ulang
+    // (mencegah rekursi tak terbatas) tetapi juga tidak ditelan diam-diam.
+    if (type === 'error' || !events.has('error')) {
+      reportUnhandled(`[kujam] ${message}`, error);
+      return;
+    }
+    emitError('listener-error', message, error, type);
+  });
+
+  function emitError(
+    code: BoardErrorCode,
+    message: string,
+    cause: unknown,
+    eventType?: keyof BoardEventMap,
+  ): void {
+    events.emit('error', Object.freeze({ code, message, cause, eventType }));
+  }
 
   const store = createRecordStore(
     options.document ? toOwnedDocument(options.document) : createEmptyDocument(),
-    { freeze, readOnly, onChange: (event) => events.emit('change', event) },
+    {
+      freeze,
+      readOnly,
+      onChange: (event) => {
+        // Riwayat diperbarui dulu agar listener `change` membaca canUndo/canRedo yang baru.
+        history.observe(event);
+        events.emit('change', event);
+        history.flush();
+      },
+    },
   );
+  const history = createLocalHistory(store, {
+    limit: historyLimit,
+    onStateChange: (state) => events.emit('history', state),
+  });
   let camera: CameraState = Object.freeze({ x: 0, y: 0, zoom: 1 });
 
   return {
@@ -253,22 +334,33 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       }
       return id;
     },
+    undo(): boolean {
+      return history.undo();
+    },
+    redo(): boolean {
+      return history.redo();
+    },
+    history: history.api,
     getCamera(): Readonly<CameraState> {
       return camera;
     },
     setCamera(patch: Partial<CameraState>): void {
       const pick = (next: number | undefined, prev: number): number =>
         next !== undefined && Number.isFinite(next) ? next : prev;
-      const zoom = pick(patch.zoom, camera.zoom);
-      camera = Object.freeze({
-        x: pick(patch.x, camera.x),
-        y: pick(patch.y, camera.y),
-        zoom: Math.min(zoomRange.max, Math.max(zoomRange.min, zoom)),
-      });
+      const previous = camera;
+      const next = {
+        x: pick(patch.x, previous.x),
+        y: pick(patch.y, previous.y),
+        zoom: Math.min(zoomRange.max, Math.max(zoomRange.min, pick(patch.zoom, previous.zoom))),
+      };
+      if (next.x === previous.x && next.y === previous.y && next.zoom === previous.zoom) return;
+      camera = Object.freeze(next);
+      events.emit('camera', Object.freeze({ camera, previous }));
     },
     dispose(): void {
       disposed = true;
       events.clear();
+      history.dispose();
       store.dispose();
     },
   };

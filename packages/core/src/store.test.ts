@@ -519,9 +519,13 @@ describe('event change', () => {
     expect(() => board.on('change', 'x' as unknown as () => void)).toThrow(TypeError);
   });
 
-  it('listener yang melempar tidak menghentikan listener lain; error diteruskan setelah commit', () => {
+  it('listener yang melempar tidak menghentikan listener lain; error diteruskan ke event error', () => {
+    // BOARD-207 mengganti perilaku BOARD-204: error listener tidak lagi dilempar ulang dari
+    // transact, melainkan dipancarkan sebagai event `error` (satu per listener yang melempar).
     const board = createBoard();
     const later = vi.fn();
+    const errors: unknown[] = [];
+    board.on('error', (e) => errors.push(e.cause));
     board.on('change', () => {
       throw new Error('listener rusak');
     });
@@ -529,9 +533,10 @@ describe('event change', () => {
       throw new Error('kedua');
     });
     board.on('change', later);
-    expect(() => board.transact((tx) => tx.put(makeElement()))).toThrow('listener rusak');
+    expect(() => board.transact((tx) => tx.put(makeElement()))).not.toThrow();
     expect(later).toHaveBeenCalledTimes(1);
     expect(board.getElement('el:1')).toBeDefined();
+    expect(errors.map((e) => (e as Error).message)).toEqual(['listener rusak', 'kedua']);
   });
 
   it('listener yang dilepas oleh listener lain selama emit tidak dipanggil', () => {
