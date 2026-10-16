@@ -1,6 +1,6 @@
 # ADR-003: Teknologi Render (Canvas 2D + Lapisan HTML)
 
-- **Status:** Diusulkan (menunggu pengukuran Firefox, Safari macOS, dan iPad Safari)
+- **Status:** Diusulkan (menunggu pengukuran Firefox dan Safari macOS; pengukuran iPad ditunda ke BOARD-2105)
 - **Tanggal:** 2026-10-16
 - **Tiket:** BOARD-003 (memblokir BOARD-801, BOARD-005)
 - **Pemilik:** @riziq
@@ -77,7 +77,7 @@ Interval p95 sekitar 17,5 ms di layar 60 Hz berarti tiap frame tepat satu vsync.
 | html-zoomhide/zoom-steps | 60              | 59,3 (2,8% frame > 20 ms)                    | 455               |
 | html-nowc/zoom-steps     | 60              | 60                                           | 147 (p95 21)      |
 
-**Outlier yang perlu dicatat:** di run WebKit pertama, `html/zoom-sweep-nolod` hanya 5,4 fps dan `html/zoom-sweep-lod` 29,5 fps (p95 180 sampai 230 ms). Hasil ini tidak muncul lagi di dua run berikutnya, baik run penuh maupun run khusus HTML. Dugaan kami, raster tile WebKit masih dingin di peluncuran pertama. Karena itu benchmark CI (BOARD-2102) harus memakai median beberapa run, dan perilaku ini wajib dicek ulang di Safari asli dan iPad.
+**Outlier yang perlu dicatat:** di run WebKit pertama, `html/zoom-sweep-nolod` hanya 5,4 fps dan `html/zoom-sweep-lod` 29,5 fps (p95 180 sampai 230 ms). Hasil ini tidak muncul lagi di dua run berikutnya, baik run penuh maupun run khusus HTML. Dugaan kami, raster tile WebKit masih dingin di peluncuran pertama. Karena itu benchmark CI (BOARD-2102) harus memakai median beberapa run, dan perilaku ini wajib dicek ulang di Safari asli, lalu di iPad saat BOARD-2105.
 
 ### Muat dan memori
 
@@ -105,14 +105,14 @@ Aturan yang dibawa ke BOARD-801 dan tiket renderer berikutnya:
 - Indeks rbush untuk culling viewport dan hit-test, `Path2D` tercache per coretan, serta teks dan elemen sub-piksel dilewati di zoom kecil (LOD).
 - Ukuran canvas dibatasi sekitar 16 juta piksel dengan menurunkan DPR efektif, karena iPad Safari punya batas area canvas.
 - Lapisan HTML memakai satu `transform` matrix di elemen pembungkus dengan `will-change: transform`. Elemen kustom punya LOD (render canvas ringkas di bawah zoom 0,4) dan culling per elemen di luar viewport.
-- Opsi renderer `hideHtmlWhileZooming` disiapkan, aktifnya diputuskan setelah pengukuran iPad.
+- Opsi renderer `hideHtmlWhileZooming` disiapkan, aktifnya diputuskan setelah pengukuran iPad (BOARD-2105).
 - Benchmark CI (BOARD-2101, BOARD-2102, BOARD-2105) memakai median minimal 3 run per engine dan menjalankan WebKit, bukan hanya Chromium.
 
 ## Yang masih terbuka sebelum status menjadi "Disetujui"
 
 - [ ] **Firefox:** build Firefox Playwright (1.64) gagal diluncurkan di macOS 27. Jalankan halaman bench di Firefox rilis secara manual.
 - [ ] **Safari macOS** (Safari asli, bukan WebKit Playwright).
-- [ ] **iPad Safari** (target PRD: iPad generasi 9) lewat LAN. Dilanjutkan secara rutin di BOARD-2105.
+- **iPad Safari** (target PRD: iPad generasi 9): **ditunda** (keputusan 2026-10-16), tidak lagi memblokir ADR ini. Pengukuran pertama dilakukan di BOARD-2105 sebelum rilis 0.1, dengan halaman bench yang sama. Bila iPad gagal target, mitigasinya ada di renderer (LOD, `hideHtmlWhileZooming`, batas DPR), bukan penggantian teknologi.
 - [ ] Memori proses untuk papan 5.000 elemen (Activity Monitor atau Web Inspector).
 - [ ] Laptop kelas menengah sungguhan (Core i5 generasi 11 atau setara), bila ada, untuk memvalidasi pengganti CPU 4x.
 

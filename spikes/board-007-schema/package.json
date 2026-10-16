@@ -1,0 +1,19 @@
+{
+  "name": "@kujam/spike-board-007-schema",
+  "version": "0.0.0",
+  "private": true,
+  "description": "BOARD-007: perbandingan mini-lib skema vs Valibot vs Zod (ukuran, inferensi tipe, kecepatan, bentuk error). Bukan kode produksi.",
+  "type": "module",
+  "scripts": {
+    "size": "node size.mjs",
+    "bench": "esbuild bench.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/bench.mjs && node node_modules/.cache/bench.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "valibot": "^1.5.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}
