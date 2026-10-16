@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 
-import type { Board, BoardDocument } from '@kujam/core';
+import { deepClone, type Board, type BoardDocument } from '@kujam/core';
 
 /**
  * Mengekspor dokumen papan sebagai objek JSON terkloning.
@@ -12,5 +12,5 @@ import type { Board, BoardDocument } from '@kujam/core';
  * @public
  */
 export function exportJSON(board: Board): BoardDocument {
-  return JSON.parse(JSON.stringify(board.getDocument())) as BoardDocument;
+  return deepClone(board.getDocument()) as BoardDocument;
 }

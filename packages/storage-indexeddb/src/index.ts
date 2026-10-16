@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 
-import type { BoardDocument } from '@kujam/core';
+import type { StorageAdapter } from '@kujam/core';
 
 /**
  * Opsi pembuatan adapter IndexedDB.
@@ -17,27 +17,11 @@ export interface IndexedDbStorageOptions {
 }
 
 /**
- * Antarmuka adapter penyimpanan IndexedDB.
- *
- * @public
- */
-export interface IndexedDbStorageAdapter {
-  load(boardId: string): Promise<BoardDocument | Uint8Array | null>;
-  save(
-    boardId: string,
-    change: { document?: BoardDocument; update?: Uint8Array },
-  ): Promise<void>;
-  debounceMs?: number;
-}
-
-/**
  * Membuat adapter penyimpanan berbasis IndexedDB.
  *
  * @public
  */
-export function createIndexedDbStorage(
-  options: IndexedDbStorageOptions = {},
-): IndexedDbStorageAdapter {
+export function createIndexedDbStorage(options: IndexedDbStorageOptions = {}): StorageAdapter {
   return {
     debounceMs: options.debounceMs ?? 1000,
     async load(_boardId: string) {
@@ -48,4 +32,3 @@ export function createIndexedDbStorage(
     },
   };
 }
-

@@ -4,104 +4,38 @@
  * @packageDocumentation
  */
 
-/**
- * Versi skema dokumen papan saat ini.
- *
- * @public
- */
-export const CURRENT_SCHEMA_VERSION = 1;
+import { deepClone, deepFreeze } from './clone.js';
+import type { BoardDocument, CameraState, ElementRecord } from './types.js';
+import { CURRENT_SCHEMA_VERSION } from './types.js';
+import { InvalidDocumentError, validateDocument } from './validate.js';
+
+export * from './types.js';
+export { deepClone } from './clone.js';
+export { InvalidDocumentError, validateDocument, type ValidationResult } from './validate.js';
 
 /**
- * Representasi record elemen di dalam dokumen papan datar.
+ * Bahasa UI yang didukung package.
  *
  * @public
  */
-export interface ElementRecord<P = Record<string, unknown>> {
-  id: string;
-  kind: 'element';
-  type: string;
-  pageId: string;
-  parentId: string | null;
-  index: string;
-  x: number;
-  y: number;
-  rotation: number;
-  w: number;
-  h: number;
-  locked: boolean;
-  opacity: number;
-  props: P;
-  meta: Record<string, unknown>;
+export type BoardLocale = 'id' | 'en';
+
+/**
+ * Batas zoom kamera.
+ *
+ * @public
+ */
+export interface ZoomRange {
+  min: number;
+  max: number;
 }
 
 /**
- * Representasi record konektor/binding antar elemen.
+ * Batas zoom bawaan: 10% sampai 400%.
  *
  * @public
  */
-export interface BindingRecord {
-  id: string;
-  kind: 'binding';
-  fromId: string;
-  toId: string;
-  anchor: { x: number; y: number };
-}
-
-/**
- * Representasi record halaman (page) di dalam papan.
- *
- * @public
- */
-export interface PageRecord {
-  id: string;
-  kind: 'page';
-  name: string;
-  index: string;
-  meta: Record<string, unknown>;
-}
-
-/**
- * Representasi record aset media di dalam papan.
- *
- * @public
- */
-export interface AssetRecord {
-  id: string;
-  kind: 'asset';
-  mimeType: string;
-  w: number;
-  h: number;
-  meta: Record<string, unknown>;
-}
-
-/**
- * Gabungan seluruh jenis record pada dokumen papan.
- *
- * @public
- */
-export type BoardRecord = ElementRecord | BindingRecord | PageRecord | AssetRecord;
-
-/**
- * Dokumen papan berversi yang menyimpan kumpulan record datar.
- *
- * @public
- */
-export interface BoardDocument {
-  schemaVersion: number;
-  meta: Record<string, unknown>;
-  records: Record<string, BoardRecord>;
-}
-
-/**
- * Konfigurasi kamera papan.
- *
- * @public
- */
-export interface CameraState {
-  x: number;
-  y: number;
-  zoom: number;
-}
+export const DEFAULT_ZOOM_RANGE: Readonly<ZoomRange> = Object.freeze({ min: 0.1, max: 4 });
 
 /**
  * Opsi pembuatan instance `Board`.
@@ -110,8 +44,15 @@ export interface CameraState {
  */
 export interface CreateBoardOptions {
   document?: BoardDocument;
+  /**
+   * Mode baca saja. Perubahan dokumen lokal ditolak; kamera dan seleksi tetap bisa diubah,
+   * dan `loadDocument` tetap diizinkan untuk menerima dokumen dari server.
+   */
   readOnly?: boolean;
-  locale?: 'id' | 'en';
+  /** Bahasa UI. Bawaan `'id'`. */
+  locale?: BoardLocale;
+  /** Batas zoom kamera. Bawaan {@link DEFAULT_ZOOM_RANGE}. */
+  zoomRange?: ZoomRange;
 }
 
 /**
@@ -120,11 +61,19 @@ export interface CreateBoardOptions {
  * @public
  */
 export interface Board {
+  /** Snapshot dokumen yang dibekukan; mengubahnya melempar `TypeError`. */
   getDocument(): Readonly<BoardDocument>;
+  /** Memuat dokumen baru. Melempar {@link InvalidDocumentError} bila tidak valid. */
   loadDocument(doc: BoardDocument): void;
   getElement(id: string): Readonly<ElementRecord> | undefined;
+  /** Snapshot kamera yang dibekukan. */
   getCamera(): Readonly<CameraState>;
+  /**
+   * Mengubah kamera. Nilai yang tidak berhingga diabaikan, dan zoom dijepit ke `zoomRange`.
+   */
   setCamera(patch: Partial<CameraState>): void;
+  readonly readOnly: boolean;
+  readonly locale: BoardLocale;
   dispose(): void;
 }
 
@@ -149,8 +98,27 @@ export function createEmptyDocument(meta: Record<string, unknown> = {}): BoardDo
   };
 }
 
-function cloneDocument(doc: BoardDocument): BoardDocument {
-  return JSON.parse(JSON.stringify(doc)) as BoardDocument;
+function toSnapshot(doc: BoardDocument): BoardDocument {
+  const result = validateDocument(doc);
+  if (!result.valid) {
+    throw new InvalidDocumentError(result.errors);
+  }
+  return deepFreeze(deepClone(doc));
+}
+
+function resolveZoomRange(range: ZoomRange | undefined): ZoomRange {
+  if (!range) return DEFAULT_ZOOM_RANGE;
+  const { min, max } = range;
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min <= 0 || max < min) {
+    throw new RangeError('zoomRange wajib berisi angka berhingga dengan 0 < min <= max.');
+  }
+  return { min, max };
+}
+
+function resolveLocale(locale: unknown): BoardLocale {
+  if (locale === undefined) return 'id';
+  if (locale === 'id' || locale === 'en') return locale;
+  throw new RangeError(`locale "${String(locale)}" tidak didukung (pilih 'id' atau 'en').`);
 }
 
 /**
@@ -159,17 +127,23 @@ function cloneDocument(doc: BoardDocument): BoardDocument {
  * @public
  */
 export function createBoard(options: CreateBoardOptions = {}): Board {
+  const zoomRange = resolveZoomRange(options.zoomRange);
+  const locale = resolveLocale(options.locale);
+  const readOnly = options.readOnly === true;
+
   let currentDoc: BoardDocument = options.document
-    ? cloneDocument(options.document)
-    : createEmptyDocument();
-  let camera: CameraState = { x: 0, y: 0, zoom: 1 };
+    ? toSnapshot(options.document)
+    : deepFreeze(createEmptyDocument());
+  let camera: CameraState = Object.freeze({ x: 0, y: 0, zoom: 1 });
 
   return {
+    readOnly,
+    locale,
     getDocument(): Readonly<BoardDocument> {
       return currentDoc;
     },
     loadDocument(doc: BoardDocument): void {
-      currentDoc = cloneDocument(doc);
+      currentDoc = toSnapshot(doc);
     },
     getElement(id: string): Readonly<ElementRecord> | undefined {
       const rec = currentDoc.records[id];
@@ -179,11 +153,14 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       return camera;
     },
     setCamera(patch: Partial<CameraState>): void {
-      camera = {
-        x: patch.x ?? camera.x,
-        y: patch.y ?? camera.y,
-        zoom: patch.zoom ?? camera.zoom,
-      };
+      const pick = (next: number | undefined, prev: number): number =>
+        next !== undefined && Number.isFinite(next) ? next : prev;
+      const zoom = pick(patch.zoom, camera.zoom);
+      camera = Object.freeze({
+        x: pick(patch.x, camera.x),
+        y: pick(patch.y, camera.y),
+        zoom: Math.min(zoomRange.max, Math.max(zoomRange.min, zoom)),
+      });
     },
     dispose(): void {
       // Pembersihan listener & state

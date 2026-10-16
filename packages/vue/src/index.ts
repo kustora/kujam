@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 
-import { defineComponent, h, onBeforeUnmount, onMounted, ref, type PropType } from 'vue';
+import { defineComponent, h, onBeforeUnmount, onMounted, ref, watch, type PropType } from 'vue';
 import type { Board as CoreBoard } from '@kujam/core';
 import { mountRenderer, type BoardView } from '@kujam/renderer';
 
@@ -25,11 +25,20 @@ export const Board = defineComponent({
     const hostRef = ref<HTMLElement | null>(null);
     let view: BoardView | null = null;
 
-    onMounted(() => {
-      if (hostRef.value) {
-        view = mountRenderer(props.board, hostRef.value);
-      }
-    });
+    const mount = (): void => {
+      view?.unmount();
+      view = hostRef.value ? mountRenderer(props.board, hostRef.value) : null;
+    };
+
+    onMounted(mount);
+
+    // Pasang ulang renderer bila instance board diganti (sama dengan dependensi [board] di React).
+    watch(
+      () => props.board,
+      () => {
+        if (view) mount();
+      },
+    );
 
     onBeforeUnmount(() => {
       view?.unmount();
@@ -43,4 +52,3 @@ export const Board = defineComponent({
       });
   },
 });
-
