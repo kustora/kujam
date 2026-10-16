@@ -47,6 +47,8 @@ pnpm install
 pnpm build
 
 # Jalankan playground pengembangan (http://localhost:5173)
+# Skenario: /s/empty, /s/rich-text, /s/schema-lab. Tambah ?bare=1 atau ?debug=0.
+# Tombol "Perangkat lain (QR)" membuka skenario yang sama di HP/iPad satu jaringan.
 pnpm playground
 
 # Jalankan seluruh unit test (termasuk @kujam/core di environment Node murni)

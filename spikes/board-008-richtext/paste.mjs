@@ -115,7 +115,10 @@ for (const [name, engine] of Object.entries({ chromium, webkit })) {
         3,
         'butir daftar hilang',
       );
-      // Catatan: indentasi daftar bersarang dari HTML luar tidak dipertahankan Quill (menjadi datar).
+      assert.ok(
+        res.model.some((o) => o.attributes?.list === 'bullet' && o.attributes?.indent === 1),
+        'indentasi daftar bersarang hilang',
+      );
     },
   );
 

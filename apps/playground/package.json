@@ -21,10 +21,12 @@
     "@kujam/storage-memory": "workspace:*",
     "@kujam/sync-yjs": "workspace:*",
     "@kujam/ui": "workspace:*",
-    "@kujam/vue": "workspace:*"
+    "@kujam/vue": "workspace:*",
+    "qrcode-generator": "^2.0.4"
   },
   "devDependencies": {
+    "@kujam/spike-board-008-richtext": "workspace:^",
+    "quill": "2.0.3",
     "vite": "^6.2.0"
   }
 }
-
