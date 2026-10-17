@@ -301,7 +301,9 @@ export type ElementPropsMigration = (props: Record<string, unknown>) => Record<s
 /**
  * Per-version props migrations for a type. Key `n` migrates props from version `n` to `n + 1`; keys must be
  * integers from `0` to `version - 1`. Versions without a step are treated as leaving props unchanged.
- * Run when loading a document, by BOARD-702.
+ * Run when loading a document (BOARD-702) for every element whose `typeVersion` (missing means `1`)
+ * is below `version`; steps receive frozen props and the element's `typeVersion` is then set to
+ * `version`.
  *
  * @public
  */

@@ -196,6 +196,7 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
   let records = new Map<string, BoardRecord>(Object.entries(snapshot.records));
   let schemaVersion = snapshot.schemaVersion;
   let meta = snapshot.meta;
+  let pluginVersions = snapshot.pluginVersions;
   let active: ActiveTransaction | null = null;
   let disposed = false;
 
@@ -207,7 +208,10 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
     if (!snapshot) {
       const out: Record<string, BoardRecord> = {};
       for (const [id, rec] of records) setOwn(out, id, rec);
-      snapshot = sealShallow({ schemaVersion, meta, records: sealShallow(out) });
+      const doc: BoardDocument = { schemaVersion, meta, records: sealShallow(out) };
+      // Only present when set, so documents without plugin migrations keep their exact shape.
+      if (pluginVersions !== undefined) doc.pluginVersions = pluginVersions;
+      snapshot = sealShallow(doc);
     }
     return snapshot;
   }
@@ -375,6 +379,7 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
       records = next;
       schemaVersion = doc.schemaVersion;
       meta = seal(doc.meta);
+      pluginVersions = doc.pluginVersions === undefined ? undefined : seal(doc.pluginVersions);
       snapshot = null;
       // Replacing the document always emits one event, even when the record diff is empty,
       // because meta and the schema version may change too.

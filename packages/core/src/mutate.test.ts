@@ -126,6 +126,7 @@ describe('BOARD-205: board.create', () => {
       locked: true,
       opacity: 0.8,
       props: { text: 'Kustom', color: 'blue' },
+      typeVersion: 1,
       meta: { author: 'Budi' },
     });
 

@@ -35,6 +35,7 @@ import {
   type BoardUser,
   type PermissionAction,
   type PermissionHook,
+  type PluginMigrations,
 } from './plugins.js';
 import { createRecordStore, type TransactOptions, type Transaction } from './store.js';
 import {
@@ -54,7 +55,7 @@ import {
   type PartialElement,
   type UpdateOptions,
 } from './mutate.js';
-import { migrateSchema } from './migrations.js';
+import { latestPluginVersion, migrateContent, migrateSchema } from './migrations.js';
 import { createSelection, type SelectionInput } from './selection.js';
 import { createSpatialIndex, type BoxBounds, type SpatialIndex } from './spatial.js';
 import { queryElements, type QueryFilter } from './query.js';
@@ -169,6 +170,7 @@ export {
   CORE_MIGRATIONS,
   MigrationError,
   migrateSchema,
+  type MigrationSource,
   type SchemaMigration,
   type SchemaMigrations,
 } from './migrations.js';
@@ -284,7 +286,12 @@ export const DEFAULT_BOARD_LIMITS: Readonly<BoardLimits> = Object.freeze({
  * @public
  */
 export interface CreateBoardOptions {
-  /** Initial board document; when omitted, a new document with one page (`page:main`) is created. */
+  /**
+   * Initial board document; when omitted, a new document with one page (`page:main`) is created.
+   * Migrated like {@link Board.loadDocument}: element and plugin migrations run once plugins are
+   * installed, with origin `'migration'`. When a migration fails, the board is disposed and the
+   * {@link MigrationError} is thrown.
+   */
   document?: BoardDocument;
   /**
    * Plugins, installed deterministically by order and `dependsOn`
@@ -379,7 +386,13 @@ export interface Board {
   /**
    * Replaces the whole document as a single transaction with origin `'load'` and emits one
    * `change` event with the diff against the old document. Also allowed when `readOnly`.
-   * Throws {@link InvalidDocumentError} when invalid (state is left unchanged).
+   *
+   * Migrations run first (BOARD-701, BOARD-702): core schema migrations before validation, then
+   * element props and plugin document migrations. When those change anything, the result is
+   * applied as a second transaction with origin `'migration'`, which never enters undo history.
+   *
+   * Throws {@link InvalidDocumentError} when invalid, or {@link MigrationError} when a migration
+   * fails (state is left unchanged in both cases).
    */
   loadDocument(doc: BoardDocument): void;
   /**
@@ -704,6 +717,24 @@ function toOwnedDocument(input: BoardDocument): BoardDocument {
   return deepClone(doc);
 }
 
+/**
+ * Creates the initial document for a board without `options.document`. Plugin document versions
+ * start at each plugin's latest version, so plugin migrations never run on a brand-new document.
+ * Invalid plugin definitions are skipped here and rejected by plugin installation.
+ */
+function createDocumentFor(plugins: unknown): BoardDocument {
+  const doc = createEmptyDocument();
+  if (!Array.isArray(plugins)) return doc;
+  const versions: Record<string, number> = {};
+  for (const plugin of plugins as unknown[]) {
+    if (!isPlainObject(plugin) || typeof plugin.id !== 'string') continue;
+    if (!isPlainObject(plugin.migrations)) continue;
+    const version = latestPluginVersion(plugin.migrations as PluginMigrations);
+    if (version > 0) versions[plugin.id] = version;
+  }
+  return Object.keys(versions).length > 0 ? { ...doc, pluginVersions: versions } : doc;
+}
+
 function resolveIdGenerator(generator: unknown): IdGenerator {
   if (generator === undefined) return () => createRandomId();
   if (typeof generator === 'function') return generator as IdGenerator;
@@ -885,7 +916,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   });
 
   const store = createRecordStore(
-    options.document ? toOwnedDocument(options.document) : createEmptyDocument(),
+    options.document ? toOwnedDocument(options.document) : createDocumentFor(options.plugins),
     {
       freeze,
       readOnly,
@@ -957,6 +988,15 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
 
   function assertUsable(): void {
     if (disposed) throw new Error('Papan sudah di-dispose.');
+  }
+
+  /**
+   * Runs element props and plugin document migrations (BOARD-702) on a validated document.
+   * Returns `doc` itself when nothing changed, otherwise a validated, owned copy.
+   */
+  function migrateDocumentContent(doc: BoardDocument): BoardDocument {
+    const migrated = migrateContent(doc, elements, plugins.api.list());
+    return migrated === doc ? doc : toOwnedDocument(migrated);
   }
 
   function checkPermissions(
@@ -1067,23 +1107,14 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     },
     loadDocument(doc: BoardDocument): void {
       assertUsable();
-      let currentDoc = doc;
-      for (const plugin of plugins.api.list()) {
-        if (plugin.migrations) {
-          let step = plugin.migrations[currentDoc.schemaVersion];
-          while (typeof step === 'function') {
-            const prevVersion = currentDoc.schemaVersion;
-            currentDoc = step(currentDoc);
-            if (currentDoc.schemaVersion === prevVersion) break;
-            step = plugin.migrations[currentDoc.schemaVersion];
-          }
-        }
-      }
-      const owned = toOwnedDocument(currentDoc);
+      const owned = toOwnedDocument(doc);
+      // Every migration runs before the store is touched, so a failing step leaves state unchanged.
+      const migrated = migrateDocumentContent(owned);
       // The diff of an in-progress interaction does not apply to the new document.
       tools.reset();
       history.api.clear();
       store.replaceDocument(owned, 'load');
+      if (migrated !== owned) store.replaceDocument(migrated, 'migration');
     },
     getElement(id: string) {
       const rec = store.getRecord(id);
@@ -1200,5 +1231,16 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   };
 
   plugins.install();
+  if (options.document) {
+    // Element and plugin migrations need the installed registries, so they run after install.
+    try {
+      const current = store.getDocument();
+      const migrated = migrateDocumentContent(current);
+      if (migrated !== current) store.replaceDocument(migrated, 'migration');
+    } catch (error) {
+      board.dispose();
+      throw error;
+    }
+  }
   return board;
 }

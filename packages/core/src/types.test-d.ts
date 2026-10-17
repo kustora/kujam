@@ -46,6 +46,7 @@ export type Tests = [
         schemaVersion: number;
         meta: Record<string, unknown>;
         records: Record<string, BoardRecord>;
+        pluginVersions?: Record<string, number>;
       }
     >
   >,
@@ -69,6 +70,7 @@ export type Tests = [
         locked: boolean;
         opacity: number;
         props: Record<string, unknown>;
+        typeVersion?: number;
         meta: Record<string, unknown>;
       }
     >

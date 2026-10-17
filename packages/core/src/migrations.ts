@@ -1,13 +1,21 @@
 /**
- * Document migrations (BOARD-701).
+ * Document migrations (BOARD-701, BOARD-702).
  *
- * Core schema migrations upgrade a document step by step from its `schemaVersion` to
- * {@link CURRENT_SCHEMA_VERSION}. They run before structural validation, because an older
- * document is not necessarily a valid document of the current schema.
+ * Order on load:
+ * 1. Core schema migrations upgrade a document step by step from its `schemaVersion` to
+ *    {@link CURRENT_SCHEMA_VERSION}. They run before structural validation, because an older
+ *    document is not necessarily a valid document of the current schema.
+ * 2. Element props migrations (`migrate` in `defineElement`), per element `typeVersion`.
+ * 3. Plugin document migrations (`migrations` in `definePlugin`), per `pluginVersions` entry.
+ *
+ * Steps 2 and 3 need the installed element types and plugins; the board applies their result
+ * as a separate transaction with origin `'migration'`.
  */
 
 import { deepClone, deepFreeze } from './clone.js';
-import { CURRENT_SCHEMA_VERSION, type BoardDocument } from './types.js';
+import type { ElementRegistry } from './elements.js';
+import type { AnyPluginDefinition, PluginMigrations } from './plugins.js';
+import { CURRENT_SCHEMA_VERSION, type BoardDocument, type BoardRecord } from './types.js';
 
 /**
  * A single core schema migration step from version `n` to `n + 1`. Must be pure: it receives a
@@ -43,13 +51,33 @@ export const CORE_MIGRATIONS: SchemaMigrations = Object.freeze({});
 export class MigrationError extends Error {
   /** Source version of the failing step. */
   readonly fromVersion: number;
+  /**
+   * What was being migrated: `{ kind: 'element', type }` for props migrations,
+   * `{ kind: 'plugin', id }` for plugin document migrations, or `undefined` for core schema
+   * migrations.
+   */
+  readonly source: MigrationSource | undefined;
 
-  constructor(fromVersion: number, message: string, options?: { cause?: unknown }) {
+  constructor(
+    fromVersion: number,
+    message: string,
+    options?: { cause?: unknown; source?: MigrationSource },
+  ) {
     super(message, options);
     this.name = 'MigrationError';
     this.fromVersion = fromVersion;
+    this.source = options?.source;
   }
 }
+
+/**
+ * Origin of a failing non-core migration step (see {@link MigrationError.source}).
+ *
+ * @public
+ */
+export type MigrationSource =
+  | { readonly kind: 'element'; readonly type: string }
+  | { readonly kind: 'plugin'; readonly id: string };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -107,4 +135,124 @@ export function migrateSchema(
   }
   // Callers own the result, so it is returned unfrozen.
   return deepClone(current);
+}
+
+// ---------- Element and plugin migrations (BOARD-702) ----------
+
+/**
+ * Number of consecutive plugin migration steps starting at `0`: the plugin's current document
+ * version. Steps after a gap are never reached.
+ *
+ * @internal
+ */
+export function latestPluginVersion(migrations: PluginMigrations | undefined): number {
+  let version = 0;
+  while (migrations && typeof migrations[version] === 'function') version++;
+  return version;
+}
+
+function runStep<T>(step: (input: T) => T, input: T, fail: (cause: unknown) => never): T {
+  let next: unknown;
+  try {
+    // A frozen copy: a step that mutates its input throws instead of corrupting board state.
+    next = step(deepFreeze(deepClone(input)));
+  } catch (error) {
+    fail(error);
+  }
+  if (!isPlainObject(next)) fail(new TypeError('Langkah migrasi wajib mengembalikan objek.'));
+  return next as T;
+}
+
+/**
+ * Runs `migrate` steps of registered element types on every element whose `typeVersion`
+ * (missing means `1`) is below its definition's `version`, then sets `typeVersion` to that
+ * version. Versions without a step leave props unchanged. Unregistered types and elements newer
+ * than their definition are left untouched. Returns `doc` itself when nothing changed.
+ *
+ * @internal
+ */
+export function migrateElements(doc: BoardDocument, elements: ElementRegistry): BoardDocument {
+  let records: Record<string, BoardRecord> | null = null;
+  for (const [id, rec] of Object.entries(doc.records)) {
+    if (rec.kind !== 'element') continue;
+    const def = elements.get(rec.type);
+    const from = rec.typeVersion ?? 1;
+    if (!def || from >= def.version) continue;
+
+    let props = rec.props;
+    for (let version = from; version < def.version; version++) {
+      const step =
+        def.migrate && Object.hasOwn(def.migrate, version) ? def.migrate[version] : undefined;
+      if (typeof step !== 'function') continue;
+      props = runStep(step, props, (cause) => {
+        throw new MigrationError(
+          version,
+          `Migrasi props tipe "${rec.type}" dari versi ${version} ke ${version + 1} gagal.`,
+          { cause, source: { kind: 'element', type: rec.type } },
+        );
+      });
+    }
+    records ??= { ...doc.records };
+    Object.defineProperty(records, id, {
+      value: { ...rec, props, typeVersion: def.version },
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
+  return records ? { ...doc, records } : doc;
+}
+
+/**
+ * Runs each plugin's document `migrations` from the version recorded in `doc.pluginVersions`
+ * (missing means `0`), in plugin order, and records the new versions. Returns `doc` itself when
+ * nothing changed.
+ *
+ * @internal
+ */
+export function migratePluginDocuments(
+  doc: BoardDocument,
+  plugins: readonly AnyPluginDefinition[],
+): BoardDocument {
+  let current = doc;
+  for (const plugin of plugins) {
+    const migrations = plugin.migrations;
+    if (!migrations) continue;
+    const from = current.pluginVersions?.[plugin.id] ?? 0;
+    const to = latestPluginVersion(migrations);
+    if (from >= to) continue;
+
+    let next = current;
+    for (let version = from; version < to; version++) {
+      next = runStep(migrations[version]!, next, (cause) => {
+        throw new MigrationError(
+          version,
+          `Migrasi dokumen plugin "${plugin.id}" dari versi ${version} ke ${version + 1} gagal.`,
+          { cause, source: { kind: 'plugin', id: plugin.id } },
+        );
+      });
+    }
+    // Plugins may not change the schema version or other plugins' versions.
+    current = {
+      ...next,
+      schemaVersion: current.schemaVersion,
+      pluginVersions: { ...current.pluginVersions, [plugin.id]: to },
+    };
+  }
+  return current;
+}
+
+/**
+ * Runs every migration that needs the installed element types and plugins, in order: element
+ * props migrations, then plugin document migrations. Core schema migrations
+ * ({@link migrateSchema}) must already have run. Returns `doc` itself when nothing changed.
+ *
+ * @internal
+ */
+export function migrateContent(
+  doc: BoardDocument,
+  elements: ElementRegistry,
+  plugins: readonly AnyPluginDefinition[],
+): BoardDocument {
+  return migratePluginDocuments(migrateElements(doc, elements), plugins);
 }

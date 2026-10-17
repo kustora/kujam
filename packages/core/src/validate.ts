@@ -40,6 +40,7 @@ function checkFields(
 const isString = (v: unknown): boolean => typeof v === 'string';
 const isNonEmptyString = (v: unknown): boolean => typeof v === 'string' && v.length > 0;
 const isNonNegative = (v: unknown): boolean => isFiniteNumber(v) && v >= 0;
+const isPositiveInteger = (v: unknown): boolean => Number.isInteger(v) && (v as number) >= 1;
 
 function validateRecord(id: string, rec: unknown, errors: string[]): void {
   const path = `records["${id}"]`;
@@ -88,6 +89,9 @@ function validateRecord(id: string, rec: unknown, errors: string[]): void {
           meta: 'berupa objek',
         },
       );
+      if (rec.typeVersion !== undefined && !isPositiveInteger(rec.typeVersion)) {
+        errors.push(`${path}.typeVersion wajib berupa bilangan bulat positif.`);
+      }
       return;
     case 'binding':
       checkFields(
@@ -162,6 +166,19 @@ export function validateDocument(doc: unknown): ValidationResult {
 
   if (!isPlainObject(candidate.meta)) {
     errors.push('Field meta wajib berupa objek.');
+  }
+
+  const pluginVersions = candidate.pluginVersions;
+  if (pluginVersions !== undefined) {
+    if (!isPlainObject(pluginVersions)) {
+      errors.push('Field pluginVersions wajib berupa objek { [idPlugin]: versi }.');
+    } else {
+      for (const [id, v] of Object.entries(pluginVersions)) {
+        if (!Number.isInteger(v) || (v as number) < 0) {
+          errors.push(`pluginVersions["${id}"] wajib berupa bilangan bulat tidak negatif.`);
+        }
+      }
+    }
   }
 
   if (!isPlainObject(candidate.records)) {

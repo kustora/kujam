@@ -36,6 +36,12 @@ export interface ElementRecord<P = Record<string, unknown>> {
   opacity: number;
   /** Type-specific content, validated by the type schema. */
   props: P;
+  /**
+   * Version of the element type (`version` in `defineElement`) that `props` were written for
+   * (BOARD-702). Missing means `1`. `board.create` and props migrations set it; code that writes
+   * element records with `tx.put` should set it too, or newer props may be migrated again on load.
+   */
+  typeVersion?: number;
   /** Free for consumers; the package never reads or changes its content. */
   meta: Record<string, unknown>;
 }
@@ -103,6 +109,11 @@ export interface BoardDocument {
   meta: Record<string, unknown>;
   /** Flat collection of records, keyed by record `id`. */
   records: Record<string, BoardRecord>;
+  /**
+   * Document migration version per plugin ID (BOARD-702): how many of the plugin's `migrations`
+   * steps this document has been through. A missing plugin entry means `0`.
+   */
+  pluginVersions?: Record<string, number>;
 }
 
 /**
