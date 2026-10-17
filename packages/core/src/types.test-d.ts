@@ -21,13 +21,18 @@ import type {
   ElementAction,
   ElementPatch,
   ElementRecord,
+  ElementTransform,
+  Geometry,
+  HitTestOptions,
   MutateOptions,
+  PathGeometry,
+  Point,
+  SnapPoint,
   PageRecord,
   PartialElement,
   PermissionAction,
   PermissionHook,
   QueryFilter,
-  Point,
   RectBounds,
   SelectionInput,
   StorageAttachment,
@@ -208,6 +213,13 @@ export type Tests = [
   Expect<Equal<ValidationResult['errors'], string[]>>,
   Expect<Equal<ValidateDocumentOptions['limits'], Partial<BoardLimits> | undefined>>,
   Expect<ElementRegistry extends DocumentPropsValidator ? true : false>,
+  // BOARD-403 & BOARD-404: geometry library and hit-test type tests
+  Expect<Equal<Parameters<Board['hitTest']>, [point: Point, options?: HitTestOptions]>>,
+  Expect<Equal<ReturnType<Board['hitTest']>, Readonly<ElementRecord> | undefined>>,
+  Expect<Equal<Extract<Geometry, { kind: 'path' }>, PathGeometry>>,
+  Expect<Equal<SnapPoint['kind'], 'corner' | 'edge' | 'center'>>,
+  // Element records can be passed wherever an ElementTransform is expected.
+  Expect<ElementRecord extends ElementTransform ? true : false>,
 ];
 
 declare const _dummyBoard: Board;

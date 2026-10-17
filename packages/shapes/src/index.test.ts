@@ -190,15 +190,16 @@ describe('draw', () => {
   ];
   const el = withDefaults(drawElement, { points });
 
-  it('geometri polyline dengan tebal garis', () => {
+  it('geometri path dengan tebal garis', () => {
     expect(drawElement.geometry?.(el)).toEqual({
-      kind: 'polyline',
+      kind: 'path',
       points: [
         { x: 0, y: 0 },
         { x: 10, y: 5 },
         { x: 20, y: 0 },
       ],
       width: 4,
+      closed: false,
     });
     expect(drawElement.geometry?.(withDefaults(drawElement, { points: [[]] }))).toMatchObject({
       points: [{ x: 0, y: 0 }],

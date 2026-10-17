@@ -1,4 +1,4 @@
-import { array, defineElement, enumOf, number, polyline, schema, string } from '@kujam/core';
+import { array, defineElement, enumOf, number, path, schema, string } from '@kujam/core';
 import { COLOR_KEYS, COLOR_VALUES } from '../colors.js';
 import { localize } from '../i18n.js';
 
@@ -26,11 +26,7 @@ export const drawElement = defineElement({
     brush: string({ minLength: 1, maxLength: 64 }),
   }),
   defaults: { points: [], color: 'black', thickness: 4, brush: 'pen' },
-  geometry: (el) =>
-    polyline(
-      el.props.points.map(([x = 0, y = 0]) => ({ x, y })),
-      el.props.thickness,
-    ),
+  geometry: (el) => path(el.props.points, el.props.thickness),
   // TODO(BOARD-1002, BOARD-406): resize needs to scale the points or store a scale.
   resize: 'free',
   render: {

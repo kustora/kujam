@@ -5,7 +5,7 @@
  */
 
 import RBush from 'rbush';
-import type { Geometry } from './geometry.js';
+import { geometryBounds, resolveElementGeometry, type Geometry } from './geometry.js';
 import type { ElementRecord } from './types.js';
 
 /**
@@ -117,103 +117,10 @@ export function computeElementAABB(
   element: ElementRecord,
   getGeometry?: (el: ElementRecord) => Geometry | undefined,
 ): BoxBounds {
-  let lx1 = 0;
-  let ly1 = 0;
-  let lx2 = element.w;
-  let ly2 = element.h;
-
-  let customPoints: { x: number; y: number }[] | null = null;
-  let strokePadding = 0;
-
-  if (getGeometry) {
-    try {
-      const geom = getGeometry(element);
-      if (geom) {
-        switch (geom.kind) {
-          case 'rect':
-          case 'ellipse':
-            lx1 = geom.x;
-            ly1 = geom.y;
-            lx2 = geom.x + geom.w;
-            ly2 = geom.y + geom.h;
-            break;
-          case 'polygon':
-            if (geom.points.length > 0) {
-              customPoints = geom.points.map((p) => ({ x: p.x, y: p.y }));
-              lx1 = Math.min(...geom.points.map((p) => p.x));
-              ly1 = Math.min(...geom.points.map((p) => p.y));
-              lx2 = Math.max(...geom.points.map((p) => p.x));
-              ly2 = Math.max(...geom.points.map((p) => p.y));
-            }
-            break;
-          case 'polyline':
-            if (geom.points.length > 0) {
-              customPoints = geom.points.map((p) => ({ x: p.x, y: p.y }));
-              strokePadding = (geom.width ?? 0) / 2;
-              lx1 = Math.min(...geom.points.map((p) => p.x)) - strokePadding;
-              ly1 = Math.min(...geom.points.map((p) => p.y)) - strokePadding;
-              lx2 = Math.max(...geom.points.map((p) => p.x)) + strokePadding;
-              ly2 = Math.max(...geom.points.map((p) => p.y)) + strokePadding;
-            }
-            break;
-        }
-      }
-    } catch {
-      // Ignore errors from the geometry function and fall back to the element's base size
-    }
-  }
-
-  // Without rotation
-  if (!element.rotation || element.rotation % 360 === 0) {
-    return {
-      minX: element.x + lx1,
-      minY: element.y + ly1,
-      maxX: element.x + lx2,
-      maxY: element.y + ly2,
-    };
-  }
-
-  // With rotation: the rotation center is the element's center (element.x + element.w / 2, element.y + element.h / 2)
-  const cx = element.x + element.w / 2;
-  const cy = element.y + element.h / 2;
-  const rad = (element.rotation * Math.PI) / 180;
-  const cos = Math.cos(rad);
-  const sin = Math.sin(rad);
-
-  const localCorners = customPoints
-    ? customPoints
-    : [
-        { x: lx1, y: ly1 },
-        { x: lx2, y: ly1 },
-        { x: lx2, y: ly2 },
-        { x: lx1, y: ly2 },
-      ];
-
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-
-  for (const pt of localCorners) {
-    const wx = element.x + pt.x;
-    const wy = element.y + pt.y;
-    const dx = wx - cx;
-    const dy = wy - cy;
-    const rx = cx + dx * cos - dy * sin;
-    const ry = cy + dx * sin + dy * cos;
-
-    if (rx < minX) minX = rx;
-    if (rx > maxX) maxX = rx;
-    if (ry < minY) minY = ry;
-    if (ry > maxY) maxY = ry;
-  }
-
-  return {
-    minX: minX - strokePadding,
-    minY: minY - strokePadding,
-    maxX: maxX + strokePadding,
-    maxY: maxY + strokePadding,
-  };
+  return geometryBounds(
+    resolveElementGeometry(element, getGeometry && (() => getGeometry(element))),
+    element,
+  );
 }
 
 /**
