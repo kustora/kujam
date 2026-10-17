@@ -21,6 +21,7 @@ import {
   type ElementRegistry,
 } from './elements.js';
 import type { Board } from './index.js';
+import { checkKeybindingMap } from './keybindings.js';
 import { defineTool, type AnyToolDefinition, type BoardTools, type ToolError } from './tools.js';
 import type { BoardDocument, ElementRecord } from './types.js';
 
@@ -210,7 +211,10 @@ export interface PluginDefinition<
   /** Commands registered into `board.commands`. */
   readonly commands?: PluginCommandsInput;
   /**
-   * Map from keyboard shortcut to command ID or `'tool:<id>'` (BOARD-504).
+   * Map from keyboard shortcut to command ID or `'tool:<id>'` (BOARD-504), for example
+   * `{ 'Mod+D': 'element.duplicate', h: 'tool:hand' }`. See `board.keybindings` for the
+   * notation. A later plugin wins over an earlier one, and the consumer's
+   * `createBoard({ keybindings })` wins over every plugin.
    *
    * @beta
    */
@@ -464,18 +468,7 @@ function checkBrushes(brushes: unknown, errors: string[]): void {
 }
 
 function checkKeybindings(keybindings: unknown, errors: string[]): void {
-  if (!isPlainObject(keybindings)) {
-    errors.push('keybindings wajib berupa objek { [shortcut]: target }.');
-    return;
-  }
-  for (const [shortcut, target] of Object.entries(keybindings)) {
-    if (shortcut.trim().length === 0) {
-      errors.push('keybindings tidak boleh memakai kunci shortcut kosong.');
-    }
-    if (typeof target !== 'string' || target.trim().length === 0) {
-      errors.push(`keybindings["${shortcut}"] wajib berupa string target tidak kosong.`);
-    }
-  }
+  errors.push(...checkKeybindingMap(keybindings, 'keybindings', false));
 }
 
 function checkToolbarItems(toolbarItems: unknown, errors: string[]): void {

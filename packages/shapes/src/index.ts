@@ -59,13 +59,15 @@ export const defaultElements = definePlugin({
 
 /**
  * Built-in tools plugin, ready to install via `createBoard({ plugins: [defaultElements, defaultTools] })`.
- * Contains the `select` and `hand` tools (BOARD-502); creation tools follow in BOARD-E10.
+ * Contains the `select` and `hand` tools (BOARD-502) with the shortcuts `V` and `H` (BOARD-504);
+ * creation tools follow in BOARD-E10.
  *
  * @public
  */
 export const defaultTools = definePlugin({
   id: 'default-tools',
   tools: Object.freeze([selectTool, handTool] as const),
+  keybindings: { v: 'tool:select', h: 'tool:hand' },
 });
 
 /**

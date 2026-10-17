@@ -87,6 +87,11 @@ export interface ToolKeyEvent {
   readonly code: string;
   readonly repeat: boolean;
   readonly modifiers: InputModifiers;
+  /**
+   * Focus is in a text input outside the board, or text on the board is being edited (BOARD-504).
+   * The board then ignores the event except Escape: no shortcut runs and the tool does not get it.
+   */
+  readonly inTextInput?: boolean;
 }
 
 /**
