@@ -79,15 +79,43 @@ describe('BOARD-205: board.create', () => {
     board.dispose();
   });
 
-  it('menggunakan fallback "page:main" jika dokumen tidak memiliki record page', () => {
+  it('menolak create di dokumen tanpa record page sampai page dibuat', () => {
     const doc: BoardDocument = {
       schemaVersion: 1,
       meta: {},
       records: {},
     };
     const board = createBoard({ document: doc, plugins: [testPlugin] });
-    const el = board.create({ type: 'note' });
-    expect(el?.pageId).toBe('page:main');
+    const codes: string[] = [];
+    board.on('error', (e) => codes.push(e.code));
+
+    expect(board.create({ type: 'note' })).toBeUndefined();
+    expect(codes).toEqual(['page-not-found']);
+
+    board.pages.create({ id: 'page:main' });
+    expect(board.create({ type: 'note' })?.pageId).toBe('page:main');
+    board.dispose();
+  });
+
+  it('menolak pageId yang bukan page yang ada', () => {
+    const board = createBoard({ plugins: [testPlugin] });
+    board.create({ id: 'el-1', type: 'note' });
+    const errors: BoardErrorEvent[] = [];
+    board.on('error', (e) => errors.push(e));
+
+    expect(board.create({ type: 'note', pageId: 'page:missing' })).toBeUndefined();
+    // An element ID is not a page ID either.
+    expect(board.create({ type: 'note', pageId: 'el-1' })).toBeUndefined();
+    // Prototype keys must not count as existing records.
+    expect(board.create({ type: 'note', pageId: 'toString' })).toBeUndefined();
+
+    expect(errors.map((e) => e.code)).toEqual([
+      'page-not-found',
+      'page-not-found',
+      'page-not-found',
+    ]);
+    expect(errors[0]!.cause).toEqual({ pageId: 'page:missing' });
+    expect(board.query({ allPages: true }).map((e) => e.id)).toEqual(['el-1']);
     board.dispose();
   });
 
