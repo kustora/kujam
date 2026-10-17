@@ -17,13 +17,16 @@ import type {
   CreateBoardOptions,
   DeleteOptions,
   DocumentPropsValidator,
-  ElementRegistry,
+  DocumentTooNewReason,
   ElementAction,
   ElementPatch,
   ElementRecord,
+  ElementRegistry,
   ElementTransform,
   Geometry,
   HitTestOptions,
+  MigrationError,
+  MigrationSource,
   MutateOptions,
   PathGeometry,
   Point,
@@ -34,6 +37,8 @@ import type {
   PermissionHook,
   QueryFilter,
   RectBounds,
+  SchemaMigration,
+  SchemaMigrations,
   SelectionInput,
   StorageAttachment,
   StorageStatus,
@@ -48,6 +53,7 @@ import type {
   ValidationResult,
 } from './index.js';
 import type { validateDocument } from './index.js';
+import type { migrateSchema } from './index.js';
 
 declare module './index.js' {
   interface BoardElementTypes {
@@ -67,6 +73,7 @@ export type Tests = [
         schemaVersion: number;
         meta: Record<string, unknown>;
         records: Record<string, BoardRecord>;
+        pluginVersions?: Record<string, number>;
       }
     >
   >,
@@ -90,6 +97,7 @@ export type Tests = [
         locked: boolean;
         opacity: number;
         props: Record<string, unknown>;
+        typeVersion?: number;
         meta: Record<string, unknown>;
       }
     >
@@ -220,6 +228,19 @@ export type Tests = [
   Expect<Equal<SnapPoint['kind'], 'corner' | 'edge' | 'center'>>,
   // Element records can be passed wherever an ElementTransform is expected.
   Expect<ElementRecord extends ElementTransform ? true : false>,
+  // BOARD-701..703: migration type tests
+  Expect<Equal<SchemaMigration, (doc: BoardDocument) => BoardDocument>>,
+  Expect<Equal<SchemaMigrations, Readonly<Record<number, SchemaMigration>>>>,
+  Expect<
+    Equal<
+      Parameters<typeof migrateSchema>,
+      [doc: BoardDocument, migrations?: SchemaMigrations, targetVersion?: number]
+    >
+  >,
+  Expect<Equal<MigrationError['source'], MigrationSource | undefined>>,
+  Expect<Equal<DocumentTooNewReason['kind'], 'schema' | 'element' | 'plugin'>>,
+  Expect<Equal<ElementRecord['typeVersion'], number | undefined>>,
+  Expect<Equal<BoardDocument['pluginVersions'], Record<string, number> | undefined>>,
 ];
 
 declare const _dummyBoard: Board;

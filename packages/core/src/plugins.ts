@@ -79,15 +79,19 @@ export interface PluginExporter {
 
 /**
  * A single plugin document migration step from version `n` to `n + 1` (BOARD-702).
- * Must be pure: does not mutate its input.
+ * Must be pure: it receives a frozen document and returns a new one. Changes to `schemaVersion`
+ * and `pluginVersions` in the result are ignored.
  *
  * @beta
  */
 export type PluginDocumentMigration = (doc: BoardDocument) => BoardDocument;
 
 /**
- * Map of plugin document migration steps keyed by source version (`0`, `1`, ...).
- * Run after the core schema migrations (BOARD-702).
+ * Map of plugin document migration steps keyed by the plugin's own document version (`0`, `1`,
+ * ...), which is recorded per plugin in `BoardDocument.pluginVersions` (missing means `0`).
+ * Run on load after core schema and element props migrations, in plugin installation order
+ * (BOARD-702). New boards start at the latest version, so steps only run on loaded documents.
+ * Steps after a gap in the keys are never reached.
  *
  * @beta
  */

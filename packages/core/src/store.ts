@@ -133,7 +133,8 @@ export class ReadOnlyBoardError extends Error {
 /** @internal */
 export interface StoreOptions {
   freeze: boolean;
-  readOnly: boolean;
+  /** Read on every transaction, since a board can become read-only after loading (BOARD-703). */
+  isReadOnly: () => boolean;
   onChange: (event: ChangeEvent) => void;
 }
 
@@ -185,7 +186,7 @@ function resolveLabel(label: unknown): string | undefined {
  * @internal
  */
 export function createRecordStore(initial: BoardDocument, options: StoreOptions): RecordStore {
-  const { freeze, readOnly, onChange } = options;
+  const { freeze, isReadOnly, onChange } = options;
   const seal = <T>(value: T): T => (freeze ? deepFreeze(value) : value);
   const sealShallow = <T extends object>(value: T): T => (freeze ? Object.freeze(value) : value);
 
@@ -196,6 +197,7 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
   let records = new Map<string, BoardRecord>(Object.entries(snapshot.records));
   let schemaVersion = snapshot.schemaVersion;
   let meta = snapshot.meta;
+  let pluginVersions = snapshot.pluginVersions;
   let active: ActiveTransaction | null = null;
   let disposed = false;
 
@@ -207,7 +209,10 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
     if (!snapshot) {
       const out: Record<string, BoardRecord> = {};
       for (const [id, rec] of records) setOwn(out, id, rec);
-      snapshot = sealShallow({ schemaVersion, meta, records: sealShallow(out) });
+      const doc: BoardDocument = { schemaVersion, meta, records: sealShallow(out) };
+      // Only present when set, so documents without plugin migrations keep their exact shape.
+      if (pluginVersions !== undefined) doc.pluginVersions = pluginVersions;
+      snapshot = sealShallow(doc);
     }
     return snapshot;
   }
@@ -332,7 +337,7 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
 
       const origin = resolveOrigin(txOptions.origin);
       const label = resolveLabel(txOptions.label);
-      if (readOnly && origin === 'local') throw new ReadOnlyBoardError();
+      if (origin === 'local' && isReadOnly()) throw new ReadOnlyBoardError();
 
       const state = openTransaction(origin, label);
       active = state;
@@ -375,6 +380,7 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
       records = next;
       schemaVersion = doc.schemaVersion;
       meta = seal(doc.meta);
+      pluginVersions = doc.pluginVersions === undefined ? undefined : seal(doc.pluginVersions);
       snapshot = null;
       // Replacing the document always emits one event, even when the record diff is empty,
       // because meta and the schema version may change too.

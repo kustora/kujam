@@ -234,6 +234,7 @@ export function createElementRecord<P = Record<string, unknown>>(
     locked: partial.locked === true,
     opacity: partial.opacity !== undefined ? partial.opacity : 1,
     props: mergedProps as P,
+    typeVersion: def.version,
     meta: { ...(partial.meta ?? {}) },
   };
 

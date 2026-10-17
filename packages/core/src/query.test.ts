@@ -197,26 +197,20 @@ describe('BOARD-206: board.query', () => {
       id: 'migration-plugin',
       elements: [noteElement],
       migrations: {
-        0: (doc: BoardDocument) => ({
-          ...doc,
-          schemaVersion: 1,
-          meta: { ...doc.meta, migratedFromLegacy: true },
-        }),
+        0: (doc: BoardDocument) => ({ ...doc, meta: { ...doc.meta, step0: true } }),
+        1: (doc: BoardDocument) => ({ ...doc, meta: { ...doc.meta, step1: doc.meta.step0 } }),
       },
     });
 
     const board = createBoard({ plugins: [migrationPlugin] });
-    const legacyDoc = {
-      schemaVersion: 0,
-      meta: { author: 'Riziq' },
-      records: {},
-    } as unknown as BoardDocument;
+    // A document never migrated by this plugin (no `pluginVersions` entry).
+    const legacyDoc: BoardDocument = { schemaVersion: 1, meta: { author: 'Riziq' }, records: {} };
 
     board.loadDocument(legacyDoc);
     const doc = board.getDocument();
     expect(doc.schemaVersion).toBe(1);
-    expect(doc.meta.migratedFromLegacy).toBe(true);
-    expect(doc.meta.author).toBe('Riziq');
+    expect(doc.meta).toEqual({ author: 'Riziq', step0: true, step1: true });
+    expect(doc.pluginVersions).toEqual({ 'migration-plugin': 2 });
 
     board.dispose();
   });

@@ -37,6 +37,7 @@ import {
   type BoardUser,
   type PermissionAction,
   type PermissionHook,
+  type PluginMigrations,
 } from './plugins.js';
 import { createRecordStore, type TransactOptions, type Transaction } from './store.js';
 import {
@@ -57,6 +58,13 @@ import {
   type UpdateOptions,
 } from './mutate.js';
 import { createCamera, resolveZoomRange, type BoardCamera, type ZoomRange } from './camera.js';
+import {
+  findTooNew,
+  latestPluginVersion,
+  migrateContent,
+  migrateSchema,
+  type DocumentTooNewReason,
+} from './migrations.js';
 import { createSelection, type SelectionInput } from './selection.js';
 import { createSpatialIndex, type BoxBounds, type SpatialIndex } from './spatial.js';
 import { hitTestElements, queryElements, type HitTestOptions, type QueryFilter } from './query.js';
@@ -175,6 +183,15 @@ export {
   type SpatialIndex,
 } from './spatial.js';
 export { queryElements, type HitTestOptions, type QueryFilter } from './query.js';
+export {
+  CORE_MIGRATIONS,
+  MigrationError,
+  migrateSchema,
+  type DocumentTooNewReason,
+  type MigrationSource,
+  type SchemaMigration,
+  type SchemaMigrations,
+} from './migrations.js';
 export type { SelectionInput } from './selection.js';
 export {
   DEFAULT_ZOOM_RANGE,
@@ -272,6 +289,10 @@ export interface CreateBoardOptions {
    * Document-level problems make `createBoard` throw {@link InvalidDocumentError}. Invalid records
    * are dropped and reported as `invalid-record` `error` events on the next microtask, so listeners
    * attached right after `createBoard` receive them.
+   *
+   * Migrated like {@link Board.loadDocument}: element and plugin migrations run once plugins are
+   * installed, with origin `'migration'`. When a migration fails, the board is disposed and the
+   * {@link MigrationError} is thrown.
    */
   document?: BoardDocument;
   /**
@@ -300,6 +321,12 @@ export interface CreateBoardOptions {
   /**
    * Read-only mode. Local document changes are rejected; camera and selection can still change,
    * and `loadDocument` is still allowed so documents from the server can be received.
+   *
+   * Independently of this option, a document newer than this board understands (its
+   * `schemaVersion`, an element `typeVersion`, or a plugin version) is opened read-only and is
+   * never migrated; an `error` event with code `document-too-new` is emitted (BOARD-703). For the
+   * initial document, that event is emitted asynchronously so listeners registered right after
+   * `createBoard` receive it.
    */
   readOnly?: boolean;
   /** UI locale. Defaults to `'id'`. */
@@ -367,6 +394,13 @@ export interface Board {
   /**
    * Replaces the whole document as a single transaction with origin `'load'` and emits one
    * `change` event with the diff against the old document. Also allowed when `readOnly`.
+   *
+   * Migrations run first (BOARD-701, BOARD-702): core schema migrations before validation, then
+   * element props and plugin document migrations. When those change anything, the result is
+   * applied as a second transaction with origin `'migration'`, which never enters undo history.
+   *
+   * Throws {@link InvalidDocumentError} when invalid, or {@link MigrationError} when a migration
+   * fails (state is left unchanged in both cases).
    *
    * The document is checked with {@link validateDocument} against this board's element registry
    * and `limits` (BOARD-210). Invalid records are dropped one by one and each is reported as an
@@ -598,7 +632,10 @@ export interface Board {
    * @beta
    */
   dispatch(event: BoardInputEvent): boolean;
-  /** Read-only mode (see {@link CreateBoardOptions.readOnly}). */
+  /**
+   * Read-only mode: the `readOnly` option, or forced while the loaded document is too new
+   * (see {@link CreateBoardOptions.readOnly}). Loading a supported document lifts the forced mode.
+   */
   readonly readOnly: boolean;
   readonly locale: BoardLocale;
   /**
@@ -717,16 +754,29 @@ interface RejectedRecord {
 }
 
 /**
- * Validates an incoming document and copies it so it is not linked to board state (BOARD-210).
- * Document-level problems throw {@link InvalidDocumentError}; invalid records are left out of the
- * copy one by one and returned so the caller can report them.
+ * Runs core schema migrations (BOARD-701), validates the document (BOARD-210), and copies it so it is
+ * not linked to board state. Document-level problems throw {@link InvalidDocumentError}; invalid
+ * records are left out of the copy one by one and returned so the caller can report them.
+ *
+ * Props are only checked for elements already at their registered type version: older ones are
+ * checked again after element migrations (BOARD-702), and newer ones are left untouched (BOARD-703).
+ * With `allowNewerSchema`, a document newer than {@link CURRENT_SCHEMA_VERSION} is accepted as-is so
+ * it can be opened read-only.
  */
 function toOwnedDocument(
-  doc: BoardDocument,
+  input: BoardDocument,
   registry: ElementRegistry | undefined,
   limits: Readonly<BoardLimits>,
+  allowNewerSchema = false,
 ): { document: BoardDocument; rejected: RejectedRecord[] } {
-  const { documentErrors, invalidRecords } = inspectDocument(doc, registry, limits);
+  const doc = migrateSchema(input);
+  const { documentErrors, invalidRecords } = inspectDocument(doc, registry, limits, {
+    allowNewerSchema,
+    checkProps: (element) => {
+      const def = registry?.get(element.type as string);
+      return def === undefined || (element.typeVersion ?? 1) === def.version;
+    },
+  });
   if (documentErrors.length > 0) {
     throw new InvalidDocumentError(documentErrors);
   }
@@ -763,6 +813,38 @@ function previewElementRegistry(
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Creates the initial document for a board without `options.document`. Plugin document versions
+ * start at each plugin's latest version, so plugin migrations never run on a brand-new document.
+ * Invalid plugin definitions are skipped here and rejected by plugin installation.
+ */
+function createDocumentFor(plugins: unknown): BoardDocument {
+  const doc = createEmptyDocument();
+  if (!Array.isArray(plugins)) return doc;
+  const versions: Record<string, number> = {};
+  for (const plugin of plugins as unknown[]) {
+    if (!isPlainObject(plugin) || typeof plugin.id !== 'string') continue;
+    if (!isPlainObject(plugin.migrations)) continue;
+    const version = latestPluginVersion(plugin.migrations as PluginMigrations);
+    if (version > 0) versions[plugin.id] = version;
+  }
+  return Object.keys(versions).length > 0 ? { ...doc, pluginVersions: versions } : doc;
+}
+
+/** `error` event message for a document newer than this board understands (BOARD-703). */
+function tooNewMessage(reason: DocumentTooNewReason): string {
+  const what =
+    reason.kind === 'schema'
+      ? 'schemaVersion dokumen'
+      : reason.kind === 'element'
+        ? `Versi tipe elemen "${reason.type}"`
+        : `Versi dokumen plugin "${reason.id}"`;
+  return (
+    `${what} (${reason.version}) lebih baru dari yang didukung (${reason.supported}); ` +
+    'papan dibuka dalam mode baca saja.'
+  );
 }
 
 function resolveIdGenerator(generator: unknown): IdGenerator {
@@ -869,7 +951,9 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   assertOptionsObject(options);
   const zoomRange = resolveZoomRange(options.zoomRange);
   const locale = resolveLocale(options.locale);
-  const readOnly = resolveReadOnly(options.readOnly);
+  const configuredReadOnly = resolveReadOnly(options.readOnly);
+  /** Why the loaded document is too new for this board, or `null` (BOARD-703). */
+  let tooNew: DocumentTooNewReason | null = null;
   const resolvers = resolveResolvers(options.resolvers);
   const assets = resolveAssets(options.assets);
   const user = resolveUser(options.user);
@@ -915,8 +999,8 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
 
   const elements = createElementRegistry();
   const initial = options.document
-    ? toOwnedDocument(options.document, previewElementRegistry(options.plugins), limits)
-    : { document: createEmptyDocument(), rejected: [] };
+    ? toOwnedDocument(options.document, previewElementRegistry(options.plugins), limits, true)
+    : { document: createDocumentFor(options.plugins), rejected: [] };
   const spatial = createSpatialIndex((el) => {
     const def = elements.get(el.type);
     return def?.geometry ? def.geometry(el as never) : undefined;
@@ -930,7 +1014,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
 
   const store = createRecordStore(initial.document, {
     freeze,
-    readOnly,
+    isReadOnly: () => configuredReadOnly || tooNew !== null,
     onChange: (event) => {
       // Update the spatial index incrementally (BOARD-404, BOARD-206)
       if (event.origin === 'load') {
@@ -1003,6 +1087,24 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     if (disposed) throw new Error('Papan sudah di-dispose.');
   }
 
+  /**
+   * Runs element props and plugin document migrations (BOARD-702) on a validated document.
+   * Returns `doc` itself when nothing changed, otherwise a validated, owned copy.
+   */
+  /**
+   * Runs element and plugin migrations, then re-validates the result: props of migrated elements
+   * are only checked now that they are at their registered type version.
+   */
+  function migrateDocumentContent(doc: BoardDocument): {
+    document: BoardDocument;
+    rejected: RejectedRecord[];
+  } {
+    const migrated = migrateContent(doc, elements, plugins.api.list());
+    return migrated === doc
+      ? { document: doc, rejected: [] }
+      : toOwnedDocument(migrated, elements, limits);
+  }
+
   function checkPermissions(
     action: PermissionAction,
     element: Readonly<ElementRecord> | null,
@@ -1048,7 +1150,9 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   };
 
   const board: Board = {
-    readOnly,
+    get readOnly(): boolean {
+      return configuredReadOnly || tooNew !== null;
+    },
     locale,
     resolvers,
     assets,
@@ -1111,24 +1215,21 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     },
     loadDocument(doc: BoardDocument): void {
       assertUsable();
-      let currentDoc = doc;
-      for (const plugin of plugins.api.list()) {
-        if (plugin.migrations) {
-          let step = plugin.migrations[currentDoc.schemaVersion];
-          while (typeof step === 'function') {
-            const prevVersion = currentDoc.schemaVersion;
-            currentDoc = step(currentDoc);
-            if (currentDoc.schemaVersion === prevVersion) break;
-            step = plugin.migrations[currentDoc.schemaVersion];
-          }
-        }
-      }
-      const { document: owned, rejected } = toOwnedDocument(currentDoc, elements, limits);
+      const { document: owned, rejected } = toOwnedDocument(doc, elements, limits, true);
+      const reason = findTooNew(owned, elements, plugins.api.list());
+      // Every migration runs before the store is touched, so a failing step leaves state unchanged.
+      // A document that is too new is never migrated: it would be rewritten in a lossy way.
+      const migrated = reason ? null : migrateDocumentContent(owned);
       // The diff of an in-progress interaction does not apply to the new document.
       tools.reset();
       history.api.clear();
+      tooNew = reason;
       store.replaceDocument(owned, 'load');
-      reportRejected(rejected);
+      if (migrated && migrated.document !== owned) {
+        store.replaceDocument(migrated.document, 'migration');
+      }
+      reportRejected([...rejected, ...(migrated?.rejected ?? [])]);
+      if (reason) emitError('document-too-new', tooNewMessage(reason), reason);
     },
     getElement(id: string) {
       const rec = store.getRecord(id);
@@ -1258,12 +1359,36 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     },
   };
 
+  // Read-only before plugin setup runs, so `setup` cannot rewrite a document that is too new.
+  tooNew = findTooNew(store.getDocument(), elements, []);
   plugins.install();
-  if (initial.rejected.length > 0) {
-    // No listener can exist yet: report on the next microtask, so `error` listeners attached right
-    // after `createBoard` still receive the events.
+  const deferred: (() => void)[] = [];
+  if (initial.rejected.length > 0) deferred.push(() => reportRejected(initial.rejected));
+  if (options.document) {
+    // Element types and plugins are only known after install.
+    tooNew = findTooNew(store.getDocument(), elements, plugins.api.list());
+    if (tooNew) {
+      const reason = tooNew;
+      deferred.push(() => emitError('document-too-new', tooNewMessage(reason), reason));
+    } else {
+      try {
+        const current = store.getDocument();
+        const migrated = migrateDocumentContent(current);
+        if (migrated.document !== current) store.replaceDocument(migrated.document, 'migration');
+        if (migrated.rejected.length > 0) {
+          deferred.push(() => reportRejected(migrated.rejected));
+        }
+      } catch (error) {
+        board.dispose();
+        throw error;
+      }
+    }
+  }
+  if (deferred.length > 0) {
+    // No listener can exist yet: report on the next microtask, so listeners attached right after
+    // `createBoard` still receive the events.
     void Promise.resolve().then(() => {
-      if (!disposed) reportRejected(initial.rejected);
+      if (!disposed) for (const report of deferred) report();
     });
   }
   return board;
