@@ -9,23 +9,27 @@ import {
   type ElementRecord,
   type ToolContext,
   type ToolDefinition,
+  type ToolPointerEvent,
   type Transaction,
 } from '@kujam/core';
-import type { ColorKey } from '../colors.js';
+import { COLOR_VALUES, type ColorKey } from '../colors.js';
 import { MAX_DRAW_POINTS } from '../elements/draw.js';
+import { chunkPoints, simplifyPoints } from '../elements/stroke-utils.js';
 import { handlePinch, handleWheel } from './navigation.js';
 
-interface DrawPoint {
-  readonly x: number;
-  readonly y: number;
-  readonly pressure: number;
+export interface ActiveStroke {
+  readonly points: readonly (readonly number[])[];
+  readonly color: string;
+  readonly thickness: number;
+  readonly brush: string;
 }
 
 export type DrawToolState = 'idle' | 'drawing';
 
 export interface DrawToolData {
-  points: DrawPoint[];
-  elementId: string | null;
+  points: number[][];
+  activeStroke: ActiveStroke | null;
+  elementId?: string | null;
   color: ColorKey;
   thickness: number;
   brush: string;
@@ -46,6 +50,7 @@ function highestIndex(board: Board): string | null {
 function initialData(options?: DrawToolOptions): () => DrawToolData {
   return () => ({
     points: [],
+    activeStroke: null,
     elementId: null,
     color: options?.color ?? 'black',
     thickness: options?.thickness ?? 4,
@@ -54,10 +59,11 @@ function initialData(options?: DrawToolOptions): () => DrawToolData {
 }
 
 /**
- * Creates a freehand drawing tool (BOARD-913).
+ * Creates a freehand drawing tool (BOARD-913, BOARD-1002).
  *
- * Streams points to a `draw` element in local coordinates.
- * Remains active until Escape.
+ * Streams active stroke points to the overlay canvas during drawing, simplifies them
+ * with RDP and chunks if exceeding MAX_DRAW_POINTS, and finalizes them as regular board
+ * element(s) upon pointer completion.
  *
  * @public
  */
@@ -75,40 +81,15 @@ export function createDrawTool(
       idle: {
         onPointerDown(ctx, e) {
           if (e.button !== 0) return;
-          const { board, data } = ctx;
-          const id = board.createId();
-          data.elementId = id;
+          const { data } = ctx;
           const pressure = e.pressure || 0.5;
-          data.points = [{ x: e.point.x, y: e.point.y, pressure }];
-
-          const el: ElementRecord = {
-            id,
-            kind: 'element',
-            type: 'draw',
-            pageId: board.pages.current,
-            parentId: null,
-            index: indexAbove(highestIndex(board)),
-            x: e.point.x,
-            y: e.point.y,
-            w: 1,
-            h: 1,
-            rotation: 0,
-            locked: false,
-            opacity: 1,
-            props: {
-              points: [[0, 0, pressure]],
-              color: data.color,
-              thickness: data.thickness,
-              brush: data.brush,
-            },
-            typeVersion: 1,
-            meta: {},
+          data.points = [[e.point.x, e.point.y, pressure]];
+          data.activeStroke = {
+            points: data.points,
+            color: COLOR_VALUES[data.color] ?? data.color,
+            thickness: data.thickness,
+            brush: data.brush,
           };
-
-          ctx.change((tx: Transaction) => tx.put(el), {
-            label: toolId,
-          });
-
           return 'drawing';
         },
         onWheel: (ctx, e) => handleWheel(ctx.board, e),
@@ -118,71 +99,107 @@ export function createDrawTool(
       drawing: {
         cursor: 'crosshair',
         onPointerMove(ctx, e) {
-          const { board, data } = ctx;
-          if (!data.elementId || data.points.length >= MAX_DRAW_POINTS) return;
-
+          const { data } = ctx;
           const pressure = e.pressure || 0.5;
-          data.points.push({ x: e.point.x, y: e.point.y, pressure });
-
-          let minX = Infinity;
-          let minY = Infinity;
-          let maxX = -Infinity;
-          let maxY = -Infinity;
-
-          for (const p of data.points) {
-            if (p.x < minX) minX = p.x;
-            if (p.y < minY) minY = p.y;
-            if (p.x > maxX) maxX = p.x;
-            if (p.y > maxY) maxY = p.y;
-          }
-
-          const w = Math.max(1, maxX - minX);
-          const h = Math.max(1, maxY - minY);
-
-          const localPoints = data.points.map((p: DrawPoint) => [
-            p.x - minX,
-            p.y - minY,
-            p.pressure,
-          ]);
-
-          const existing = board.getElement(data.elementId);
-          if (existing) {
-            const updated: ElementRecord = {
-              ...existing,
-              x: minX,
-              y: minY,
-              w,
-              h,
-              props: {
-                ...existing.props,
-                points: localPoints,
-              },
-            };
-            ctx.change((tx: Transaction) => tx.put(updated), {
-              label: toolId,
-            });
-          }
+          data.points.push([e.point.x, e.point.y, pressure]);
+          data.activeStroke = {
+            points: data.points,
+            color: COLOR_VALUES[data.color] ?? data.color,
+            thickness: data.thickness,
+            brush: data.brush,
+          };
         },
 
-        onPointerUp(ctx: ToolContext<DrawToolState, DrawToolData>) {
+        onPointerUp(ctx: ToolContext<DrawToolState, DrawToolData>, e?: ToolPointerEvent) {
           const { board, data } = ctx;
-          if (data.elementId) {
-            board.select([data.elementId]);
+          if (e?.point) {
+            const last = data.points.at(-1);
+            if (!last || last[0] !== e.point.x || last[1] !== e.point.y) {
+              data.points.push([e.point.x, e.point.y, e.pressure || 0.5]);
+            }
           }
-          data.elementId = null;
+
+          if (data.points.length > 0) {
+            // Simplify points with Ramer-Douglas-Peucker tolerance ~0.5 px (BOARD-1002)
+            const simplified = simplifyPoints(data.points, 0.5);
+            // Split if points exceed MAX_DRAW_POINTS (BOARD-1002)
+            const chunks = chunkPoints(simplified, MAX_DRAW_POINTS);
+            let lastIndex = highestIndex(board);
+            const elements: ElementRecord[] = [];
+
+            for (const chunk of chunks) {
+              let minX = Infinity;
+              let minY = Infinity;
+              let maxX = -Infinity;
+              let maxY = -Infinity;
+
+              for (const p of chunk) {
+                const x = p[0] ?? 0;
+                const y = p[1] ?? 0;
+                if (x < minX) minX = x;
+                if (y < minY) minY = y;
+                if (x > maxX) maxX = x;
+                if (y > maxY) maxY = y;
+              }
+
+              const w = Math.max(1, maxX - minX);
+              const h = Math.max(1, maxY - minY);
+              const localPoints = chunk.map((p) => [
+                (p[0] ?? 0) - minX,
+                (p[1] ?? 0) - minY,
+                p[2] ?? 0.5,
+              ]);
+
+              const nextIndex = indexAbove(lastIndex);
+              lastIndex = nextIndex;
+
+              elements.push({
+                id: board.createId(),
+                kind: 'element',
+                type: 'draw',
+                pageId: board.pages.current,
+                parentId: null,
+                index: nextIndex,
+                x: minX,
+                y: minY,
+                w,
+                h,
+                rotation: 0,
+                locked: false,
+                opacity: 1,
+                props: {
+                  points: localPoints,
+                  color: data.color,
+                  thickness: data.thickness,
+                  brush: data.brush,
+                },
+                typeVersion: 1,
+                meta: {},
+              });
+            }
+
+            if (elements.length > 0) {
+              ctx.change(
+                (tx: Transaction) => {
+                  for (const el of elements) {
+                    tx.put(el);
+                  }
+                },
+                { label: toolId },
+              );
+              board.select(elements.map((el) => el.id));
+            }
+          }
+
           data.points = [];
+          data.activeStroke = null;
           return 'idle';
         },
 
         onCancel(ctx: ToolContext<DrawToolState, DrawToolData>) {
           const { data } = ctx;
-          if (data.elementId) {
-            ctx.change((tx: Transaction) => tx.remove(data.elementId!), {
-              label: toolId,
-            });
-          }
-          data.elementId = null;
           data.points = [];
+          data.activeStroke = null;
           return 'idle';
         },
       },

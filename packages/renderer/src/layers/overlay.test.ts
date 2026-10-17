@@ -89,6 +89,7 @@ function createMockContext() {
     closePath: vi.fn(() => calls.push('closePath')),
     moveTo: vi.fn((...args: unknown[]) => calls.push(`moveTo(${args.join(',')})`)),
     lineTo: vi.fn((...args: unknown[]) => calls.push(`lineTo(${args.join(',')})`)),
+    quadraticCurveTo: vi.fn((...args: unknown[]) => calls.push(`quadraticCurveTo(${args.join(',')})`)),
     arc: vi.fn((...args: unknown[]) => calls.push(`arc(${args.join(',')})`)),
     rect: vi.fn((...args: unknown[]) => calls.push(`rect(${args.join(',')})`)),
     clip: vi.fn(() => calls.push('clip')),
@@ -300,6 +301,45 @@ describe('BOARD-805: Overlay Renderer', () => {
       const stats = overlayRenderer.render(canvas, ctx as unknown as CanvasRenderingContext2D, 1);
       expect(stats.rendered).toBe(true);
       expect(ctx.fillText).toHaveBeenCalledWith('Alice', expect.any(Number), expect.any(Number));
+    });
+
+    it('draws active freehand stroke preview from toolData (BOARD-1002)', () => {
+      const board = createBoard({ plugins: [testPlugin] });
+      boards.push(board);
+      board.camera.setViewport({ width: 800, height: 600 });
+
+      Object.defineProperty(board, 'toolData', {
+        value: {
+          brush: null,
+          guides: [],
+          activeStroke: {
+            points: [
+              [100, 100, 0.5],
+              [120, 130, 0.6],
+              [150, 180, 0.7],
+            ],
+            color: '#1d1d1f',
+            thickness: 4,
+            brush: 'pen',
+          },
+        },
+        configurable: true,
+      });
+
+      const overlayRenderer = new OverlayRenderer(board);
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 600;
+      const ctx = createMockContext();
+
+      const stats = overlayRenderer.render(canvas, ctx as unknown as CanvasRenderingContext2D, 1);
+      expect(stats.rendered).toBe(true);
+      expect(stats.hasActiveStroke).toBe(true);
+
+      expect(ctx.beginPath).toHaveBeenCalled();
+      expect(ctx.fill).toHaveBeenCalled();
+      const strokeFill = ctx.fills.find((f) => f.type === 'fill');
+      expect(strokeFill).toBeDefined();
     });
   });
 

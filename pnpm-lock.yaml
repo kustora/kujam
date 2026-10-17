@@ -208,6 +208,9 @@ importers:
       '@kujam/core':
         specifier: workspace:*
         version: link:../core
+      perfect-freehand:
+        specifier: ^1.2.2
+        version: 1.2.3
     devDependencies:
       happy-dom:
         specifier: ^21.0.3

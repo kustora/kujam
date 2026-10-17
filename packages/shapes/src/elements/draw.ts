@@ -1,7 +1,9 @@
 import { array, defineElement, enumOf, number, path, schema, string } from '@kujam/core';
+import { getStroke } from 'perfect-freehand';
 import { builtInBrush } from '../brushes.js';
 import { COLOR_KEYS, COLOR_VALUES } from '../colors.js';
 import { localize } from '../i18n.js';
+import { getStrokeOptions, renderStrokeOutline } from './stroke-utils.js';
 
 /**
  * Points per stroke limit; longer strokes are split (BOARD-1002).
@@ -34,20 +36,15 @@ export const drawElement = defineElement({
   // TODO(BOARD-1002, BOARD-406): resize needs to scale the points or store a scale.
   resize: 'free',
   render: {
-    // TODO(BOARD-1002): perfect-freehand strokes with pressure, using `brush.strokeOptions`.
     canvas: (g, el, _data, _lod, ctx) => {
-      const points = el.props.points;
+      const points = el.props.points.filter((p) => p.length >= 2);
       if (points.length === 0) return;
-      g.beginPath();
-      points.forEach(([x = 0, y = 0], i) => (i === 0 ? g.moveTo(x, y) : g.lineTo(x, y)));
-      if (points.length === 1) g.lineTo(points[0]![0] ?? 0, points[0]![1] ?? 0);
-      g.strokeStyle = COLOR_VALUES[el.props.color];
-      g.lineWidth = el.props.thickness;
-      g.lineCap = 'round';
-      g.lineJoin = 'round';
       const brush = ctx ? ctx.resolveBrush(el.props.brush) : builtInBrush(el.props.brush);
+      g.fillStyle = COLOR_VALUES[el.props.color] ?? el.props.color;
       g.globalCompositeOperation = brush.blend;
-      g.stroke();
+      const strokeOptions = getStrokeOptions(el.props.thickness, brush, true);
+      const outline = getStroke(points as number[][], strokeOptions);
+      renderStrokeOutline(g, outline);
     },
   },
   a11y: (_el, _data, ctx) => ({

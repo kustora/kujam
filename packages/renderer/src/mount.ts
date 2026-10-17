@@ -246,6 +246,7 @@ export function mountRenderer(
     rendered: false,
     selectedCount: 0,
     hasBrush: false,
+    hasActiveStroke: false,
     guidesCount: 0,
     hoveredId: null,
   });
@@ -253,6 +254,11 @@ export function mountRenderer(
   const detachInput = attachInput(board, layers, {
     onHover(id) {
       if (overlayRenderer.setHovered(id)) {
+        scheduleRender();
+      }
+    },
+    onEvent() {
+      if (board.toolState !== 'idle') {
         scheduleRender();
       }
     },

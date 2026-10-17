@@ -2,7 +2,7 @@
  * Input event pipeline for Pointer Events, multi-touch gestures, wheel, and keyboard (BOARD-806, ADR-004).
  */
 
-import type { Board, InputModifiers, Point, PointerKind, ToolPointerEvent } from '@kujam/core';
+import type { Board, BoardInputEvent, InputModifiers, Point, PointerKind, ToolPointerEvent } from '@kujam/core';
 import type { RendererLayers } from '../mount.js';
 
 /** Screen distance a press must travel before it becomes a drag (ADR-004). */
@@ -94,6 +94,7 @@ function midpoint(p1: Point, p2: Point): Point {
 
 export interface AttachInputOptions {
   onHover?: (id: string | null) => void;
+  onEvent?: (event: BoardInputEvent) => void;
 }
 
 /**
@@ -107,6 +108,12 @@ export function attachInput(
   options?: AttachInputOptions,
 ): () => void {
   const { root, canvas } = layers;
+
+  function dispatch(event: BoardInputEvent): boolean {
+    const handled = board.dispatch(event);
+    options?.onEvent?.(event);
+    return handled;
+  }
 
   root.style.touchAction = 'none';
   root.style.userSelect = 'none';
@@ -207,13 +214,13 @@ export function attachInput(
       activePointers.set(e.pointerId, state);
 
       if (!isTouchEmpty) {
-        board.dispatch(createPointerEvent('pointer-down', e, screen, point, kind, true));
+        dispatch(createPointerEvent('pointer-down', e, screen, point, kind, true));
       }
     } else if (activePointers.size === 1 && primaryPointerId !== null) {
       // Second pointer touched down: cancel primary pointer action and begin 2-finger gesture (ADR-004)
       const primary = activePointers.get(primaryPointerId);
       if (primary && !primary.isTouchEmptyPan) {
-        board.dispatch({
+        dispatch({
           type: 'pointer-cancel',
           pointerId: primary.id,
           pointerType: primary.type,
@@ -251,7 +258,7 @@ export function attachInput(
         lastCenterScreen: centerScreen,
       };
 
-      board.dispatch({
+      dispatch({
         type: 'pinch',
         phase: 'start',
         point: centerBoard,
@@ -286,7 +293,7 @@ export function attachInput(
         board.camera.set({ x: x - dx / zoom, y: y - dy / zoom });
       }
     } else {
-      board.dispatch(createPointerEvent('pointer-move', e, screen, point, state.type));
+      dispatch(createPointerEvent('pointer-move', e, screen, point, state.type));
     }
 
     state.lastScreen = screen;
@@ -330,7 +337,7 @@ export function attachInput(
       twoFinger.lastDistance = dist;
       twoFinger.lastCenterScreen = center;
 
-      board.dispatch({
+      dispatch({
         type: 'pinch',
         phase: 'update',
         point: board.camera.screenToBoard(center),
@@ -370,7 +377,7 @@ export function attachInput(
 
     if (twoFinger && (e.pointerId === twoFinger.id1 || e.pointerId === twoFinger.id2)) {
       const center = twoFinger.lastCenterScreen;
-      board.dispatch({
+      dispatch({
         type: 'pinch',
         phase: 'end',
         point: board.camera.screenToBoard(center),
@@ -403,7 +410,7 @@ export function attachInput(
         board.clearSelection();
       }
     } else {
-      board.dispatch(createPointerEvent('pointer-up', e, screen, point, state.type));
+      dispatch(createPointerEvent('pointer-up', e, screen, point, state.type));
     }
 
     e.preventDefault();
@@ -419,7 +426,7 @@ export function attachInput(
     }
 
     if (twoFinger && (e.pointerId === twoFinger.id1 || e.pointerId === twoFinger.id2)) {
-      board.dispatch({
+      dispatch({
         type: 'pinch',
         phase: 'end',
         point: board.camera.screenToBoard(twoFinger.lastCenterScreen),
@@ -441,7 +448,7 @@ export function attachInput(
     }
 
     if (state && !state.isTouchEmptyPan) {
-      board.dispatch({
+      dispatch({
         type: 'pointer-cancel',
         pointerId: state.id,
         pointerType: state.type,
@@ -463,7 +470,7 @@ export function attachInput(
     const screen = toScreen(e.clientX, e.clientY);
     const point = board.camera.screenToBoard(screen);
 
-    const handled = board.dispatch({
+    const handled = dispatch({
       type: 'wheel',
       point,
       screen,
@@ -482,7 +489,7 @@ export function attachInput(
     const ge = e as SafariGestureEvent;
     lastSafariScale = ge.scale || 1;
     const screen = toScreen(ge.clientX, ge.clientY);
-    board.dispatch({
+    dispatch({
       type: 'pinch',
       phase: 'start',
       point: board.camera.screenToBoard(screen),
@@ -501,7 +508,7 @@ export function attachInput(
     lastSafariScale = currentScale;
 
     const screen = toScreen(ge.clientX, ge.clientY);
-    board.dispatch({
+    dispatch({
       type: 'pinch',
       phase: 'update',
       point: board.camera.screenToBoard(screen),
@@ -516,7 +523,7 @@ export function attachInput(
   function onGestureEnd(e: Event): void {
     const ge = e as SafariGestureEvent;
     const screen = toScreen(ge.clientX, ge.clientY);
-    board.dispatch({
+    dispatch({
       type: 'pinch',
       phase: 'end',
       point: board.camera.screenToBoard(screen),
@@ -535,7 +542,7 @@ export function attachInput(
     // Only capture keyboard when the board is focused
     if (!root.contains(document.activeElement)) return;
 
-    const handled = board.dispatch({
+    const handled = dispatch({
       type: 'key-down',
       key: e.key,
       code: e.code,
@@ -552,7 +559,7 @@ export function attachInput(
   function onKeyUp(e: KeyboardEvent): void {
     if (!root.contains(document.activeElement)) return;
 
-    const handled = board.dispatch({
+    const handled = dispatch({
       type: 'key-up',
       key: e.key,
       code: e.code,

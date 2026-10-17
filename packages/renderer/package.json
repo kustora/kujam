@@ -23,7 +23,8 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@kujam/core": "workspace:*"
+    "@kujam/core": "workspace:*",
+    "perfect-freehand": "^1.2.2"
   },
   "devDependencies": {
     "happy-dom": "^21.0.3"

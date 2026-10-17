@@ -242,7 +242,7 @@ describe('draw', () => {
   it('render canvas: garis, titik tunggal, kosong, dan stabilo', () => {
     let { g, calls } = recorder();
     drawElement.render?.canvas?.(g, el, undefined, lod);
-    expect(calls).toEqual(expect.arrayContaining(['moveTo(0,0)', 'lineTo(20,0)', 'stroke()']));
+    expect(calls).toEqual(expect.arrayContaining(['beginPath()', 'fill()']));
     expect(calls).not.toContain('globalCompositeOperation=multiply');
 
     ({ g, calls } = recorder());
@@ -253,12 +253,12 @@ describe('draw', () => {
       lod,
     );
     expect(calls).toEqual(
-      expect.arrayContaining(['moveTo(3,4)', 'lineTo(3,4)', 'globalCompositeOperation=multiply']),
+      expect.arrayContaining(['beginPath()', 'fill()', 'globalCompositeOperation=multiply']),
     );
 
     ({ g, calls } = recorder());
     drawElement.render?.canvas?.(g, withDefaults(drawElement, { points: [[]] }), undefined, lod);
-    expect(calls).toContain('lineTo(0,0)');
+    expect(calls).toEqual([]);
 
     ({ g, calls } = recorder());
     drawElement.render?.canvas?.(g, withDefaults(drawElement), undefined, lod);

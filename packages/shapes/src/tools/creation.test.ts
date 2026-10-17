@@ -290,14 +290,18 @@ describe('BOARD-913: Element creation tools', () => {
       // Start drawing
       board.dispatch(pointer(board, 'pointer-down', { x: 50, y: 50 }));
       board.dispatch(pointer(board, 'pointer-move', { x: 80, y: 80 }));
-      expect(board.query()).toHaveLength(1);
+      expect(board.toolState).toBe('drawing');
+      expect((board.toolData as { activeStroke: { points: number[][] } }).activeStroke.points).toHaveLength(2);
+      expect(board.query()).toHaveLength(0);
 
       // Cancel
       pressKey(board, 'Escape', 'Escape');
-      // In-progress element cancelled and removed
+      // In-progress element cancelled and not committed to document
       expect(board.query()).toHaveLength(0);
+      expect((board.toolData as { activeStroke: unknown }).activeStroke).toBeNull();
       // Tool returns to idle
       expect(board.tool).toBe('draw');
+      expect(board.toolState).toBe('idle');
 
       // Second escape returns to select
       pressKey(board, 'Escape', 'Escape');

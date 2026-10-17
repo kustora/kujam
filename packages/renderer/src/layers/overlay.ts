@@ -13,6 +13,7 @@ import {
   type ElementRecord,
   type SnapGuide,
 } from '@kujam/core';
+import { getStroke } from 'perfect-freehand';
 
 export const SELECTION_COLOR = '#2f80ed';
 export const SELECTION_LINE_WIDTH = 1.5;
@@ -32,10 +33,18 @@ export interface RemoteCursor {
   readonly name?: string;
 }
 
+export interface ActiveStrokeOverlay {
+  readonly points: readonly (readonly number[])[];
+  readonly color: string;
+  readonly thickness: number;
+  readonly brush?: string;
+}
+
 export interface OverlayRenderStats {
   rendered: boolean;
   selectedCount: number;
   hasBrush: boolean;
+  hasActiveStroke: boolean;
   guidesCount: number;
   hoveredId: string | null;
 }
@@ -43,6 +52,37 @@ export interface OverlayRenderStats {
 interface ToolOverlayData {
   brush?: BoxBounds | null;
   guides?: readonly SnapGuide[];
+  activeStroke?: ActiveStrokeOverlay | null;
+}
+
+function renderStrokeOutline(
+  g: CanvasRenderingContext2D,
+  outline: readonly (readonly [number, number])[] | readonly number[][],
+): void {
+  if (outline.length === 0) return;
+
+  const first = outline[0];
+  if (!first) return;
+
+  g.beginPath();
+  if (outline.length < 3) {
+    g.moveTo(first[0] ?? 0, first[1] ?? 0);
+    for (let i = 1; i < outline.length; i++) {
+      const pt = outline[i];
+      if (pt) g.lineTo(pt[0] ?? 0, pt[1] ?? 0);
+    }
+  } else {
+    g.moveTo(first[0] ?? 0, first[1] ?? 0);
+    for (let i = 0; i < outline.length; i++) {
+      const p0 = outline[i]!;
+      const p1 = outline[(i + 1) % outline.length]!;
+      const midX = (p0[0]! + p1[0]!) / 2;
+      const midY = (p0[1]! + p1[1]!) / 2;
+      g.quadraticCurveTo(p0[0]!, p0[1]!, midX, midY);
+    }
+  }
+  g.closePath();
+  g.fill();
 }
 
 /**
@@ -89,10 +129,12 @@ export class OverlayRenderer {
       }
     }
 
-    // 2. Gather tool data (brush, snap guides)
+    // 2. Gather tool data (brush, snap guides, active stroke)
     const toolData = board.toolData as ToolOverlayData | null;
     const brush = toolData?.brush ?? null;
     const guides = toolData?.guides ?? [];
+    const activeStroke = toolData?.activeStroke ?? null;
+    const hasActiveStroke = Boolean(activeStroke && activeStroke.points && activeStroke.points.length > 0);
 
     // 3. Hovered element
     const hoveredEl =
@@ -109,13 +151,15 @@ export class OverlayRenderer {
       brush !== null ||
       guides.length > 0 ||
       hoveredEl !== null ||
-      this.cursors.length > 0;
+      this.cursors.length > 0 ||
+      hasActiveStroke;
 
     if (!hasContent) {
       return {
         rendered: false,
         selectedCount: 0,
         hasBrush: false,
+        hasActiveStroke: false,
         guidesCount: 0,
         hoveredId: null,
       };
@@ -274,10 +318,51 @@ export class OverlayRenderer {
       ctx.restore();
     }
 
+    // --- F. Active Freehand Stroke Preview (BOARD-1002) ---
+    if (activeStroke && activeStroke.points && activeStroke.points.length > 0) {
+      ctx.save();
+      ctx.scale(pixelRatio, pixelRatio);
+      const cam = camera.get();
+      ctx.translate(-cam.x * zoom, -cam.y * zoom);
+      ctx.scale(zoom, zoom);
+
+      const brush = board.elementContext
+        ? board.elementContext.resolveBrush(activeStroke.brush ?? 'pen')
+        : undefined;
+      ctx.globalCompositeOperation = brush?.blend ?? 'source-over';
+      ctx.fillStyle = activeStroke.color;
+
+      const taper = brush?.strokeOptions.taper;
+      const startTaper = typeof taper === 'object' && taper !== null ? taper.start : taper;
+      const endTaper = typeof taper === 'object' && taper !== null ? taper.end : taper;
+
+      const strokeOptions = {
+        size: activeStroke.thickness,
+        thinning: brush?.strokeOptions.thinning,
+        smoothing: brush?.strokeOptions.smoothing,
+        streamline: brush?.strokeOptions.streamline,
+        simulatePressure: brush?.strokeOptions.simulatePressure,
+        start: {
+          taper: startTaper,
+          cap: true,
+        },
+        end: {
+          taper: endTaper,
+          cap: true,
+        },
+        last: false,
+      };
+
+      const outline = getStroke(activeStroke.points as number[][], strokeOptions);
+      renderStrokeOutline(ctx, outline);
+      ctx.restore();
+    }
+
     return {
       rendered: true,
       selectedCount: selectedElements.length,
       hasBrush: brush !== null,
+      hasActiveStroke,
       guidesCount: guides.length,
       hoveredId: this.hoveredId,
     };

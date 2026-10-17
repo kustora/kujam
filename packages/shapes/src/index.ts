@@ -25,6 +25,7 @@ import { textTool } from './tools/text.js';
 export { DEFAULT_BRUSHES, highlighterBrush, penBrush } from './brushes.js';
 export { stickyElement } from './elements/sticky.js';
 export { drawElement, MAX_DRAW_POINTS } from './elements/draw.js';
+export { chunkPoints, simplifyPoints } from './elements/stroke-utils.js';
 export { textElement } from './elements/text.js';
 export { geoElement, geoGeometry, GEO_KINDS, type GeoKind } from './elements/geo.js';
 export {
@@ -40,7 +41,13 @@ export { createBoxTool, type BoxToolOptions } from './tools/box-tool.js';
 export { stickyTool } from './tools/sticky.js';
 export { textTool } from './tools/text.js';
 export { createGeoTool, geoTool, rectangleTool, ellipseTool } from './tools/geo.js';
-export { createDrawTool, drawTool, type DrawToolData, type DrawToolOptions } from './tools/draw.js';
+export {
+  createDrawTool,
+  drawTool,
+  type ActiveStroke,
+  type DrawToolData,
+  type DrawToolOptions,
+} from './tools/draw.js';
 export {
   createEraserTool,
   eraserTool,
