@@ -54,6 +54,7 @@ import {
   type PartialElement,
   type UpdateOptions,
 } from './mutate.js';
+import { migrateSchema } from './migrations.js';
 import { createSelection, type SelectionInput } from './selection.js';
 import { createSpatialIndex, type BoxBounds, type SpatialIndex } from './spatial.js';
 import { queryElements, type QueryFilter } from './query.js';
@@ -164,6 +165,13 @@ export {
   type SpatialIndex,
 } from './spatial.js';
 export { queryElements, type QueryFilter } from './query.js';
+export {
+  CORE_MIGRATIONS,
+  MigrationError,
+  migrateSchema,
+  type SchemaMigration,
+  type SchemaMigrations,
+} from './migrations.js';
 export type { SelectionInput } from './selection.js';
 
 /**
@@ -683,8 +691,12 @@ export function createEmptyDocument(meta: Record<string, unknown> = {}): BoardDo
   };
 }
 
-/** Validates and then copies the input document so it is not linked to board state. */
-function toOwnedDocument(doc: BoardDocument): BoardDocument {
+/**
+ * Runs core schema migrations (BOARD-701), validates, and then copies the input document so it is
+ * not linked to board state.
+ */
+function toOwnedDocument(input: BoardDocument): BoardDocument {
+  const doc = migrateSchema(input);
   const result = validateDocument(doc);
   if (!result.valid) {
     throw new InvalidDocumentError(result.errors);
