@@ -141,14 +141,19 @@ describe('BOARD-107: istilah domain aplikasi', () => {
   it('lint menolak identifier berisi istilah domain', async () => {
     const messages = await lintFixtureAs('domain-terms.ts', 'shapes');
     const errors = errorsOf(messages, 'no-restricted-syntax');
-    // postId, createCampaign, approvalStatus, BRAND_COLOR, TaskList
-    expect(errors).toHaveLength(5);
-    expect(errors[0]?.message).toContain('BOARD-107: ');
+    // Identifiers: postId (2), createCampaign (3), approvalStatus and BRAND_COLOR (4), TaskList (6).
+    // Strings and template text: one per line from 9 to 14.
+    expect(errors.map((error) => error.line)).toEqual([2, 3, 4, 4, 6, 9, 10, 11, 12, 13, 14]);
+    expect(errors.every((error) => error.message.startsWith('BOARD-107: '))).toBe(true);
   });
 
-  it('API platform seperti postMessage tetap boleh', async () => {
+  it('API platform, method HTTP POST, dan kata biasa yang memuat istilah tetap boleh', async () => {
     const messages = await lintFixtureAs('domain-terms-allowed.ts', 'core');
     expect(errorsOf(messages, 'no-restricted-syntax')).toEqual([]);
+  });
+
+  it('dokumentasi (docs/**) tidak di-lint, jadi resep boleh memakai contoh "kartu post"', async () => {
+    expect(await eslint.isPathIgnored(join(ROOT, 'docs', 'resep-kartu-post.ts'))).toBe(true);
   });
 });
 
