@@ -1,4 +1,4 @@
-import type { attachStorage, resizeElements, rotateElements } from './index.js';
+import type { attachStorage, resizeElements, rotateElements, snapTranslation } from './index.js';
 import type {
   AssetAdapter,
   AssetRecord,
@@ -14,6 +14,8 @@ import type {
   ElementSize,
   ResizeHandle,
   ResizeOptions,
+  SnapGuide,
+  SnapOptions,
   RotateOptions,
   TransformResult,
   Bounds,
@@ -264,6 +266,18 @@ export type Tests = [
   Expect<Equal<ReturnType<typeof rotateElements>, TransformResult[]>>,
   Expect<Equal<RotateOptions['snap'], number | undefined>>,
   Expect<Equal<ElementDefinition['minSize'], ElementSize | undefined>>,
+  // BOARD-407: snap type tests
+  Expect<Equal<Board['snapOptions'], Readonly<SnapOptions>>>,
+  Expect<Equal<Parameters<Board['setSnapOptions']>, [patch: Partial<SnapOptions>]>>,
+  Expect<Equal<CreateBoardOptions['snap'], Partial<SnapOptions> | undefined>>,
+  Expect<Equal<SnapOptions['grid'], number | null>>,
+  Expect<Equal<SnapGuide['axis'], 'x' | 'y'>>,
+  Expect<
+    Equal<
+      ReturnType<typeof snapTranslation>,
+      { readonly delta: Point; readonly guides: readonly SnapGuide[] }
+    >
+  >,
 ];
 
 declare const _dummyBoard: Board;

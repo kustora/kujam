@@ -66,6 +66,7 @@ import {
   type DocumentTooNewReason,
 } from './migrations.js';
 import { createSelection, type SelectionInput } from './selection.js';
+import { resolveSnapOptions, type SnapOptions } from './snap.js';
 import { createSpatialIndex, type BoxBounds, type SpatialIndex } from './spatial.js';
 import { hitTestElements, queryElements, type HitTestOptions, type QueryFilter } from './query.js';
 import { resolveElementGeometry, toBoardTolerance, type Geometry, type Point } from './geometry.js';
@@ -200,6 +201,17 @@ export {
   type TransformOptions,
   type TransformResult,
 } from './transform.js';
+export {
+  computeSnap,
+  DEFAULT_SNAP_OPTIONS,
+  isSnapSuppressed,
+  snapTranslation,
+  type ComputeSnapOptions,
+  type SnapGuide,
+  type SnapOptions,
+  type SnapResult,
+  type SnapTranslationOptions,
+} from './snap.js';
 export {
   CORE_MIGRATIONS,
   MigrationError,
@@ -371,6 +383,13 @@ export interface CreateBoardOptions {
   /** Camera zoom bounds. Defaults to {@link DEFAULT_ZOOM_RANGE}. */
   zoomRange?: ZoomRange;
   /**
+   * Snap settings for dragging (BOARD-407); omitted fields use {@link DEFAULT_SNAP_OPTIONS}
+   * (enabled, 8-unit grid, 8-pixel threshold).
+   *
+   * @beta
+   */
+  snap?: Partial<SnapOptions>;
+  /**
    * Deep-freezes snapshots (`Object.freeze`) so accidental mutation throws a `TypeError`
    * immediately. Defaults to `true` (development mode, safe).
    *
@@ -516,6 +535,20 @@ export interface Board {
    * @beta
    */
   readonly camera: BoardCamera;
+  /**
+   * Current snap settings (BOARD-407), frozen. Local UI state, like the camera.
+   *
+   * @beta
+   */
+  readonly snapOptions: Readonly<SnapOptions>;
+  /**
+   * Changes snap settings, for example `{ grid: null }` to turn off grid snapping or
+   * `{ enabled: false }` to turn snapping off.
+   *
+   * @throws `TypeError` or `RangeError` for invalid values (settings are left unchanged).
+   * @beta
+   */
+  setSnapOptions(patch: Partial<SnapOptions>): void;
   /** Frozen camera snapshot. Same as `board.camera.get()`. */
   getCamera(): Readonly<CameraState>;
   /**
@@ -967,6 +1000,7 @@ function resolvePermissions(permissions: unknown): PermissionHook | null {
 export function createBoard(options: CreateBoardOptions = {}): Board {
   assertOptionsObject(options);
   const zoomRange = resolveZoomRange(options.zoomRange);
+  let snapOptions = resolveSnapOptions(options.snap);
   const locale = resolveLocale(options.locale);
   const configuredReadOnly = resolveReadOnly(options.readOnly);
   /** Why the loaded document is too new for this board, or `null` (BOARD-703). */
@@ -1331,6 +1365,12 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       return tools.dispatch(event);
     },
     camera,
+    get snapOptions() {
+      return snapOptions;
+    },
+    setSnapOptions(patch: Partial<SnapOptions>): void {
+      snapOptions = resolveSnapOptions(patch, snapOptions);
+    },
     getCamera(): Readonly<CameraState> {
       return camera.get();
     },
