@@ -53,6 +53,20 @@ const fakeContext = {
   clearRect: () => {
     clears++;
   },
+  save: () => {},
+  restore: () => {},
+  beginPath: () => {},
+  rect: () => {},
+  clip: () => {},
+  stroke: () => {},
+  fill: () => {},
+  strokeRect: () => {},
+  fillRect: () => {},
+  translate: () => {},
+  rotate: () => {},
+  scale: () => {},
+  fillText: () => {},
+  setLineDash: () => {},
 };
 
 let boards: Board[] = [];

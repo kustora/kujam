@@ -11,6 +11,14 @@
  */
 
 import type { Board, ViewportSize } from '@kujam/core';
+import { HtmlLayer, type EditorBounds } from './html-layer.js';
+import { attachInput } from './input.js';
+import { CanvasRenderer, type RenderStats } from './render-canvas.js';
+import { OverlayRenderer, type OverlayRenderStats } from './overlay.js';
+
+export type { RenderStats } from './render-canvas.js';
+export type { OverlayRenderStats } from './overlay.js';
+export type { EditorBounds } from './html-layer.js';
 
 /**
  * Options for {@link mountRenderer}.
@@ -24,6 +32,11 @@ export interface RendererOptions {
    */
   // TODO(BOARD-803): follow DPR changes and cap the canvas area (about 16 million pixels, ADR-003).
   readonly pixelRatio?: number;
+  /**
+   * When `true`, enables visual debug overlays (dirty rectangles and element counts)
+   * and tracks render statistics (BOARD-802).
+   */
+  readonly debug?: boolean;
 }
 
 /**
@@ -39,6 +52,10 @@ export interface RendererLayers {
   readonly canvas: HTMLCanvasElement;
   /** Layer for elements rendered as DOM (`render.html`). */
   readonly html: HTMLDivElement;
+  /**
+   * Camera wrapper inside the HTML layer; transforms with the camera in board units (BOARD-804).
+   */
+  readonly htmlCamera: HTMLDivElement;
   /** Overlay canvas for selection, handles, the selection box, and snap guides. */
   readonly overlay: HTMLCanvasElement;
 }
@@ -61,6 +78,19 @@ export interface BoardView {
   readonly pixelRatio: number;
   /** `false` after {@link BoardView.unmount}, or after the board was disposed. */
   readonly mounted: boolean;
+  /** Enables or disables visual debug overlays and render stats tracking (BOARD-802). */
+  debug: boolean;
+  /** Render performance and culling statistics from the last rendered frame (BOARD-802). */
+  readonly stats: Readonly<RenderStats>;
+  /** Statistics from the last rendered overlay frame (BOARD-805). */
+  readonly overlayStats: Readonly<OverlayRenderStats>;
+  /**
+   * Mounts an active DOM editor (e.g. text or rich text editor) inside the HTML camera layer (BOARD-804).
+   * The editor is positioned in board coordinates and moves automatically with camera pan and zoom.
+   *
+   * @returns Unmount callback that removes the editor from the layer.
+   */
+  mountEditor(editor: HTMLElement, bounds: EditorBounds): () => void;
   /**
    * Schedules a render on the next animation frame. Several calls before that frame produce one
    * render. No effect after unmount.
@@ -76,9 +106,6 @@ export interface BoardView {
 
 /** Window APIs the renderer needs; taken from the container's own window. */
 type ViewWindow = Window & typeof globalThis;
-
-/** Board events that change what is drawn. */
-const RENDER_EVENTS = ['change', 'camera', 'selection', 'page', 'tool'] as const;
 
 function createLayer<K extends 'div' | 'canvas'>(
   doc: Document,
@@ -96,6 +123,30 @@ function createLayer<K extends 'div' | 'canvas'>(
   return el;
 }
 
+/** Maximum canvas backing store area in pixels before Safari iOS drops or crashes the canvas (ADR-003, BOARD-803). */
+export const SAFARI_MAX_CANVAS_PIXELS = 16_777_216;
+
+/**
+ * Clamps the desired pixel ratio so that the resulting backing canvas area
+ * does not exceed the Safari iOS 16.7M pixel memory limit (BOARD-803).
+ *
+ * @public
+ */
+export function clampPixelRatio(
+  width: number,
+  height: number,
+  desiredRatio: number,
+  maxPixels = SAFARI_MAX_CANVAS_PIXELS,
+): number {
+  if (width <= 0 || height <= 0 || desiredRatio <= 0) return desiredRatio;
+  const area = width * desiredRatio * (height * desiredRatio);
+  if (area <= maxPixels) {
+    return desiredRatio;
+  }
+  const maxRatio = Math.sqrt(Math.max(0, maxPixels - 2048) / (width * height));
+  return Math.max(1, maxRatio);
+}
+
 function resolvePixelRatio(options: RendererOptions, win: ViewWindow | null): number {
   if (options.pixelRatio !== undefined) {
     const ratio = options.pixelRatio;
@@ -106,6 +157,30 @@ function resolvePixelRatio(options: RendererOptions, win: ViewWindow | null): nu
   }
   const ratio = win?.devicePixelRatio;
   return typeof ratio === 'number' && Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+}
+
+function listenDprChange(win: ViewWindow | null, onChange: (newDpr: number) => void): () => void {
+  if (!win || typeof win.matchMedia !== 'function') return () => {};
+
+  let currentDpr = win.devicePixelRatio || 1;
+  let mediaQuery: MediaQueryList | null = null;
+
+  const handleChange = () => {
+    update();
+    onChange(win.devicePixelRatio || 1);
+  };
+
+  const update = () => {
+    mediaQuery?.removeEventListener?.('change', handleChange);
+    currentDpr = win.devicePixelRatio || 1;
+    mediaQuery = win.matchMedia(`(resolution: ${currentDpr}dppx)`);
+    mediaQuery?.addEventListener?.('change', handleChange);
+  };
+
+  update();
+  return () => {
+    mediaQuery?.removeEventListener?.('change', handleChange);
+  };
 }
 
 /** Clamps a measured length to a finite, non-negative number of CSS pixels. */
@@ -142,7 +217,8 @@ export function mountRenderer(
     throw new TypeError('Argumen container pada mountRenderer wajib berupa elemen DOM.');
   }
   const win = doc.defaultView as ViewWindow | null;
-  const pixelRatio = resolvePixelRatio(options, win);
+  let targetPixelRatio = resolvePixelRatio(options, win);
+  let effectivePixelRatio = targetPixelRatio;
 
   const root = doc.createElement('div');
   root.dataset.kujamViewport = '';
@@ -151,32 +227,57 @@ export function mountRenderer(
   root.style.height = '100%';
   root.style.overflow = 'hidden';
 
-  // TODO(BOARD-806): pointer, wheel, and keyboard input are attached to the main canvas.
   const canvas = createLayer(doc, 'canvas', 'canvas', true);
-  // TODO(BOARD-804): one wrapper inside this layer follows the camera with a single `transform`.
   const html = createLayer(doc, 'div', 'html', false);
   const overlay = createLayer(doc, 'canvas', 'overlay', false);
   root.append(canvas, html, overlay);
   container.appendChild(root);
 
-  const layers: RendererLayers = Object.freeze({ root, canvas, html, overlay });
+  const htmlLayer = new HtmlLayer(board, html);
+  const layers: RendererLayers = Object.freeze({
+    root,
+    canvas,
+    html,
+    htmlCamera: htmlLayer.cameraHost,
+    overlay,
+  });
+  const overlayRenderer = new OverlayRenderer(board);
+  let overlayStats: Readonly<OverlayRenderStats> = Object.freeze({
+    rendered: false,
+    selectedCount: 0,
+    hasBrush: false,
+    guidesCount: 0,
+    hoveredId: null,
+  });
+
+  const detachInput = attachInput(board, layers, {
+    onHover(id) {
+      if (overlayRenderer.setHovered(id)) {
+        scheduleRender();
+      }
+    },
+  });
   let size: Readonly<ViewportSize> = Object.freeze({ width: 0, height: 0 });
   let mounted = true;
   let frame: number | null = null;
+
+  let debug = Boolean(options.debug);
+  const canvasRenderer = new CanvasRenderer(board);
+
+  function updateEffectivePixelRatio(): void {
+    effectivePixelRatio = clampPixelRatio(size.width, size.height, targetPixelRatio);
+  }
 
   function draw(): void {
     // Without a 2D context (unsupported environment, or a lost context) there is nothing to draw.
     const main = canvas.getContext('2d');
     if (main) {
-      main.setTransform(1, 0, 0, 1, 0, 0);
-      main.clearRect(0, 0, canvas.width, canvas.height);
-      // TODO(BOARD-802): draw visible elements with dirty rects and viewport culling.
+      canvasRenderer.render(canvas, main, effectivePixelRatio, debug);
     }
+    htmlLayer.updateElements();
     const top = overlay.getContext('2d');
     if (top) {
-      top.setTransform(1, 0, 0, 1, 0, 0);
-      top.clearRect(0, 0, overlay.width, overlay.height);
-      // TODO(BOARD-805): draw the selection, handles, selection box, and snap guides.
+      overlayStats = overlayRenderer.render(overlay, top, effectivePixelRatio);
     }
   }
 
@@ -185,11 +286,16 @@ export function mountRenderer(
     if (mounted) draw();
   }
 
-  function requestRender(): void {
+  function scheduleRender(): void {
     if (!mounted || frame !== null) return;
     frame = win?.requestAnimationFrame
       ? win.requestAnimationFrame(onFrame)
       : (setTimeout(onFrame, 16) as unknown as number);
+  }
+
+  function requestRender(): void {
+    canvasRenderer.markAllDirty();
+    scheduleRender();
   }
 
   function cancelFrame(): void {
@@ -200,8 +306,8 @@ export function mountRenderer(
   }
 
   function setBackingSize(target: HTMLCanvasElement, width: number, height: number): void {
-    const w = Math.round(width * pixelRatio);
-    const h = Math.round(height * pixelRatio);
+    const w = Math.round(width * effectivePixelRatio);
+    const h = Math.round(height * effectivePixelRatio);
     // Assigning `width`/`height` clears the canvas, so only do it on an actual change.
     if (target.width !== w) target.width = w;
     if (target.height !== h) target.height = h;
@@ -212,10 +318,12 @@ export function mountRenderer(
     const next = { width: cssLength(width), height: cssLength(height) };
     if (next.width === size.width && next.height === size.height) return;
     size = Object.freeze(next);
+    updateEffectivePixelRatio();
     setBackingSize(canvas, size.width, size.height);
     setBackingSize(overlay, size.width, size.height);
     board.camera.setViewport(size);
-    requestRender();
+    canvasRenderer.markAllDirty();
+    scheduleRender();
   }
 
   // The root fills the container's content box and has no padding or border, so its client size
@@ -231,8 +339,37 @@ export function mountRenderer(
     : null;
   observer?.observe(root);
 
-  const unsubscribers = RENDER_EVENTS.map((type) => board.on(type, requestRender));
-  unsubscribers.push(board.on('dispose', unmount));
+  const unsubscribers = [
+    board.on('camera', () => {
+      canvasRenderer.markAllDirty();
+      scheduleRender();
+    }),
+    board.on('page', () => {
+      canvasRenderer.markAllDirty();
+      htmlLayer.clearAll();
+      scheduleRender();
+    }),
+    board.on('change', (event) => {
+      canvasRenderer.markChange(event);
+      scheduleRender();
+    }),
+    board.on('selection', scheduleRender),
+    board.on('tool', scheduleRender),
+    board.on('dispose', unmount),
+  ];
+
+  if (options.pixelRatio === undefined && win) {
+    const detachDpr = listenDprChange(win, (newDpr) => {
+      if (!mounted) return;
+      targetPixelRatio = newDpr;
+      updateEffectivePixelRatio();
+      setBackingSize(canvas, size.width, size.height);
+      setBackingSize(overlay, size.width, size.height);
+      canvasRenderer.markAllDirty();
+      scheduleRender();
+    });
+    unsubscribers.push(detachDpr);
+  }
 
   function unmount(): void {
     if (!mounted) return;
@@ -241,10 +378,12 @@ export function mountRenderer(
     observer?.disconnect();
     for (const off of unsubscribers) off();
     unsubscribers.length = 0;
+    detachInput();
+    htmlLayer.dispose();
     root.remove();
   }
 
-  requestRender();
+  scheduleRender();
 
   return {
     board,
@@ -253,10 +392,27 @@ export function mountRenderer(
     get size() {
       return size;
     },
-    pixelRatio,
+    get pixelRatio() {
+      return effectivePixelRatio;
+    },
     get mounted() {
       return mounted;
     },
+    get debug() {
+      return debug;
+    },
+    set debug(value: boolean) {
+      debug = Boolean(value);
+      canvasRenderer.markAllDirty();
+      scheduleRender();
+    },
+    get stats() {
+      return canvasRenderer.stats;
+    },
+    get overlayStats() {
+      return overlayStats;
+    },
+    mountEditor: (editor, bounds) => htmlLayer.mountEditor(editor, bounds),
     requestRender,
     unmount,
   };
