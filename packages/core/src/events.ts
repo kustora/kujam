@@ -122,7 +122,8 @@ export interface BoardEventMap {
   /** One event per transaction that produces a net change, and per `loadDocument`. */
   change: ChangeEvent;
   /**
-   * The selection changed. It has no source in this release yet (BOARD-405).
+   * The selection changed via `select`, `addToSelection`, `removeFromSelection`, `clearSelection`,
+   * or because selected elements were deleted (BOARD-405).
    *
    * @beta
    */

@@ -23,6 +23,7 @@ import type {
   PermissionHook,
   QueryFilter,
   RectBounds,
+  SelectionInput,
   SpatialIndex,
   UpdateOptions,
 } from './index.js';
@@ -149,6 +150,14 @@ export type Tests = [
     Equal<Parameters<Board['runAction']>, [action: ElementAction, element: Readonly<ElementRecord>]>
   >,
   Expect<Equal<ReturnType<Board['runAction']>, boolean>>,
+  // BOARD-405: selection type tests
+  Expect<Equal<Board['selection'], readonly string[]>>,
+  Expect<Equal<Board['selectionBounds'], Readonly<BoxBounds> | null>>,
+  Expect<Equal<SelectionInput, string | readonly string[]>>,
+  Expect<Equal<Parameters<Board['select']>, [ids: SelectionInput]>>,
+  Expect<Equal<Parameters<Board['addToSelection']>, [ids: SelectionInput]>>,
+  Expect<Equal<Parameters<Board['removeFromSelection']>, [ids: SelectionInput]>>,
+  Expect<Equal<ReturnType<Board['clearSelection']>, void>>,
 ];
 
 declare const _dummyBoard: Board;

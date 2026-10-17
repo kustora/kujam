@@ -54,7 +54,8 @@ import {
   type PartialElement,
   type UpdateOptions,
 } from './mutate.js';
-import { createSpatialIndex, type SpatialIndex } from './spatial.js';
+import { createSelection, type SelectionInput } from './selection.js';
+import { createSpatialIndex, type BoxBounds, type SpatialIndex } from './spatial.js';
 import { queryElements, type QueryFilter } from './query.js';
 import type { BoardDocument, CameraState, ElementRecord } from './types.js';
 import { CURRENT_SCHEMA_VERSION } from './types.js';
@@ -163,6 +164,7 @@ export {
   type SpatialIndex,
 } from './spatial.js';
 export { queryElements, type QueryFilter } from './query.js';
+export type { SelectionInput } from './selection.js';
 
 /**
  * Global map from element type to props type, for declaration merging (BOARD-607).
@@ -444,6 +446,53 @@ export interface Board {
    * Emits a `camera` event when the camera actually changes.
    */
   setCamera(patch: Partial<CameraState>): void;
+  /**
+   * IDs of the selected elements, in selection order (BOARD-405). A frozen array that stays the same
+   * object until the selection changes.
+   *
+   * The selection is local UI state: it is not part of the document, is not saved, and is not
+   * recorded in undo history. It only ever holds IDs of existing elements; elements deleted by any
+   * origin (local, remote, undo, `loadDocument`) leave the selection automatically.
+   *
+   * @beta
+   */
+  readonly selection: readonly string[];
+  /**
+   * Axis-aligned bounds enclosing every selected element, accounting for rotation and element
+   * geometry (BOARD-405), or `null` when nothing is selected. Computed on every read.
+   *
+   * @beta
+   */
+  readonly selectionBounds: Readonly<BoxBounds> | null;
+  /**
+   * Replaces the selection. IDs that are not existing elements are ignored, and duplicates are
+   * dropped. Emits a `selection` event only when the selection actually changes. Allowed on
+   * `readOnly` boards.
+   *
+   * @throws `TypeError` when `ids` is not a string or an array of strings, or `Error` after `dispose`.
+   * @beta
+   */
+  select(ids: SelectionInput): void;
+  /**
+   * Appends elements to the end of the selection; already-selected IDs keep their position.
+   * Same filtering, events, and errors as {@link Board.select}.
+   *
+   * @beta
+   */
+  addToSelection(ids: SelectionInput): void;
+  /**
+   * Removes elements from the selection. Same events and errors as {@link Board.select}.
+   *
+   * @beta
+   */
+  removeFromSelection(ids: SelectionInput): void;
+  /**
+   * Empties the selection. Emits a `selection` event only when something was selected.
+   *
+   * @throws `Error` after `dispose`.
+   * @beta
+   */
+  clearSelection(): void;
   /**
    * Undoes the last local step: its inverse diff is applied as a transaction with origin
    * `'undo'` and the original transaction's label. Records changed by another party (for example
@@ -856,6 +905,8 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
         else history.observe(event);
         events.emit('change', event);
         history.flush();
+        // After `change`, so `selection` listeners see the document that caused the change.
+        selection.observe(event);
       },
     },
   );
@@ -871,6 +922,11 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     onStateChange: (state) => events.emit('history', state),
   });
   let camera: CameraState = Object.freeze({ x: 0, y: 0, zoom: 1 });
+  const selection = createSelection({
+    isElement: (id) => store.getRecord(id)?.kind === 'element',
+    getBounds: (id) => spatial.getBounds(id),
+    onChange: (event) => events.emit('selection', event),
+  });
   const commands = createCommandRegistry(() => board);
   const interaction = createInteraction(store, history);
   const tools = createToolRuntime({
@@ -1092,6 +1148,28 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       if (next.x === previous.x && next.y === previous.y && next.zoom === previous.zoom) return;
       camera = Object.freeze(next);
       events.emit('camera', Object.freeze({ camera, previous }));
+    },
+    get selection() {
+      return selection.ids;
+    },
+    get selectionBounds() {
+      return selection.bounds;
+    },
+    select(ids: SelectionInput): void {
+      assertUsable();
+      selection.select(ids);
+    },
+    addToSelection(ids: SelectionInput): void {
+      assertUsable();
+      selection.add(ids);
+    },
+    removeFromSelection(ids: SelectionInput): void {
+      assertUsable();
+      selection.remove(ids);
+    },
+    clearSelection(): void {
+      assertUsable();
+      selection.clear();
     },
     dispose(): void {
       if (disposed) return;
