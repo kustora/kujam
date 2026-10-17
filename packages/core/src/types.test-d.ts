@@ -14,6 +14,8 @@ import type {
   ElementSize,
   ResizeHandle,
   ResizeOptions,
+  ElementContext,
+  ToolPointerEvent,
   SnapGuide,
   SnapOptions,
   RotateOptions,
@@ -278,6 +280,10 @@ export type Tests = [
       { readonly delta: Point; readonly guides: readonly SnapGuide[] }
     >
   >,
+  // BOARD-502: tool feedback, element callbacks, and double clicks
+  Expect<Equal<Board['toolData'], unknown>>,
+  Expect<Equal<Board['elementContext'], ElementContext>>,
+  Expect<Equal<ToolPointerEvent['clickCount'], number | undefined>>,
 ];
 
 declare const _dummyBoard: Board;

@@ -139,7 +139,8 @@ export interface BoardEventMap {
    */
   tool: ToolEvent;
   /**
-   * Plugin action. It has no source in this release yet (BOARD-605).
+   * Plugin action, emitted through `ctx.emit(name, payload)` of the element context, for example
+   * from `onDoubleClick` (`board.elementContext`, BOARD-502, BOARD-605).
    *
    * @beta
    */

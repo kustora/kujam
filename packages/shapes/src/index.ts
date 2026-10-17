@@ -13,11 +13,22 @@ import { drawElement } from './elements/draw.js';
 import { geoElement } from './elements/geo.js';
 import { stickyElement } from './elements/sticky.js';
 import { textElement } from './elements/text.js';
+import { handTool } from './tools/hand.js';
+import { selectTool } from './tools/select.js';
 
 export { stickyElement } from './elements/sticky.js';
 export { drawElement, MAX_DRAW_POINTS } from './elements/draw.js';
 export { textElement } from './elements/text.js';
 export { geoElement, geoGeometry, GEO_KINDS, type GeoKind } from './elements/geo.js';
+export {
+  DRAG_THRESHOLD_PX,
+  HANDLE_TOLERANCE_PX,
+  HIT_TOLERANCE_PX,
+  ROTATE_HANDLE_OFFSET_PX,
+  selectTool,
+  type SelectToolData,
+} from './tools/select.js';
+export { handTool, type HandToolData } from './tools/hand.js';
 export { COLOR_KEYS, STICKY_COLORS, type ColorKey, type StickyColor } from './colors.js';
 export {
   EMPTY_RICH_TEXT,
@@ -43,13 +54,13 @@ export const defaultElements = definePlugin({
 
 /**
  * Built-in tools plugin, ready to install via `createBoard({ plugins: [defaultElements, defaultTools] })`.
- * The built-in tool state machines are implemented by BOARD-502 (`select`, `hand`) and BOARD-E10.
+ * Contains the `select` and `hand` tools (BOARD-502); creation tools follow in BOARD-E10.
  *
  * @public
  */
 export const defaultTools = definePlugin({
   id: 'default-tools',
-  tools: Object.freeze([] as const),
+  tools: Object.freeze([selectTool, handTool] as const),
 });
 
 /**

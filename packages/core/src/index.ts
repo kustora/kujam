@@ -9,6 +9,7 @@ import { createCommandRegistry, type BoardCommands } from './commands.js';
 import {
   createElementRegistry,
   type ElementAction,
+  type ElementContext,
   type ElementRegistry,
   type ResolveResult,
 } from './elements.js';
@@ -674,6 +675,21 @@ export interface Board {
    */
   readonly cursor: string;
   /**
+   * `ctx.data` of the active tool, or `undefined` when no tool is active. The renderer reads it
+   * after `dispatch` to draw tool feedback, for example the selection box or snap guides of the
+   * select tool (BOARD-502). Treat it as read-only.
+   *
+   * @beta
+   */
+  readonly toolData: unknown;
+  /**
+   * Context passed to element callbacks such as `onDoubleClick` (BOARD-502): the board locale and
+   * `emit`, which emits an `action` event (BOARD-605).
+   *
+   * @beta
+   */
+  readonly elementContext: ElementContext;
+  /**
    * Sends a normalized input event from the renderer to the active tool.
    *
    * @returns `true` when the event was handled (the renderer should call `preventDefault`).
@@ -1113,6 +1129,15 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     zoomRange,
     onChange: (event) => events.emit('camera', event),
   });
+  const elementContext: ElementContext = Object.freeze({
+    locale,
+    emit(name: string, payload?: unknown): void {
+      if (typeof name !== 'string' || name === '') {
+        throw new TypeError('Nama aksi wajib berupa string tidak kosong.');
+      }
+      events.emit('action', Object.freeze({ name, payload }));
+    },
+  });
   const selection = createSelection({
     isElement: (id) => store.getRecord(id)?.kind === 'element',
     getBounds: (id) => spatial.getBounds(id),
@@ -1360,6 +1385,10 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     get cursor() {
       return tools.cursor;
     },
+    get toolData() {
+      return tools.data;
+    },
+    elementContext,
     dispatch(event: BoardInputEvent): boolean {
       assertUsable();
       return tools.dispatch(event);

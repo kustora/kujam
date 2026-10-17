@@ -3,9 +3,18 @@ import type {
   AnyElementDefinition,
   AnyPluginDefinition,
   ElementCanvasContext,
+  BoxBounds,
   ElementPropsOf,
+  SnapGuide,
 } from '@kujam/core';
-import type { defaultElements, defaultTools, geoElement, RichText, stickyElement } from './index.js';
+import type {
+  defaultElements,
+  defaultTools,
+  geoElement,
+  RichText,
+  SelectToolData,
+  stickyElement,
+} from './index.js';
 
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
@@ -22,8 +31,7 @@ const _plugins: readonly AnyPluginDefinition[] = [] as unknown as [
   typeof defaultElements,
   typeof defaultTools,
 ];
-const _all: readonly AnyElementDefinition[] =
-  [] as unknown as (typeof defaultElements)['elements'];
+const _all: readonly AnyElementDefinition[] = [] as unknown as (typeof defaultElements)['elements'];
 
 type StickyProps = ElementPropsOf<typeof stickyElement>;
 
@@ -44,4 +52,9 @@ export type Checks = [
   Expect<
     Equal<(typeof defaultElements)['elements'][number]['type'], 'sticky' | 'draw' | 'text' | 'geo'>
   >,
+  // BOARD-502: built-in select and hand tools, and the overlay data of the select tool.
+  Expect<Equal<NonNullable<(typeof defaultTools)['tools']>[number]['id'], string>>,
+  Expect<Equal<NonNullable<(typeof defaultTools)['tools']>['length'], 2>>,
+  Expect<Equal<SelectToolData['brush'], BoxBounds | null>>,
+  Expect<Equal<SelectToolData['guides'], readonly SnapGuide[]>>,
 ];
