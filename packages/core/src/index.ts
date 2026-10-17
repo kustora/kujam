@@ -59,7 +59,14 @@ import {
   type PartialElement,
   type UpdateOptions,
 } from './mutate.js';
-import { createCamera, resolveZoomRange, type BoardCamera, type ZoomRange } from './camera.js';
+import {
+  createCamera,
+  resolveFrameScheduler,
+  resolveZoomRange,
+  type BoardCamera,
+  type FrameScheduler,
+  type ZoomRange,
+} from './camera.js';
 import {
   findTooNew,
   latestPluginVersion,
@@ -70,7 +77,7 @@ import {
 import { createPages, type BoardPages } from './pages.js';
 import { createSelection, type SelectionInput } from './selection.js';
 import { resolveSnapOptions, type SnapOptions } from './snap.js';
-import { createSpatialIndex, type BoxBounds, type SpatialIndex } from './spatial.js';
+import { createSpatialIndex, unionBounds, type BoxBounds, type SpatialIndex } from './spatial.js';
 import { hitTestElements, queryElements, type HitTestOptions, type QueryFilter } from './query.js';
 import { resolveElementGeometry, toBoardTolerance, type Geometry, type Point } from './geometry.js';
 import type { BoardDocument, CameraState, ElementRecord } from './types.js';
@@ -229,10 +236,15 @@ export {
 export type { BoardPages, PageInput } from './pages.js';
 export type { SelectionInput } from './selection.js';
 export {
+  DEFAULT_CAMERA_ANIMATION_MS,
+  DEFAULT_ZOOM_PADDING,
   DEFAULT_ZOOM_RANGE,
   type BoardCamera,
+  type CameraAnimation,
+  type FrameScheduler,
   type ViewportSize,
   type ZoomRange,
+  type ZoomToOptions,
 } from './camera.js';
 export {
   attachStorage,
@@ -388,6 +400,20 @@ export interface CreateBoardOptions {
   permissions?: PermissionHook;
   /** Camera zoom bounds. Defaults to {@link DEFAULT_ZOOM_RANGE}. */
   zoomRange?: ZoomRange;
+  /**
+   * Starts with camera animations turned off (BOARD-402, BOARD-1905). The renderer usually sets it
+   * later from `prefers-reduced-motion` via `board.camera.setReducedMotion`. Defaults to `false`.
+   *
+   * @beta
+   */
+  reducedMotion?: boolean;
+  /**
+   * Frame and clock source for camera animations (BOARD-402). Defaults to `requestAnimationFrame`
+   * (or `setTimeout` where it is missing) and `performance.now()`.
+   *
+   * @beta
+   */
+  frameScheduler?: FrameScheduler;
   /**
    * Snap settings for dragging (BOARD-407); omitted fields use {@link DEFAULT_SNAP_OPTIONS}
    * (enabled, 8-unit grid, 8-pixel threshold).
@@ -1032,6 +1058,11 @@ function resolvePermissions(permissions: unknown): PermissionHook | null {
 export function createBoard(options: CreateBoardOptions = {}): Board {
   assertOptionsObject(options);
   const zoomRange = resolveZoomRange(options.zoomRange);
+  const frameScheduler = resolveFrameScheduler(options.frameScheduler);
+  if (options.reducedMotion !== undefined && typeof options.reducedMotion !== 'boolean') {
+    throw new TypeError('Opsi reducedMotion wajib berupa boolean.');
+  }
+  const reducedMotion = options.reducedMotion === true;
   let snapOptions = resolveSnapOptions(options.snap);
   const locale = resolveLocale(options.locale);
   const configuredReadOnly = resolveReadOnly(options.readOnly);
@@ -1147,6 +1178,10 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   const camera = createCamera({
     zoomRange,
     onChange: (event) => events.emit('camera', event),
+    getContentBounds: () => unionBounds(board.query().map((el) => spatial.getBounds(el.id))),
+    getSelectionBounds: () => selection.bounds,
+    scheduler: frameScheduler,
+    reducedMotion,
   });
   const elementContext: ElementContext = Object.freeze({
     locale,
@@ -1478,6 +1513,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
         plugins.dispose();
       } finally {
         disposed = true;
+        camera.dispose();
         spatial.clear();
         events.clear();
         commands.clear();

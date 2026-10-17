@@ -80,6 +80,27 @@ export function isRectBounds(bounds: unknown): bounds is RectBounds {
 }
 
 /**
+ * Smallest box enclosing every given box, skipping `undefined` entries. Frozen; `null` when there
+ * is none.
+ *
+ * @internal
+ */
+export function unionBounds(boxes: Iterable<BoxBounds | undefined>): Readonly<BoxBounds> | null {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const b of boxes) {
+    if (!b) continue;
+    minX = Math.min(minX, b.minX);
+    minY = Math.min(minY, b.minY);
+    maxX = Math.max(maxX, b.maxX);
+    maxY = Math.max(maxY, b.maxY);
+  }
+  return minX === Infinity ? null : Object.freeze({ minX, minY, maxX, maxY });
+}
+
+/**
  * Normalizes input {@link Bounds} into valid {@link BoxBounds} (`minX <= maxX` and `minY <= maxY`).
  *
  * @throws `TypeError` when the argument is in neither `BoxBounds` nor `RectBounds` format.

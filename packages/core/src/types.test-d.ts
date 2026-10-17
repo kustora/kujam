@@ -64,6 +64,9 @@ import type {
   UpdateOptions,
   ViewportSize,
   ZoomRange,
+  ZoomToOptions,
+  CameraAnimation,
+  FrameScheduler,
   ValidateDocumentOptions,
   ValidationResult,
 } from './index.js';
@@ -305,6 +308,14 @@ export type Tests = [
   Expect<Equal<Board['toolData'], unknown>>,
   Expect<Equal<Board['elementContext'], ElementContext>>,
   Expect<Equal<ToolPointerEvent['clickCount'], number | undefined>>,
+  // BOARD-402: fitting and camera animation
+  Expect<Equal<Parameters<BoardCamera['zoomToBounds']>, [bounds: Bounds, options?: ZoomToOptions]>>,
+  Expect<Equal<Parameters<BoardCamera['zoomToFit']>, [options?: ZoomToOptions]>>,
+  Expect<Equal<ReturnType<BoardCamera['zoomToSelection']>, boolean>>,
+  Expect<Equal<ZoomToOptions['animate'], boolean | CameraAnimation | undefined>>,
+  Expect<Equal<BoardCamera['reducedMotion'], boolean>>,
+  Expect<Equal<CreateBoardOptions['frameScheduler'], FrameScheduler | undefined>>,
+  Expect<Equal<CreateBoardOptions['reducedMotion'], boolean | undefined>>,
 ];
 
 declare const _dummyBoard: Board;
