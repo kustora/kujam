@@ -95,7 +95,7 @@ export interface ElementPatch<P = Record<string, unknown>> {
   readonly h?: number;
   readonly locked?: boolean;
   readonly opacity?: number;
-  /** Changed props; merged per key with the existing props. */
+  /** Changed props; merged per key with the existing props. Rejected for unregistered types. */
   readonly props?: Partial<P>;
   /** Free-form metadata; shallow-merged with the existing meta. */
   readonly meta?: Record<string, unknown>;
@@ -283,6 +283,16 @@ export function updateElementRecord<P = Record<string, unknown>>(
 
   let nextProps = current.props;
   if (patch.props !== undefined) {
+    // Props of an unregistered type cannot be validated, so they are kept exactly as loaded
+    // (BOARD-209); the element can still be moved, resized, locked, or deleted like a plain box.
+    if (ctx.elements.get(current.type) === undefined) {
+      ctx.emitError(
+        'invalid-props',
+        `Props elemen "${id}" bertipe "${current.type}" tidak bisa diubah karena tipenya tidak terdaftar.`,
+        { id, type: current.type },
+      );
+      return undefined;
+    }
     nextProps = { ...current.props, ...patch.props };
     const validation = ctx.elements.validateElementProps(current.type, nextProps);
     if (validation && !validation.ok) {

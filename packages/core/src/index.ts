@@ -388,8 +388,12 @@ export interface Board {
   /**
    * Updates an existing element with a partial patch (BOARD-205). Props are merged per key.
    *
+   * Elements whose type is not registered (BOARD-209) can still be moved, resized, locked, and
+   * deleted, but their props are kept as loaded: a `props` patch is rejected with `invalid-props`.
+   *
    * @returns The updated element record, or `undefined` when the element is not found, is
-   *   locked (without `force`), or the new props fail the type schema.
+   *   locked (without `force`), the new props fail the type schema, or the type is not registered
+   *   and the patch changes props.
    * @beta
    */
   update<T = Record<string, unknown>>(
