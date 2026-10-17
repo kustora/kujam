@@ -30,6 +30,14 @@ const FORBIDDEN_DOMAIN_TERMS_REGEX = [
 // Platform APIs that happen to contain the terms above and are allowed.
 const ALLOWED_IDENTIFIERS_REGEX = '^(postMessage|onmessage)$';
 
+// Reviewed string exceptions: whole string values that contain a banned term but name a platform
+// concept, not the application domain. Keep each entry justified here.
+// - `POST`: the HTTP method, for HTTP adapters such as storage-http (`method: 'POST'`).
+const ALLOWED_STRINGS_REGEX = '^(POST)$';
+
+const DOMAIN_TERMS_MESSAGE =
+  'BOARD-107: Istilah domain aplikasi (post, task, brand, approval, campaign, kampanye, tayang) dilarang di dalam package @kujam/*.';
+
 // BOARD-106: @kujam/* packages each package may import, following the "Depends on"
 // column of the package table in the PRD. One direction: core <- renderer <- ui/react/vue/export;
 // shapes, sync-yjs, storage-*, and server depend only on core. New packages must be
@@ -88,12 +96,21 @@ export default tseslint.config(
       ],
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
       // BOARD-107: Ban Tayang domain terms across packages/*/src
+      // Identifiers, string literals, and template literal text are checked with the same
+      // segment regex, so words that merely contain a term (`postpone`, `multitask`) still pass.
       'no-restricted-syntax': [
         'error',
         {
           selector: `Identifier[name=/${FORBIDDEN_DOMAIN_TERMS_REGEX}/]:not([name=/${ALLOWED_IDENTIFIERS_REGEX}/])`,
-          message:
-            'BOARD-107: Istilah domain aplikasi (post, task, brand, approval, campaign, kampanye, tayang) dilarang di dalam package @kujam/*.',
+          message: DOMAIN_TERMS_MESSAGE,
+        },
+        {
+          selector: `Literal[value=/${FORBIDDEN_DOMAIN_TERMS_REGEX}/]:not([value=/${ALLOWED_STRINGS_REGEX}/])`,
+          message: DOMAIN_TERMS_MESSAGE,
+        },
+        {
+          selector: `TemplateElement[value.raw=/${FORBIDDEN_DOMAIN_TERMS_REGEX}/]`,
+          message: DOMAIN_TERMS_MESSAGE,
         },
       ],
     },
