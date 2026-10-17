@@ -19,7 +19,7 @@ export type SelectionInput = string | readonly string[];
 
 /** @internal */
 export interface SelectionOptions {
-  /** Whether `id` is an element in the current document. */
+  /** Whether `id` is a selectable element: it exists and is on the current page. */
   isElement(id: string): boolean;
   /** Rotation-aware AABB of an element, or `undefined` when unknown. */
   getBounds(id: string): BoxBounds | undefined;
@@ -117,7 +117,8 @@ export function createSelection(options: SelectionOptions): SelectionRuntime {
         ids.filter((id) => {
           // `Object.hasOwn`, not `in`: IDs such as `toString` must not match prototype keys.
           if (Object.hasOwn(event.removed, id)) return false;
-          return !Object.hasOwn(event.updated, id) || event.updated[id]!.after.kind === 'element';
+          // Updated records may have stopped being elements or moved to another page.
+          return !Object.hasOwn(event.updated, id) || options.isElement(id);
         }),
       );
     },

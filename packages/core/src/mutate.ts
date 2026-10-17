@@ -61,7 +61,7 @@ export interface PartialElement<P = Record<string, unknown>> {
   readonly type: string;
   /** Record ID; when omitted, generated with the board's ID generator. */
   readonly id?: string;
-  /** Target page ID; when omitted, the first page in the document is used. */
+  /** Target page ID; when omitted, the current page (`board.pages.current`) is used. */
   readonly pageId?: string;
   /** Container ID (frame or group); defaults to `null`. */
   readonly parentId?: string | null;
@@ -117,6 +117,8 @@ export interface MutationContext {
   readonly limits: MutationLimits;
   readonly user: Readonly<BoardUser> | null;
   checkPermission(action: PermissionAction, element: Readonly<ElementRecord> | null): boolean;
+  /** Page for new elements without `pageId`: the current page (BOARD-208). */
+  defaultPageId(): string;
   createId(): string;
   emitError(code: BoardErrorCode, message: string, cause: unknown): void;
   assertUsable(): void;
@@ -124,13 +126,6 @@ export interface MutationContext {
 
 function isPlainObject(value: unknown): boolean {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function resolveDefaultPageId(doc: Readonly<BoardDocument>): string {
-  for (const rec of Object.values(doc.records)) {
-    if (rec.kind === 'page') return rec.id;
-  }
-  return 'page:main';
 }
 
 function findTopIndexOnPage(doc: Readonly<BoardDocument>, pageId: string): string | null {
@@ -215,7 +210,7 @@ export function createElementRecord<P = Record<string, unknown>>(
     return undefined;
   }
 
-  const pageId = partial.pageId ?? resolveDefaultPageId(doc);
+  const pageId = partial.pageId ?? ctx.defaultPageId();
   const index = partial.index ?? indexAbove(findTopIndexOnPage(doc, pageId));
   const id = typeof partial.id === 'string' && partial.id.length > 0 ? partial.id : ctx.createId();
 

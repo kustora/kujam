@@ -65,6 +65,7 @@ import {
   migrateSchema,
   type DocumentTooNewReason,
 } from './migrations.js';
+import { createPages, type BoardPages } from './pages.js';
 import { createSelection, type SelectionInput } from './selection.js';
 import { createSpatialIndex, type BoxBounds, type SpatialIndex } from './spatial.js';
 import { hitTestElements, queryElements, type HitTestOptions, type QueryFilter } from './query.js';
@@ -144,6 +145,7 @@ export type {
   BoardEventMap,
   CameraEvent,
   Listener,
+  PageEvent,
   SelectionEvent,
   ToolEvent,
   Unsubscribe,
@@ -192,6 +194,7 @@ export {
   type SchemaMigration,
   type SchemaMigrations,
 } from './migrations.js';
+export type { BoardPages, PageInput } from './pages.js';
 export type { SelectionInput } from './selection.js';
 export {
   DEFAULT_ZOOM_RANGE,
@@ -449,6 +452,8 @@ export interface Board {
   ): Readonly<ElementRecord<ResolveElementProps<T>>> | undefined;
   /**
    * Finds elements in the document by type, page, parent, and spatial bounds filters (BOARD-206).
+   * Without `pageId`, only the current page is searched (BOARD-208); pass `allPages: true` to
+   * search every page.
    *
    * @typeParam T - Element type name registered in {@link BoardElementTypes}, or a custom props type.
    * @returns Matching element records, deterministically ordered from bottom layer to top.
@@ -463,6 +468,7 @@ export interface Board {
    * Elements are tested against their `geometry` (or their `w × h` box), with rotation applied.
    * The topmost element follows paint order: siblings by layer index, and children of a frame or
    * group above their container. `locked` elements are skipped unless `includeLocked` is set.
+   * Without `pageId`, only the current page is tested (BOARD-208) unless `allPages` is set.
    *
    * @param point - Point in board coordinates.
    * @returns The hit element, or `undefined` when nothing is under the point.
@@ -517,6 +523,13 @@ export interface Board {
    * @beta
    */
   readonly selection: readonly string[];
+  /**
+   * Pages of the document and the current page (BOARD-208). Query, hit-test, new elements, and
+   * the selection default to the current page.
+   *
+   * @beta
+   */
+  readonly pages: BoardPages;
   /**
    * Axis-aligned bounds enclosing every selected element, accounting for rotation and element
    * geometry (BOARD-405), or `null` when nothing is selected. Computed on every read.
@@ -1043,7 +1056,8 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       else history.observe(event);
       events.emit('change', event);
       history.flush();
-      // After `change`, so `selection` listeners see the document that caused the change.
+      // After `change`, so `page` and `selection` listeners see the document that caused it.
+      pages.observe(event);
       selection.observe(event);
     },
   });
@@ -1063,9 +1077,26 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     onChange: (event) => events.emit('camera', event),
   });
   const selection = createSelection({
-    isElement: (id) => store.getRecord(id)?.kind === 'element',
+    isElement: (id) => {
+      const rec = store.getRecord(id);
+      return rec?.kind === 'element' && rec.pageId === pages.api.current;
+    },
     getBounds: (id) => spatial.getBounds(id),
     onChange: (event) => events.emit('selection', event),
+  });
+  const pages = createPages({
+    getDocument: () => store.getDocument(),
+    transact: (fn, txOpts) => store.transact(fn, txOpts),
+    createId: () => board.createId(),
+    checkPermission: (action, element) => can(action, element),
+    deleteElements: (ids, opts) => deleteElementRecords(mutationCtx, ids, opts),
+    emitError: (code, message, cause) => emitError(code, message, cause),
+    assertUsable: () => assertUsable(),
+    onCurrentChange: (event) => {
+      // Elements of another page are never selected.
+      selection.clear();
+      events.emit('page', event);
+    },
   });
   const commands = createCommandRegistry(() => board);
   const interaction = createInteraction(store, history);
@@ -1144,6 +1175,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     limits,
     user,
     checkPermission: (action, element) => can(action, element),
+    defaultPageId: () => pages.api.current,
     createId: () => board.createId(),
     emitError,
     assertUsable,
@@ -1237,7 +1269,9 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     },
     query(filter) {
       assertUsable();
-      return queryElements(store.getDocument(), spatial, filter) as never;
+      const { allPages, ...rest } = filter ?? {};
+      const pageId = rest.pageId ?? (allPages ? undefined : pages.api.current);
+      return queryElements(store.getDocument(), spatial, { ...rest, pageId }) as never;
     },
     hitTest(point, hitOptions = {}) {
       assertUsable();
@@ -1258,7 +1292,10 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
         hitGeometry,
         { x: point.x, y: point.y },
         toBoardTolerance(tolerancePx, camera.get().zoom),
-        hitOptions,
+        {
+          ...hitOptions,
+          pageId: hitOptions.pageId ?? (hitOptions.allPages ? undefined : pages.api.current),
+        },
       );
     },
     spatial,
@@ -1320,6 +1357,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     setCamera(patch: Partial<CameraState>): void {
       camera.set(patch);
     },
+    pages: pages.api,
     get selection() {
       return selection.ids;
     },

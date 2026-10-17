@@ -9,6 +9,7 @@ import type {
   CameraEvent,
   ChangeEvent,
   HistoryEvent,
+  PageEvent,
   SelectionEvent,
   ToolEvent,
 } from './index.js';
@@ -24,13 +25,22 @@ export type Tests = [
   Expect<
     Equal<
       keyof BoardEventMap,
-      'change' | 'selection' | 'camera' | 'tool' | 'action' | 'error' | 'history' | 'dispose'
+      | 'change'
+      | 'selection'
+      | 'camera'
+      | 'tool'
+      | 'page'
+      | 'action'
+      | 'error'
+      | 'history'
+      | 'dispose'
     >
   >,
   Expect<Equal<BoardEventMap['change'], ChangeEvent>>,
   Expect<Equal<BoardEventMap['selection'], SelectionEvent>>,
   Expect<Equal<BoardEventMap['camera'], CameraEvent>>,
   Expect<Equal<BoardEventMap['tool'], ToolEvent>>,
+  Expect<Equal<BoardEventMap['page'], PageEvent>>,
   Expect<Equal<BoardEventMap['action'], ActionEvent>>,
   Expect<Equal<BoardEventMap['error'], BoardErrorEvent>>,
   Expect<Equal<BoardEventMap['dispose'], undefined>>,

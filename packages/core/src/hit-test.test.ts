@@ -185,8 +185,10 @@ describe('BOARD-404: board.hitTest', () => {
     board.create({ id: 'p2', type: 'box', w: 100, h: 100, pageId: 'page:two' });
 
     expect(board.getElement('p1')!.index).toBe(board.getElement('p2')!.index);
-    // Without a page filter, equal paint order is broken by ID.
-    expect(board.hitTest({ x: 50, y: 50 })?.id).toBe('p2');
+    // Without a page filter, only the current page is tested (BOARD-208).
+    expect(board.hitTest({ x: 50, y: 50 })?.id).toBe('p1');
+    // Across all pages, equal paint order is broken by ID.
+    expect(board.hitTest({ x: 50, y: 50 }, { allPages: true })?.id).toBe('p2');
     expect(board.hitTest({ x: 50, y: 50 }, { pageId: 'page:main' })?.id).toBe('p1');
     expect(board.hitTest({ x: 50, y: 50 }, { pageId: 'page:two' })?.id).toBe('p2');
     expect(board.hitTest({ x: 50, y: 50 }, { pageId: 'page:none' })).toBeUndefined();

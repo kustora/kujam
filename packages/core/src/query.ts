@@ -18,8 +18,10 @@ import type { BoardDocument, ElementRecord } from './types.js';
 export interface QueryFilter {
   /** Filter by a specific element type (for example `'sticky'`, `'draw'`). */
   readonly type?: string;
-  /** Filter by target page ID. */
+  /** Filter by target page ID. `board.query` defaults to the current page (BOARD-208). */
   readonly pageId?: string;
+  /** With `board.query`, search every page instead of the current one when `pageId` is omitted. */
+  readonly allPages?: boolean;
   /** Filter by parent container ID (frame or group); use `null` for elements at the canvas root. */
   readonly parentId?: string | null;
   /** Spatial bounds filter (only intersecting elements are returned). */
@@ -85,8 +87,10 @@ export interface HitTestOptions {
    * current camera zoom. Defaults to 0.
    */
   readonly tolerance?: number;
-  /** Only consider elements on this page. */
+  /** Only consider elements on this page. `board.hitTest` defaults to the current page (BOARD-208). */
   readonly pageId?: string;
+  /** With `board.hitTest`, consider every page instead of the current one when `pageId` is omitted. */
+  readonly allPages?: boolean;
   /** Also hit `locked` elements. Defaults to `false`, so locked elements are not picked by clicks. */
   readonly includeLocked?: boolean;
 }
