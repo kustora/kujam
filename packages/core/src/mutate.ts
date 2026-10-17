@@ -91,6 +91,10 @@ export interface PartialElement<P = Record<string, unknown>> {
  * @public
  */
 export interface ElementPatch<P = Record<string, unknown>> {
+  /**
+   * Moves the element to another page. Must be an existing page, otherwise `update` emits
+   * `page-not-found` and returns `undefined`.
+   */
   readonly pageId?: string;
   readonly parentId?: string | null;
   readonly index?: string;
@@ -158,6 +162,17 @@ function withinPointLimit(ctx: MutationContext, type: string, props: unknown): b
 }
 
 /**
+ * Whether `pageId` is an existing page; emits `page-not-found` when not. An element on a missing page
+ * would never be visible and never removed by a page delete (BOARD-208).
+ */
+function pageExists(ctx: MutationContext, doc: Readonly<BoardDocument>, pageId: string): boolean {
+  const page = Object.hasOwn(doc.records, pageId) ? doc.records[pageId] : undefined;
+  if (page?.kind === 'page') return true;
+  ctx.emitError('page-not-found', `Page "${pageId}" tidak ditemukan.`, { pageId });
+  return false;
+}
+
+/**
  * Creates a new element and stores it on the board (BOARD-205).
  *
  * @internal
@@ -216,12 +231,7 @@ export function createElementRecord<P = Record<string, unknown>>(
   }
 
   const pageId = partial.pageId ?? ctx.defaultPageId();
-  // An element on a missing page would never be visible and never removed by a page delete.
-  const page = Object.hasOwn(doc.records, pageId) ? doc.records[pageId] : undefined;
-  if (page?.kind !== 'page') {
-    ctx.emitError('page-not-found', `Page "${pageId}" tidak ditemukan.`, { pageId });
-    return undefined;
-  }
+  if (!pageExists(ctx, doc, pageId)) return undefined;
   const index = partial.index ?? indexAbove(findTopIndexOnPage(doc, pageId));
   const id = typeof partial.id === 'string' && partial.id.length > 0 ? partial.id : ctx.createId();
 
@@ -302,6 +312,15 @@ export function updateElementRecord<P = Record<string, unknown>>(
       element: current,
       user: ctx.user,
     });
+    return undefined;
+  }
+
+  // Only a move is checked: an element already on a missing page can still be edited in place.
+  if (
+    patch.pageId !== undefined &&
+    patch.pageId !== current.pageId &&
+    !pageExists(ctx, ctx.getDocument(), patch.pageId)
+  ) {
     return undefined;
   }
 
