@@ -63,7 +63,10 @@ export interface PartialElement<P = Record<string, unknown>> {
   readonly type: string;
   /** Record ID; when omitted, generated with the board's ID generator. */
   readonly id?: string;
-  /** Target page ID; when omitted, the current page (`board.pages.current`) is used. */
+  /**
+   * Target page ID; when omitted, the current page (`board.pages.current`) is used. Must be an
+   * existing page, otherwise `create` emits `page-not-found` and returns `undefined`.
+   */
   readonly pageId?: string;
   /** Container ID (frame or group); defaults to `null`. */
   readonly parentId?: string | null;
@@ -213,6 +216,12 @@ export function createElementRecord<P = Record<string, unknown>>(
   }
 
   const pageId = partial.pageId ?? ctx.defaultPageId();
+  // An element on a missing page would never be visible and never removed by a page delete.
+  const page = Object.hasOwn(doc.records, pageId) ? doc.records[pageId] : undefined;
+  if (page?.kind !== 'page') {
+    ctx.emitError('page-not-found', `Page "${pageId}" tidak ditemukan.`, { pageId });
+    return undefined;
+  }
   const index = partial.index ?? indexAbove(findTopIndexOnPage(doc, pageId));
   const id = typeof partial.id === 'string' && partial.id.length > 0 ? partial.id : ctx.createId();
 

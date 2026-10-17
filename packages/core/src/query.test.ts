@@ -69,6 +69,7 @@ describe('BOARD-206: board.query', () => {
 
   it('memfilter berdasarkan pageId', () => {
     const board = createBoard({ plugins: [testPlugin] });
+    board.pages.create({ id: 'page:other' });
 
     board.create({ id: 'p1-1', type: 'note', pageId: 'page:main' });
     board.create({ id: 'p2-1', type: 'note', pageId: 'page:other' });
