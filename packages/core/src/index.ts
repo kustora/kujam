@@ -198,6 +198,12 @@ export {
 export { queryElements, type HitTestOptions, type QueryFilter } from './query.js';
 export type { BoardKeybindings, Keybinding, KeyboardPlatform } from './keybindings.js';
 export {
+  DEFAULT_DUPLICATE_OFFSET,
+  defaultCommands,
+  ZOOM_TO_FIT_PADDING_PX,
+  type DuplicateArgs,
+} from './default-commands.js';
+export {
   DEFAULT_MIN_SIZE,
   moveElements,
   resizeElements,

@@ -1,5 +1,7 @@
 import type { attachStorage, resizeElements, rotateElements, snapTranslation } from './index.js';
+import type { defaultCommands } from './index.js';
 import type {
+  DuplicateArgs,
   BoardKeybindings,
   Keybinding,
   KeyboardPlatform,
@@ -315,6 +317,9 @@ export type Tests = [
   Expect<Equal<Parameters<BoardKeybindings['set']>, [shortcut: string, target: string | null]>>,
   Expect<Equal<ReturnType<BoardKeybindings['match']>, Keybinding | undefined>>,
   Expect<Equal<ToolKeyEvent['inTextInput'], boolean | undefined>>,
+  // BOARD-505: built-in commands
+  Expect<Equal<(typeof defaultCommands)['id'], 'default-commands'>>,
+  Expect<Equal<DuplicateArgs['offset'], Point | undefined>>,
   // BOARD-502: tool feedback, element callbacks, and double clicks
   Expect<Equal<Board['toolData'], unknown>>,
   Expect<Equal<Board['elementContext'], ElementContext>>,
