@@ -24,5 +24,8 @@
   },
   "dependencies": {
     "@kujam/core": "workspace:*"
+  },
+  "devDependencies": {
+    "happy-dom": "^21.0.3"
   }
 }
