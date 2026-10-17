@@ -28,8 +28,10 @@ import {
 } from './history.js';
 import { createId as createRandomId, type IdGenerator } from './ids.js';
 import { createInteraction } from './interaction.js';
+import { resolveLimits, type BoardLimits } from './limits.js';
 import {
   createPluginRuntime,
+  resolvePluginOrder,
   type AnyPluginDefinition,
   type BoardPlugins,
   type BoardUser,
@@ -60,11 +62,18 @@ import { createSpatialIndex, type BoxBounds, type SpatialIndex } from './spatial
 import { queryElements, type QueryFilter } from './query.js';
 import type { BoardDocument, CameraState, ElementRecord } from './types.js';
 import { CURRENT_SCHEMA_VERSION } from './types.js';
-import { InvalidDocumentError, validateDocument } from './validate.js';
+import { InvalidDocumentError, inspectDocument } from './validate.js';
 
 export * from './types.js';
 export { deepClone } from './clone.js';
-export { InvalidDocumentError, validateDocument, type ValidationResult } from './validate.js';
+export {
+  InvalidDocumentError,
+  validateDocument,
+  type DocumentPropsValidator,
+  type ValidateDocumentOptions,
+  type ValidationResult,
+} from './validate.js';
+export { DEFAULT_BOARD_LIMITS, type BoardLimits } from './limits.js';
 export * from './schema.js';
 export * from './elements.js';
 export * from './geometry.js';
@@ -249,37 +258,20 @@ export interface AssetAdapter {
 }
 
 /**
- * Limits on board size and entity counts (BOARD-005, BOARD-210, BOARD-211).
- *
- * @public
- */
-export interface BoardLimits {
-  /** Maximum serialized document size in bytes. Defaults to 10 MB (`10_485_760`). */
-  readonly maxDocumentBytes: number;
-  /** Maximum number of elements per board. Defaults to `5_000`. */
-  readonly maxElements: number;
-  /** Maximum number of points per freehand (`draw`) element. Defaults to `5_000`. */
-  readonly maxDrawPoints: number;
-}
-
-/**
- * Default board limits: 10 MB document, 5,000 elements, 5,000 points per stroke.
- *
- * @public
- */
-export const DEFAULT_BOARD_LIMITS: Readonly<BoardLimits> = Object.freeze({
-  maxDocumentBytes: 10 * 1024 * 1024,
-  maxElements: 5_000,
-  maxDrawPoints: 5_000,
-});
-
-/**
  * Options for creating a `Board` instance (BOARD-211).
  *
  * @public
  */
 export interface CreateBoardOptions {
-  /** Initial board document; when omitted, a new document with one page (`page:main`) is created. */
+  /**
+   * Initial board document; when omitted, a new document with one page (`page:main`) is created.
+   *
+   * Validated like {@link Board.loadDocument} (BOARD-210), with props checked against the element
+   * types of `plugins` (types registered later, inside a plugin's `setup`, are not checked here).
+   * Document-level problems make `createBoard` throw {@link InvalidDocumentError}. Invalid records
+   * are dropped and reported as `invalid-record` `error` events on the next microtask, so listeners
+   * attached right after `createBoard` receive them.
+   */
   document?: BoardDocument;
   /**
    * Plugins, installed deterministically by order and `dependsOn`
@@ -374,7 +366,12 @@ export interface Board {
   /**
    * Replaces the whole document as a single transaction with origin `'load'` and emits one
    * `change` event with the diff against the old document. Also allowed when `readOnly`.
-   * Throws {@link InvalidDocumentError} when invalid (state is left unchanged).
+   *
+   * The document is checked with {@link validateDocument} against this board's element registry
+   * and `limits` (BOARD-210). Invalid records are dropped one by one and each is reported as an
+   * `error` event with code `invalid-record` after the `change` event; the rest still loads.
+   * Document-level problems (shape, schema version, byte size, element count) throw
+   * {@link InvalidDocumentError} and leave the state unchanged.
    */
   loadDocument(doc: BoardDocument): void;
   /**
@@ -391,8 +388,12 @@ export interface Board {
   /**
    * Updates an existing element with a partial patch (BOARD-205). Props are merged per key.
    *
+   * Elements whose type is not registered (BOARD-209) can still be moved, resized, locked, and
+   * deleted, but their props are kept as loaded: a `props` patch is rejected with `invalid-props`.
+   *
    * @returns The updated element record, or `undefined` when the element is not found, is
-   *   locked (without `force`), or the new props fail the type schema.
+   *   locked (without `force`), the new props fail the type schema, or the type is not registered
+   *   and the patch changes props.
    * @beta
    */
   update<T = Record<string, unknown>>(
@@ -694,13 +695,60 @@ export function createEmptyDocument(meta: Record<string, unknown> = {}): BoardDo
   };
 }
 
-/** Validates and then copies the input document so it is not linked to board state. */
-function toOwnedDocument(doc: BoardDocument): BoardDocument {
-  const result = validateDocument(doc);
-  if (!result.valid) {
-    throw new InvalidDocumentError(result.errors);
+/** An incoming record left out of a loaded document because it is invalid (BOARD-210). */
+interface RejectedRecord {
+  readonly id: string;
+  readonly errors: readonly string[];
+  readonly record: unknown;
+}
+
+/**
+ * Validates an incoming document and copies it so it is not linked to board state (BOARD-210).
+ * Document-level problems throw {@link InvalidDocumentError}; invalid records are left out of the
+ * copy one by one and returned so the caller can report them.
+ */
+function toOwnedDocument(
+  doc: BoardDocument,
+  registry: ElementRegistry | undefined,
+  limits: Readonly<BoardLimits>,
+): { document: BoardDocument; rejected: RejectedRecord[] } {
+  const { documentErrors, invalidRecords } = inspectDocument(doc, registry, limits);
+  if (documentErrors.length > 0) {
+    throw new InvalidDocumentError(documentErrors);
   }
-  return deepClone(doc);
+  const rejected: RejectedRecord[] = [];
+  const records: Record<string, unknown> = {};
+  for (const [id, record] of Object.entries(doc.records)) {
+    if (Object.hasOwn(invalidRecords, id))
+      rejected.push({ id, errors: invalidRecords[id]!, record });
+    // `Object.defineProperty` keeps IDs such as `__proto__` as own keys.
+    else
+      Object.defineProperty(records, id, {
+        value: record,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
+  }
+  return { document: deepClone({ ...doc, records } as BoardDocument), rejected };
+}
+
+/**
+ * Element registry built from the element definitions of `plugins`, used to validate the props of
+ * the initial document before the plugins are installed. Returns `undefined` when the plugins are
+ * invalid; installing them throws the proper error later.
+ */
+function previewElementRegistry(
+  plugins: Iterable<AnyPluginDefinition> | undefined,
+): ElementRegistry | undefined {
+  if (plugins === undefined) return undefined;
+  try {
+    return createElementRegistry(
+      resolvePluginOrder(plugins).flatMap((p) => [...(p.elements ?? [])]),
+    );
+  } catch {
+    return undefined;
+  }
 }
 
 function resolveIdGenerator(generator: unknown): IdGenerator {
@@ -790,33 +838,6 @@ function resolveUser(user: unknown): Readonly<BoardUser> | null {
   });
 }
 
-function resolveLimits(limits: unknown): Readonly<BoardLimits> {
-  if (limits === undefined) return DEFAULT_BOARD_LIMITS;
-  if (!isPlainObject(limits)) {
-    throw new TypeError('Opsi limits wajib berupa objek.');
-  }
-  const checkInt = (key: keyof BoardLimits, val: unknown, def: number): number => {
-    if (val === undefined) return def;
-    if (typeof val !== 'number' || !Number.isInteger(val) || val < 1) {
-      throw new RangeError(`limits.${key} wajib berupa bilangan bulat positif (>= 1).`);
-    }
-    return val;
-  };
-  return Object.freeze({
-    maxDocumentBytes: checkInt(
-      'maxDocumentBytes',
-      limits.maxDocumentBytes,
-      DEFAULT_BOARD_LIMITS.maxDocumentBytes,
-    ),
-    maxElements: checkInt('maxElements', limits.maxElements, DEFAULT_BOARD_LIMITS.maxElements),
-    maxDrawPoints: checkInt(
-      'maxDrawPoints',
-      limits.maxDrawPoints,
-      DEFAULT_BOARD_LIMITS.maxDrawPoints,
-    ),
-  });
-}
-
 function resolvePermissions(permissions: unknown): PermissionHook | null {
   if (permissions === undefined || permissions === null) return null;
   if (typeof permissions !== 'function') {
@@ -868,50 +889,60 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     events.emit('error', Object.freeze({ code, message, cause, eventType }));
   }
 
+  /** Reports records dropped from an incoming document, one `invalid-record` error each. */
+  function reportRejected(rejected: readonly RejectedRecord[]): void {
+    for (const item of rejected) {
+      const message = `Record "${item.id}" dari dokumen masuk tidak valid dan diabaikan: ${item.errors.join(' ')}`;
+      // Dropping data must never be silent: without an `error` listener, log it.
+      if (events.has('error')) emitError('invalid-record', message, Object.freeze({ ...item }));
+      else reportUnhandled(`[kujam] ${message}`, item.record);
+    }
+  }
+
   const elements = createElementRegistry();
+  const initial = options.document
+    ? toOwnedDocument(options.document, previewElementRegistry(options.plugins), limits)
+    : { document: createEmptyDocument(), rejected: [] };
   const spatial = createSpatialIndex((el) => {
     const def = elements.get(el.type);
     return def?.geometry ? def.geometry(el as never) : undefined;
   });
 
-  const store = createRecordStore(
-    options.document ? toOwnedDocument(options.document) : createEmptyDocument(),
-    {
-      freeze,
-      readOnly,
-      onChange: (event) => {
-        // Update the spatial index incrementally (BOARD-404, BOARD-206)
-        if (event.origin === 'load') {
-          spatial.clear();
-          spatial.load(
-            Object.values(store.getDocument().records).filter(
-              (r): r is ElementRecord => r.kind === 'element',
-            ),
-          );
-        } else {
-          for (const rec of Object.values(event.added)) {
-            if (rec.kind === 'element') spatial.insert(rec);
-          }
-          for (const update of Object.values(event.updated)) {
-            if (update.after.kind === 'element') spatial.update(update.after);
-            else if (update.before.kind === 'element') spatial.remove(update.before.id);
-          }
-          for (const rec of Object.values(event.removed)) {
-            if (rec.kind === 'element') spatial.remove(rec.id);
-          }
+  const store = createRecordStore(initial.document, {
+    freeze,
+    readOnly,
+    onChange: (event) => {
+      // Update the spatial index incrementally (BOARD-404, BOARD-206)
+      if (event.origin === 'load') {
+        spatial.clear();
+        spatial.load(
+          Object.values(store.getDocument().records).filter(
+            (r): r is ElementRecord => r.kind === 'element',
+          ),
+        );
+      } else {
+        for (const rec of Object.values(event.added)) {
+          if (rec.kind === 'element') spatial.insert(rec);
         }
+        for (const update of Object.values(event.updated)) {
+          if (update.after.kind === 'element') spatial.update(update.after);
+          else if (update.before.kind === 'element') spatial.remove(update.before.id);
+        }
+        for (const rec of Object.values(event.removed)) {
+          if (rec.kind === 'element') spatial.remove(rec.id);
+        }
+      }
 
-        // Tool interaction transactions are recorded as a single step when the interaction ends.
-        if (interaction.capturing) interaction.observe(event);
-        // History is updated first so `change` listeners read the new canUndo/canRedo.
-        else history.observe(event);
-        events.emit('change', event);
-        history.flush();
-        // After `change`, so `selection` listeners see the document that caused the change.
-        selection.observe(event);
-      },
+      // Tool interaction transactions are recorded as a single step when the interaction ends.
+      if (interaction.capturing) interaction.observe(event);
+      // History is updated first so `change` listeners read the new canUndo/canRedo.
+      else history.observe(event);
+      events.emit('change', event);
+      history.flush();
+      // After `change`, so `selection` listeners see the document that caused the change.
+      selection.observe(event);
     },
-  );
+  });
 
   // Initialize the spatial index from the initial document
   spatial.load(
@@ -1072,11 +1103,12 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
           }
         }
       }
-      const owned = toOwnedDocument(currentDoc);
+      const { document: owned, rejected } = toOwnedDocument(currentDoc, elements, limits);
       // The diff of an in-progress interaction does not apply to the new document.
       tools.reset();
       history.api.clear();
       store.replaceDocument(owned, 'load');
+      reportRejected(rejected);
     },
     getElement(id: string) {
       const rec = store.getRecord(id);
@@ -1185,5 +1217,12 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   };
 
   plugins.install();
+  if (initial.rejected.length > 0) {
+    // No listener can exist yet: report on the next microtask, so `error` listeners attached right
+    // after `createBoard` still receive the events.
+    void Promise.resolve().then(() => {
+      if (!disposed) reportRejected(initial.rejected);
+    });
+  }
   return board;
 }

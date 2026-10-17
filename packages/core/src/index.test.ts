@@ -177,7 +177,7 @@ describe('validateDocument', () => {
   it('menerima dokumen yang valid', () => {
     const doc = createEmptyDocument();
     doc.records['el:1'] = makeElement();
-    expect(validateDocument(doc)).toEqual({ valid: true, errors: [] });
+    expect(validateDocument(doc)).toEqual({ valid: true, errors: [], invalidRecords: {} });
   });
 
   it.each([
@@ -228,7 +228,7 @@ describe('validateDocument', () => {
       h: 10,
       meta: {},
     };
-    expect(validateDocument(doc)).toEqual({ valid: true, errors: [] });
+    expect(validateDocument(doc)).toEqual({ valid: true, errors: [], invalidRecords: {} });
   });
 
   it.each([
