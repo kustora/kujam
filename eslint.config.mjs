@@ -71,6 +71,8 @@ export default tseslint.config(
       '**/.turbo/**',
       '**/coverage/**',
       'docs/**',
+      // Claude Code subagent worktrees hold full copies of the repo.
+      '.claude/**',
       // BOARD-106: intentional violation examples; linted by tooling/architecture.test.ts.
       'tooling/fixtures/**',
     ],

@@ -27,3 +27,5 @@ test-results/
 !.vscode/extensions.json
 *.log
 
+# Claude Code (local settings, subagent worktrees)
+.claude/
