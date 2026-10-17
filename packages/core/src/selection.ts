@@ -7,7 +7,7 @@
  */
 
 import type { SelectionEvent } from './events.js';
-import type { BoxBounds } from './spatial.js';
+import { unionBounds, type BoxBounds } from './spatial.js';
 import type { ChangeEvent } from './store.js';
 
 /**
@@ -79,19 +79,7 @@ export function createSelection(options: SelectionOptions): SelectionRuntime {
       return ids;
     },
     get bounds() {
-      let minX = Infinity;
-      let minY = Infinity;
-      let maxX = -Infinity;
-      let maxY = -Infinity;
-      for (const id of ids) {
-        const b = options.getBounds(id);
-        if (!b) continue;
-        minX = Math.min(minX, b.minX);
-        minY = Math.min(minY, b.minY);
-        maxX = Math.max(maxX, b.maxX);
-        maxY = Math.max(maxY, b.maxY);
-      }
-      return minX === Infinity ? null : Object.freeze({ minX, minY, maxX, maxY });
+      return unionBounds(ids.map((id) => options.getBounds(id)));
     },
     select(input) {
       commit(existing(toList(input, 'select')));
