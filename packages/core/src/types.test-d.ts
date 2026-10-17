@@ -1,10 +1,29 @@
-import type { attachStorage, resizeElements, rotateElements, snapTranslation } from './index.js';
 import type {
+  attachStorage,
+  defineBrush,
+  resizeElements,
+  rotateElements,
+  snapTranslation,
+} from './index.js';
+import type { defaultCommands } from './index.js';
+import type {
+  DuplicateArgs,
+  BoardKeybindings,
+  Keybinding,
+  KeyboardPlatform,
+  ToolKeyEvent,
   AssetAdapter,
   AssetRecord,
   BindingRecord,
   Board,
   BoardCamera,
+  BrushBlendMode,
+  BrushDefinition,
+  BrushInput,
+  BrushRegistry,
+  BrushStrokeOptions,
+  ElementRenderers,
+  PluginBrushDefinition,
   BoardDocument,
   BoardLimits,
   BoardRecord,
@@ -48,6 +67,7 @@ import type {
   PageInput,
   PageRecord,
   PartialElement,
+  PreparedDocument,
   PermissionAction,
   PermissionHook,
   QueryFilter,
@@ -64,6 +84,9 @@ import type {
   UpdateOptions,
   ViewportSize,
   ZoomRange,
+  ZoomToOptions,
+  CameraAnimation,
+  FrameScheduler,
   ValidateDocumentOptions,
   ValidationResult,
 } from './index.js';
@@ -264,6 +287,10 @@ export type Tests = [
   Expect<Equal<ReturnType<BoardPages['create']>, Readonly<PageRecord> | undefined>>,
   Expect<Equal<ReturnType<BoardPages['delete']>, readonly string[]>>,
   Expect<Equal<QueryFilter['allPages'], boolean | undefined>>,
+  // BOARD-1701: preparing incoming documents without touching the board
+  Expect<Equal<Parameters<Board['prepareDocument']>, [doc: BoardDocument]>>,
+  Expect<Equal<ReturnType<Board['prepareDocument']>, PreparedDocument>>,
+  Expect<Equal<PreparedDocument['tooNew'], DocumentTooNewReason | null>>,
   // BOARD-302: undo coalescing type tests
   Expect<Equal<TransactOptions['mergeKey'], string | undefined>>,
   Expect<Equal<MutateOptions['mergeKey'], string | undefined>>,
@@ -301,10 +328,46 @@ export type Tests = [
       { readonly delta: Point; readonly guides: readonly SnapGuide[] }
     >
   >,
+  // BOARD-504: keybindings
+  Expect<Equal<Board['keybindings'], BoardKeybindings>>,
+  Expect<Equal<KeyboardPlatform, 'mac' | 'other'>>,
+  Expect<Equal<CreateBoardOptions['platform'], KeyboardPlatform | undefined>>,
+  Expect<
+    Equal<CreateBoardOptions['keybindings'], Readonly<Record<string, string | null>> | undefined>
+  >,
+  Expect<Equal<Parameters<BoardKeybindings['set']>, [shortcut: string, target: string | null]>>,
+  Expect<Equal<ReturnType<BoardKeybindings['match']>, Keybinding | undefined>>,
+  Expect<Equal<ToolKeyEvent['inTextInput'], boolean | undefined>>,
+  // BOARD-505: built-in commands
+  Expect<Equal<(typeof defaultCommands)['id'], 'default-commands'>>,
+  Expect<Equal<DuplicateArgs['offset'], Point | undefined>>,
   // BOARD-502: tool feedback, element callbacks, and double clicks
   Expect<Equal<Board['toolData'], unknown>>,
   Expect<Equal<Board['elementContext'], ElementContext>>,
   Expect<Equal<ToolPointerEvent['clickCount'], number | undefined>>,
+  // BOARD-402: fitting and camera animation
+  Expect<Equal<Parameters<BoardCamera['zoomToBounds']>, [bounds: Bounds, options?: ZoomToOptions]>>,
+  Expect<Equal<Parameters<BoardCamera['zoomToFit']>, [options?: ZoomToOptions]>>,
+  Expect<Equal<ReturnType<BoardCamera['zoomToSelection']>, boolean>>,
+  Expect<Equal<ZoomToOptions['animate'], boolean | CameraAnimation | undefined>>,
+  Expect<Equal<BoardCamera['reducedMotion'], boolean>>,
+  Expect<Equal<CreateBoardOptions['frameScheduler'], FrameScheduler | undefined>>,
+  Expect<Equal<CreateBoardOptions['reducedMotion'], boolean | undefined>>,
+  // BOARD-603: brushes
+  Expect<Equal<Board['brushes'], BrushRegistry>>,
+  Expect<Equal<Parameters<typeof defineBrush>, [definition: BrushInput]>>,
+  Expect<Equal<ReturnType<typeof defineBrush>, BrushDefinition>>,
+  Expect<Equal<ReturnType<BrushRegistry['resolve']>, Readonly<BrushDefinition>>>,
+  Expect<Equal<BrushDefinition['blend'], BrushBlendMode>>,
+  Expect<Equal<PluginBrushDefinition, BrushInput>>,
+  Expect<Equal<BrushInput['strokeOptions'], BrushStrokeOptions | undefined>>,
+  Expect<Equal<ReturnType<ElementContext['resolveBrush']>, Readonly<BrushDefinition>>>,
+  Expect<
+    Equal<
+      Parameters<NonNullable<ElementRenderers<unknown, undefined>['canvas']>>[4],
+      ElementContext | undefined
+    >
+  >,
 ];
 
 declare const _dummyBoard: Board;

@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 
+import { createBrushRegistry, type BrushDefinition, type BrushRegistry } from './brushes.js';
 import { deepClone } from './clone.js';
 import { createCommandRegistry, type BoardCommands } from './commands.js';
 import {
@@ -47,6 +48,7 @@ import {
   DEFAULT_TOOL_ID,
   type BoardInputEvent,
   type BoardTools,
+  type ToolKeyEvent,
 } from './tools.js';
 import {
   createElementRecord,
@@ -59,7 +61,14 @@ import {
   type PartialElement,
   type UpdateOptions,
 } from './mutate.js';
-import { createCamera, resolveZoomRange, type BoardCamera, type ZoomRange } from './camera.js';
+import {
+  createCamera,
+  resolveFrameScheduler,
+  resolveZoomRange,
+  type BoardCamera,
+  type FrameScheduler,
+  type ZoomRange,
+} from './camera.js';
 import {
   findTooNew,
   latestPluginVersion,
@@ -70,12 +79,18 @@ import {
 import { createPages, type BoardPages } from './pages.js';
 import { createSelection, type SelectionInput } from './selection.js';
 import { resolveSnapOptions, type SnapOptions } from './snap.js';
-import { createSpatialIndex, type BoxBounds, type SpatialIndex } from './spatial.js';
+import { createSpatialIndex, unionBounds, type BoxBounds, type SpatialIndex } from './spatial.js';
 import { hitTestElements, queryElements, type HitTestOptions, type QueryFilter } from './query.js';
 import { resolveElementGeometry, toBoardTolerance, type Geometry, type Point } from './geometry.js';
 import type { BoardDocument, CameraState, ElementRecord } from './types.js';
 import { CURRENT_SCHEMA_VERSION } from './types.js';
 import { InvalidDocumentError, inspectDocument } from './validate.js';
+import {
+  createKeymap,
+  detectPlatform,
+  type BoardKeybindings,
+  type KeyboardPlatform,
+} from './keybindings.js';
 
 export * from './types.js';
 export { deepClone } from './clone.js';
@@ -88,6 +103,15 @@ export {
 } from './validate.js';
 export { DEFAULT_BOARD_LIMITS, type BoardLimits } from './limits.js';
 export * from './schema.js';
+export {
+  DEFAULT_URL_SCHEMES,
+  isSafeUrl,
+  MAX_URL_LENGTH,
+  SAFE_LINK_REL,
+  safeLinkAttributes,
+  sanitizeUrl,
+  type SafeUrlOptions,
+} from './url.js';
 export * from './elements.js';
 export * from './geometry.js';
 export {
@@ -139,6 +163,18 @@ export {
   type ToolStateDefinition,
   type ToolWheelEvent,
 } from './tools.js';
+export {
+  BRUSH_BLEND_MODES,
+  BrushError,
+  DEFAULT_BRUSH_ID,
+  defineBrush,
+  type BrushBlendMode,
+  type BrushDefinition,
+  type BrushErrorCode,
+  type BrushInput,
+  type BrushRegistry,
+  type BrushStrokeOptions,
+} from './brushes.js';
 export { createId, DEFAULT_ID_LENGTH, type IdGenerator } from './ids.js';
 export { compareIndex, indexAbove, indexBelow, indexBetween, indicesBetween } from './indexing.js';
 export type {
@@ -189,6 +225,12 @@ export {
   type SpatialIndex,
 } from './spatial.js';
 export { queryElements, type HitTestOptions, type QueryFilter } from './query.js';
+export type { BoardKeybindings, Keybinding, KeyboardPlatform } from './keybindings.js';
+export {
+  DEFAULT_DUPLICATE_OFFSET,
+  defaultCommands,
+  type DuplicateArgs,
+} from './default-commands.js';
 export {
   DEFAULT_MIN_SIZE,
   moveElements,
@@ -229,10 +271,15 @@ export {
 export type { BoardPages, PageInput } from './pages.js';
 export type { SelectionInput } from './selection.js';
 export {
+  DEFAULT_CAMERA_ANIMATION_MS,
+  DEFAULT_ZOOM_PADDING,
   DEFAULT_ZOOM_RANGE,
   type BoardCamera,
+  type CameraAnimation,
+  type FrameScheduler,
   type ViewportSize,
   type ZoomRange,
+  type ZoomToOptions,
 } from './camera.js';
 export {
   attachStorage,
@@ -389,6 +436,20 @@ export interface CreateBoardOptions {
   /** Camera zoom bounds. Defaults to {@link DEFAULT_ZOOM_RANGE}. */
   zoomRange?: ZoomRange;
   /**
+   * Starts with camera animations turned off (BOARD-402, BOARD-1905). The renderer usually sets it
+   * later from `prefers-reduced-motion` via `board.camera.setReducedMotion`. Defaults to `false`.
+   *
+   * @beta
+   */
+  reducedMotion?: boolean;
+  /**
+   * Frame and clock source for camera animations (BOARD-402). Defaults to `requestAnimationFrame`
+   * (or `setTimeout` where it is missing) and `performance.now()`.
+   *
+   * @beta
+   */
+  frameScheduler?: FrameScheduler;
+  /**
    * Snap settings for dragging (BOARD-407); omitted fields use {@link DEFAULT_SNAP_OPTIONS}
    * (enabled, 8-unit grid, 8-pixel threshold).
    *
@@ -420,6 +481,35 @@ export interface CreateBoardOptions {
    * @beta
    */
   defaultTool?: string;
+  /**
+   * Consumer shortcuts (BOARD-504), for example `{ 'Mod+D': 'element.duplicate', k: 'tool:pen' }`.
+   * They win over plugin `keybindings` for the same chord; `null` removes a plugin shortcut. See
+   * {@link BoardKeybindings} for the notation.
+   *
+   * @beta
+   */
+  keybindings?: Readonly<Record<string, string | null>>;
+  /**
+   * Platform that decides what `Mod` means in shortcuts: Cmd on `'mac'`, Ctrl elsewhere. Detected
+   * from `navigator` when available, otherwise `'other'`.
+   *
+   * @beta
+   */
+  platform?: KeyboardPlatform;
+}
+
+/**
+ * Result of {@link Board.prepareDocument}.
+ *
+ * @beta
+ */
+export interface PreparedDocument {
+  /** Validated, migrated copy, not linked to the input or the board; invalid records removed. */
+  readonly document: BoardDocument;
+  /** Records left out because they are invalid, with the reasons (same as `invalid-record`). */
+  readonly rejected: readonly { readonly id: string; readonly errors: readonly string[] }[];
+  /** Why the document is newer than this board understands, or `null` (BOARD-703). */
+  readonly tooNew: DocumentTooNewReason | null;
 }
 
 /**
@@ -451,6 +541,20 @@ export interface Board {
    * {@link InvalidDocumentError} and leave the state unchanged.
    */
   loadDocument(doc: BoardDocument): void;
+  /**
+   * Runs the same incoming-document pipeline as {@link Board.loadDocument} without touching the
+   * board: core schema migrations, validation against this board's element registry and `limits`,
+   * then element and plugin migrations (BOARD-210, BOARD-701, BOARD-702). Emits no events.
+   * Used to import content into an existing board (BOARD-1701).
+   *
+   * A document newer than this board understands is returned unmigrated with `tooNew` set
+   * (BOARD-703); callers must not write it into the board.
+   *
+   * @throws {@link InvalidDocumentError} for document-level problems, or {@link MigrationError}
+   *   when a migration fails.
+   * @beta
+   */
+  prepareDocument(doc: BoardDocument): PreparedDocument;
   /**
    * Creates a new element with default values and stores it in the document (BOARD-205).
    *
@@ -665,6 +769,13 @@ export interface Board {
    */
   readonly tools: BoardTools;
   /**
+   * This board's freehand brush registry (BOARD-603). Plugins register their `brushes` here; the
+   * renderer and pen tool look strokes up with `resolve`, which falls back to the default pen.
+   *
+   * @beta
+   */
+  readonly brushes: BrushRegistry;
+  /**
    * Activates a tool. The previous tool's interaction is cancelled (rolled back). Emits a `tool`
    * event when the tool changes.
    *
@@ -706,7 +817,17 @@ export interface Board {
    */
   readonly elementContext: ElementContext;
   /**
+   * Shortcut map: plugin `keybindings` overridden by the consumer's (BOARD-504).
+   *
+   * @beta
+   */
+  readonly keybindings: BoardKeybindings;
+  /**
    * Sends a normalized input event from the renderer to the active tool.
+   *
+   * Key events run a matching shortcut (BOARD-504) when the tool is idle; during a tool
+   * interaction they only go to the tool, so Esc cancels it. With `inTextInput`, every key except
+   * Escape is ignored.
    *
    * @returns `true` when the event was handled (the renderer should call `preventDefault`).
    * @throws `Error` after `dispose`. Errors from tool handlers are propagated after the interaction
@@ -1032,6 +1153,11 @@ function resolvePermissions(permissions: unknown): PermissionHook | null {
 export function createBoard(options: CreateBoardOptions = {}): Board {
   assertOptionsObject(options);
   const zoomRange = resolveZoomRange(options.zoomRange);
+  const frameScheduler = resolveFrameScheduler(options.frameScheduler);
+  if (options.reducedMotion !== undefined && typeof options.reducedMotion !== 'boolean') {
+    throw new TypeError('Opsi reducedMotion wajib berupa boolean.');
+  }
+  const reducedMotion = options.reducedMotion === true;
   let snapOptions = resolveSnapOptions(options.snap);
   const locale = resolveLocale(options.locale);
   const configuredReadOnly = resolveReadOnly(options.readOnly);
@@ -1046,6 +1172,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   const freeze = options.freezeSnapshots !== false;
   const generateId = resolveIdGenerator(options.createId);
   const defaultTool = options.defaultTool ?? DEFAULT_TOOL_ID;
+  const keymap = createKeymap(options.platform ?? detectPlatform(), options.keybindings);
   if (typeof defaultTool !== 'string') throw new TypeError('Opsi defaultTool wajib berupa string.');
   const historyLimit = resolveHistoryLimit(options.history);
   const mergeWindowMs = resolveMergeWindow(options.history);
@@ -1082,6 +1209,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   }
 
   const elements = createElementRegistry();
+  const brushes = createBrushRegistry();
   const initial = options.document
     ? toOwnedDocument(options.document, previewElementRegistry(options.plugins), limits, true)
     : { document: createDocumentFor(options.plugins), rejected: [] };
@@ -1147,9 +1275,14 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   const camera = createCamera({
     zoomRange,
     onChange: (event) => events.emit('camera', event),
+    getContentBounds: () => unionBounds(board.query().map((el) => spatial.getBounds(el.id))),
+    getSelectionBounds: () => selection.bounds,
+    scheduler: frameScheduler,
+    reducedMotion,
   });
   const elementContext: ElementContext = Object.freeze({
     locale,
+    resolveBrush: (id: string): Readonly<BrushDefinition> => brushes.api.resolve(id),
     emit(name: string, payload?: unknown): void {
       if (typeof name !== 'string' || name === '') {
         throw new TypeError('Nama aksi wajib berupa string tidak kosong.');
@@ -1192,8 +1325,27 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     elements,
     tools: tools.api,
     commands: commands.api,
+    brushes: brushes.api,
     plugins: options.plugins,
   });
+
+  /**
+   * Runs the shortcut matching a key-down, if any (BOARD-504). Returns `false` when nothing ran: no
+   * match, a repeat, an unregistered target, or a command whose `isEnabled` rejected it.
+   */
+  function runShortcut(event: ToolKeyEvent): boolean {
+    if (event.repeat) return false;
+    const binding = keymap.api.match(event);
+    if (!binding) return false;
+    if (binding.target.startsWith('tool:')) {
+      const id = binding.target.slice('tool:'.length);
+      if (!tools.api.has(id)) return false;
+      tools.setTool(id);
+      return true;
+    }
+    if (!commands.api.get(binding.target)) return false;
+    return commands.run(binding.target, undefined);
+  }
 
   function assertUsable(): void {
     if (disposed) throw new Error('Papan sudah di-dispose.');
@@ -1344,6 +1496,20 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       reportRejected([...rejected, ...(migrated?.rejected ?? [])]);
       if (reason) emitError('document-too-new', tooNewMessage(reason), reason);
     },
+    prepareDocument(doc: BoardDocument): PreparedDocument {
+      assertUsable();
+      const { document: owned, rejected } = toOwnedDocument(doc, elements, limits, true);
+      const reason = findTooNew(owned, elements, plugins.api.list());
+      const migrated = reason ? null : migrateDocumentContent(owned);
+      return {
+        document: migrated?.document ?? owned,
+        rejected: [...rejected, ...(migrated?.rejected ?? [])].map(({ id, errors }) => ({
+          id,
+          errors,
+        })),
+        tooNew: reason,
+      };
+    },
     getElement(id: string) {
       const rec = store.getRecord(id);
       return rec?.kind === 'element' ? (rec as never) : undefined;
@@ -1414,6 +1580,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     elements,
     plugins: plugins.api,
     tools: tools.api,
+    brushes: brushes.api,
     setTool(id: string): void {
       assertUsable();
       tools.setTool(id);
@@ -1431,9 +1598,19 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       return tools.data;
     },
     elementContext,
+    keybindings: keymap.api,
     dispatch(event: BoardInputEvent): boolean {
       assertUsable();
-      return tools.dispatch(event);
+      if (event?.type !== 'key-down' && event?.type !== 'key-up') return tools.dispatch(event);
+      const escape = event.key === 'Escape';
+      if (event.inTextInput === true && !escape) return false;
+      // Esc and keys during an interaction belong to the tool first.
+      if (escape || tools.busy) {
+        const handled = tools.dispatch(event);
+        if (handled || !escape) return handled;
+      }
+      if (runShortcut(event)) return true;
+      return escape ? false : tools.dispatch(event);
     },
     camera,
     get snapOptions() {
@@ -1478,10 +1655,12 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
         plugins.dispose();
       } finally {
         disposed = true;
+        camera.dispose();
         spatial.clear();
         events.clear();
         commands.clear();
         tools.clear();
+        brushes.clear();
         history.dispose();
         store.dispose();
       }
@@ -1491,6 +1670,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   // Read-only before plugin setup runs, so `setup` cannot rewrite a document that is too new.
   tooNew = findTooNew(store.getDocument(), elements, []);
   plugins.install();
+  keymap.loadPlugins(plugins.api.list());
   const deferred: (() => void)[] = [];
   if (initial.rejected.length > 0) deferred.push(() => reportRejected(initial.rejected));
   if (options.document) {

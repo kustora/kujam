@@ -7,6 +7,7 @@
  * `defaultTools`) use the same API with no internal shortcuts.
  */
 
+import { collectBrushErrors, type BrushInput, type BrushRegistry } from './brushes.js';
 import {
   defineCommand,
   type AnyCommandDefinition,
@@ -20,26 +21,19 @@ import {
   type ElementRegistry,
 } from './elements.js';
 import type { Board } from './index.js';
+import { checkKeybindingMap } from './keybindings.js';
 import { defineTool, type AnyToolDefinition, type BoardTools, type ToolError } from './tools.js';
 import type { BoardDocument, ElementRecord } from './types.js';
 
 // ---------- Plugin extension points ----------
 
 /**
- * Freehand brush definition provided by a plugin (BOARD-603).
+ * Freehand brush provided by a plugin (BOARD-603): a {@link defineBrush} result or a plain
+ * {@link BrushInput}, validated the same way.
  *
  * @beta
  */
-export interface PluginBrushDefinition {
-  /** Unique brush ID, for example `'pen'` or `'highlighter'`. */
-  readonly id: string;
-  /** i18n key or display label of the brush. */
-  readonly label?: string;
-  /** Stroke shaping options (size, thinning, smoothing, streamline, taper). */
-  readonly strokeOptions?: Readonly<Record<string, unknown>>;
-  /** Canvas composite mode, for example `'multiply'` for a highlighter. */
-  readonly blend?: string;
-}
+export type PluginBrushDefinition = BrushInput;
 
 /**
  * An extra main-toolbar item provided by a plugin (BOARD-1402).
@@ -217,7 +211,10 @@ export interface PluginDefinition<
   /** Commands registered into `board.commands`. */
   readonly commands?: PluginCommandsInput;
   /**
-   * Map from keyboard shortcut to command ID or `'tool:<id>'` (BOARD-504).
+   * Map from keyboard shortcut to command ID or `'tool:<id>'` (BOARD-504), for example
+   * `{ 'Mod+D': 'element.duplicate', h: 'tool:hand' }`. See `board.keybindings` for the
+   * notation. A later plugin wins over an earlier one, and the consumer's
+   * `createBoard({ keybindings })` wins over every plugin.
    *
    * @beta
    */
@@ -455,43 +452,23 @@ function checkBrushes(brushes: unknown, errors: string[]): void {
   }
   const seen = new Set<string>();
   for (let i = 0; i < brushes.length; i++) {
-    const item = brushes[i];
+    const item: unknown = brushes[i];
     if (!isPlainObject(item)) {
       errors.push(`brushes[${i}] wajib berupa objek.`);
       continue;
     }
-    if (typeof item.id !== 'string' || !PLUGIN_ID.test(item.id)) {
-      errors.push(`brushes[${i}].id wajib berupa string ID yang valid.`);
-    } else if (seen.has(item.id)) {
-      errors.push(`brushes[${i}]: kuas "${item.id}" duplikat di dalam plugin yang sama.`);
-    } else {
+    if (typeof item.id === 'string') {
+      if (seen.has(item.id)) {
+        errors.push(`brushes[${i}]: kuas "${item.id}" duplikat di dalam plugin yang sama.`);
+      }
       seen.add(item.id);
     }
-    if (item.label !== undefined && (typeof item.label !== 'string' || item.label.length === 0)) {
-      errors.push(`brushes[${i}].label wajib berupa string tidak kosong.`);
-    }
-    if (item.strokeOptions !== undefined && !isPlainObject(item.strokeOptions)) {
-      errors.push(`brushes[${i}].strokeOptions wajib berupa objek.`);
-    }
-    if (item.blend !== undefined && (typeof item.blend !== 'string' || item.blend.length === 0)) {
-      errors.push(`brushes[${i}].blend wajib berupa string tidak kosong.`);
-    }
+    for (const problem of collectBrushErrors(item)) errors.push(`brushes[${i}].${problem}`);
   }
 }
 
 function checkKeybindings(keybindings: unknown, errors: string[]): void {
-  if (!isPlainObject(keybindings)) {
-    errors.push('keybindings wajib berupa objek { [shortcut]: target }.');
-    return;
-  }
-  for (const [shortcut, target] of Object.entries(keybindings)) {
-    if (shortcut.trim().length === 0) {
-      errors.push('keybindings tidak boleh memakai kunci shortcut kosong.');
-    }
-    if (typeof target !== 'string' || target.trim().length === 0) {
-      errors.push(`keybindings["${shortcut}"] wajib berupa string target tidak kosong.`);
-    }
-  }
+  errors.push(...checkKeybindingMap(keybindings, 'keybindings', false));
 }
 
 function checkToolbarItems(toolbarItems: unknown, errors: string[]): void {
@@ -763,6 +740,7 @@ export interface PluginRuntimeOptions {
   elements: ElementRegistry;
   tools: BoardTools;
   commands: BoardCommands;
+  brushes: BrushRegistry;
   plugins: Iterable<AnyPluginDefinition> | undefined;
 }
 
@@ -776,7 +754,7 @@ export interface PluginRuntime {
 
 /** @internal */
 export function createPluginRuntime(options: PluginRuntimeOptions): PluginRuntime {
-  const { getBoard, elements, tools, commands } = options;
+  const { getBoard, elements, tools, commands, brushes } = options;
   const ordered =
     options.plugins === undefined ? Object.freeze([]) : resolvePluginOrder(options.plugins);
   const byId = new Map<string, AnyPluginDefinition>();
@@ -817,6 +795,9 @@ export function createPluginRuntime(options: PluginRuntimeOptions): PluginRuntim
           }
           for (const toolDef of plugin.tools ?? []) {
             unregisters.push(tools.register(toolDef));
+          }
+          for (const brush of plugin.brushes ?? []) {
+            unregisters.push(brushes.register(brush));
           }
           if (plugin.commands !== undefined) {
             for (const cmdDef of normalizeCommands(plugin.commands, [])) {

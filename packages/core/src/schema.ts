@@ -5,6 +5,8 @@
  * Validation never throws, objects are strict, and issues never carry the input value.
  */
 
+import { DEFAULT_URL_SCHEMES, MAX_URL_LENGTH, sanitizeUrl } from './url.js';
+
 /**
  * Path segment leading to the invalid value: an object key or an array index.
  *
@@ -26,6 +28,7 @@ export type SchemaIssueCode =
   | 'too_small'
   | 'too_big'
   | 'not_integer'
+  | 'unsafe_url'
   | 'too_many_issues';
 
 /**
@@ -155,6 +158,44 @@ export function string(options: StringOptions = {}): Schema<string> {
       return report(ctx, path, 'too_small', `expected at least ${minLength} characters`);
     if (maxLength !== undefined && v.length > maxLength)
       return report(ctx, path, 'too_big', `expected at most ${maxLength} characters`);
+    return true;
+  });
+}
+
+/**
+ * Options for {@link url}.
+ *
+ * @public
+ */
+export interface UrlOptions {
+  /** Allowed schemes; defaults to `https:` and `http:` (see {@link isSafeUrl}). */
+  schemes?: readonly string[];
+  /** Maximum length; defaults to {@link MAX_URL_LENGTH}. */
+  maxLength?: number;
+}
+
+/**
+ * A safe absolute URL (BOARD-2002, ADR-007): a string accepted by {@link isSafeUrl} with the given
+ * schemes, already in normalized form (no surrounding control characters, tabs, or newlines), so the
+ * stored value is exactly what will be rendered. Rejects with code `unsafe_url`.
+ *
+ * @example
+ * ```ts
+ * const props = schema({ href: url({ schemes: ['https:', 'mailto:'] }) });
+ * ```
+ *
+ * @public
+ */
+export function url(options: UrlOptions = {}): Schema<string> {
+  const schemes = options.schemes ?? DEFAULT_URL_SCHEMES;
+  const maxLength = options.maxLength ?? MAX_URL_LENGTH;
+  return make('url', (v, path, ctx) => {
+    if (typeof v !== 'string')
+      return report(ctx, path, 'type', `expected string, got ${describe(v)}`);
+    if (v.length > maxLength)
+      return report(ctx, path, 'too_big', `expected at most ${maxLength} characters`);
+    if (sanitizeUrl(v, schemes, { maxLength }) !== v)
+      return report(ctx, path, 'unsafe_url', `expected a safe ${schemes.join(' / ')} URL`);
     return true;
   });
 }
