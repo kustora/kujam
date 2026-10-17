@@ -6,7 +6,12 @@
 
 import { deepClone } from './clone.js';
 import { createCommandRegistry, type BoardCommands } from './commands.js';
-import { createElementRegistry, type ElementRegistry, type ResolveResult } from './elements.js';
+import {
+  createElementRegistry,
+  type ElementAction,
+  type ElementRegistry,
+  type ResolveResult,
+} from './elements.js';
 import {
   createEmitter,
   reportUnhandled,
@@ -28,6 +33,7 @@ import {
   type AnyPluginDefinition,
   type BoardPlugins,
   type BoardUser,
+  type PermissionAction,
   type PermissionHook,
 } from './plugins.js';
 import { createRecordStore, type TransactOptions, type Transaction } from './store.js';
@@ -309,6 +315,14 @@ export interface CreateBoardOptions {
    * Hook izin tingkat aplikasi; digabung secara logika AND dengan hook izin dari plugin
    * (BOARD-212).
    *
+   * @remarks
+   * **PENTING — Keamanan & Penegakan Izin:**
+   * Hook ini berjalan sepenuhnya di sisi klien (in-memory) dan dirancang semata-mata untuk kenyamanan UI
+   * (seperti menonaktifkan tombol aksi, menyembunyikan menu kontekstual, atau membatalkan operasi lokal sebelum
+   * dikirim ke jaringan). Hook ini **TIDAK** memberikan jaminan keamanan. Penegakan otorisasi dan kontrol akses
+   * yang sesungguhnya **WAJIB** ditegakkan di sisi server (misalnya saat memvalidasi pembaruan Yjs atau endpoint
+   * API penyimpanan). Klien tidak boleh dipercaya.
+   *
    * @beta
    */
   permissions?: PermissionHook;
@@ -537,11 +551,46 @@ export interface Board {
    */
   readonly limits: Readonly<BoardLimits>;
   /**
-   * Hook izin aplikasi lokal (BOARD-211, BOARD-212).
+   * Hook izin gabungan dari aplikasi dan seluruh plugin terpasang (BOARD-211, BOARD-212).
+   * Bernilai `null` bila tidak ada hook izin yang didaftarkan.
    *
    * @beta
    */
   readonly permissions: PermissionHook | null;
+  /**
+   * Memeriksa apakah suatu operasi diizinkan oleh hook izin aplikasi dan plugin (BOARD-212).
+   * Seluruh hook digabungkan dengan logika AND: operasi diizinkan hanya jika tidak ada satu pun
+   * hook yang mengembalikan `false`.
+   *
+   * @param action - Jenis operasi: `'create'`, `'update'`, `'delete'`, `'action'`, atau string aksi kustom.
+   * @param element - Elemen target, atau `null` bila aksi bersifat umum/global.
+   * @returns `true` bila diizinkan, `false` bila ditolak oleh salah satu hook.
+   *
+   * @remarks
+   * **PENTING — Keamanan & Penegakan Izin:**
+   * Hook ini berjalan sepenuhnya di sisi klien (in-memory) dan dirancang semata-mata untuk kenyamanan UI
+   * (seperti menonaktifkan tombol aksi, menyembunyikan menu kontekstual, atau membatalkan operasi lokal sebelum
+   * dikirim ke jaringan). Hook ini **TIDAK** memberikan jaminan keamanan. Penegakan otorisasi dan kontrol akses
+   * yang sesungguhnya **WAJIB** ditegakkan di sisi server (misalnya saat memvalidasi pembaruan Yjs atau endpoint
+   * API penyimpanan). Klien tidak boleh dipercaya.
+   *
+   * @beta
+   */
+  can(action: PermissionAction, element?: Readonly<ElementRecord> | null): boolean;
+  /**
+   * Menjalankan aksi kontekstual elemen dengan verifikasi izin (BOARD-212, BOARD-605).
+   *
+   * Sebelum memanggil `action.run()`, memeriksa izin dengan `board.can('action', element)`.
+   * Bila ditolak, memancarkan event `error` berkode `'forbidden'` dan mengembalikan `false` tanpa
+   * memanggil `action.run()`.
+   *
+   * @param action - Aksi elemen yang akan dijalankan.
+   * @param element - Elemen yang memiliki aksi tersebut.
+   * @returns `true` bila aksi dijalankan, `false` bila ditolak oleh hook izin atau `action.isEnabled()`.
+   *
+   * @beta
+   */
+  runAction(action: ElementAction, element: Readonly<ElementRecord>): boolean;
   /**
    * Menandakan apakah papan sudah dibuang dengan {@link Board.dispose}.
    *
@@ -675,6 +724,9 @@ function resolveUser(user: unknown): Readonly<BoardUser> | null {
   if (user.color !== undefined && typeof user.color !== 'string') {
     throw new TypeError('user.color wajib berupa string.');
   }
+  if (user.role !== undefined && typeof user.role !== 'string') {
+    throw new TypeError('user.role wajib berupa string.');
+  }
   if (user.meta !== undefined && !isPlainObject(user.meta)) {
     throw new TypeError('user.meta wajib berupa objek.');
   }
@@ -682,6 +734,7 @@ function resolveUser(user: unknown): Readonly<BoardUser> | null {
     id: user.id,
     ...(user.name !== undefined ? { name: user.name } : {}),
     ...(user.color !== undefined ? { color: user.color } : {}),
+    ...(user.role !== undefined ? { role: user.role } : {}),
     meta: Object.freeze({ ...(user.meta as Record<string, unknown> | undefined) }),
   });
 }
@@ -838,12 +891,45 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     if (disposed) throw new Error('Papan sudah di-dispose.');
   }
 
+  function checkPermissions(
+    action: PermissionAction,
+    element: Readonly<ElementRecord> | null,
+    targetUser: Readonly<BoardUser> | null,
+  ): boolean {
+    if (permissions !== null) {
+      try {
+        if (permissions(action, element, targetUser) === false) {
+          return false;
+        }
+      } catch {
+        return false;
+      }
+    }
+    for (const hook of plugins.getPermissions()) {
+      try {
+        if (hook(action, element, targetUser) === false) {
+          return false;
+        }
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function can(action: PermissionAction, element: Readonly<ElementRecord> | null = null): boolean {
+    if (disposed) return false;
+    return checkPermissions(action, element, user);
+  }
+
   const mutationCtx: MutationContext = {
     getDocument: () => store.getDocument(),
     getElement: (id) => board.getElement(id),
     transact: (fn, txOpts) => store.transact(fn, txOpts),
     elements,
     limits,
+    user,
+    checkPermission: (action, element) => can(action, element),
     createId: () => board.createId(),
     emitError,
     assertUsable,
@@ -856,7 +942,43 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     assets,
     user,
     limits,
-    permissions,
+    get permissions(): PermissionHook | null {
+      const pluginHooks = plugins.getPermissions();
+      if (pluginHooks.length === 0) {
+        return permissions;
+      }
+      if (permissions === null && pluginHooks.length === 1) {
+        return pluginHooks[0]!;
+      }
+      return checkPermissions;
+    },
+    can(action, element) {
+      return can(action, element ?? null);
+    },
+    runAction(action, element) {
+      assertUsable();
+      if (!isPlainObject(action) || typeof action.run !== 'function') {
+        throw new TypeError(
+          'Argumen action pada board.runAction wajib berupa objek dengan method run().',
+        );
+      }
+      if (!isPlainObject(element) || element.kind !== 'element') {
+        throw new TypeError('Argumen element pada board.runAction wajib berupa ElementRecord.');
+      }
+      if (!can('action', element)) {
+        emitError(
+          'forbidden',
+          `Menjalankan aksi "${action.id}" pada elemen "${element.id}" ditolak oleh hook izin.`,
+          { action: 'action', actionId: action.id, element, user },
+        );
+        return false;
+      }
+      if (typeof action.isEnabled === 'function' && !action.isEnabled()) {
+        return false;
+      }
+      action.run();
+      return true;
+    },
     get disposed(): boolean {
       return disposed;
     },

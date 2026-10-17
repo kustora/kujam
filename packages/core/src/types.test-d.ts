@@ -13,11 +13,13 @@ import type {
   ChangeEvent,
   CreateBoardOptions,
   DeleteOptions,
+  ElementAction,
   ElementPatch,
   ElementRecord,
   MutateOptions,
   PageRecord,
   PartialElement,
+  PermissionAction,
   PermissionHook,
   QueryFilter,
   RectBounds,
@@ -135,6 +137,18 @@ export type Tests = [
       readonly Readonly<ElementRecord<{ note: string; priority: number }>>[]
     >
   >,
+  // BOARD-212: Uji tipe izin (can, runAction)
+  Expect<
+    Equal<
+      Parameters<Board['can']>,
+      [action: PermissionAction, element?: Readonly<ElementRecord> | null]
+    >
+  >,
+  Expect<Equal<ReturnType<Board['can']>, boolean>>,
+  Expect<
+    Equal<Parameters<Board['runAction']>, [action: ElementAction, element: Readonly<ElementRecord>]>
+  >,
+  Expect<Equal<ReturnType<Board['runAction']>, boolean>>,
 ];
 
 declare const _dummyBoard: Board;

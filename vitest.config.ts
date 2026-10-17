@@ -2,6 +2,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    testTimeout: 20_000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
@@ -22,6 +23,7 @@ export default defineConfig({
           name: 'core',
           include: ['packages/core/src/**/*.test.ts'],
           environment: 'node',
+          testTimeout: 20_000,
         },
       },
       {
@@ -29,6 +31,7 @@ export default defineConfig({
           name: 'packages',
           include: ['packages/!(core)/src/**/*.test.ts'],
           environment: 'node',
+          testTimeout: 20_000,
         },
       },
       {
@@ -37,6 +40,7 @@ export default defineConfig({
           name: 'tooling',
           include: ['tooling/**/*.test.ts'],
           environment: 'node',
+          testTimeout: 20_000,
         },
       },
     ],

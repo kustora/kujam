@@ -8,6 +8,7 @@
 import { compareIndex, indexAbove } from './indexing.js';
 import type { ElementRegistry } from './elements.js';
 import type { BoardErrorCode } from './events.js';
+import type { BoardUser, PermissionAction } from './plugins.js';
 import type { ChangeOrigin, TransactOptions, Transaction } from './store.js';
 import type { BoardDocument, ElementRecord } from './types.js';
 
@@ -112,6 +113,8 @@ export interface MutationContext {
   transact<T>(fn: (tx: Transaction) => T, options?: TransactOptions): T;
   readonly elements: ElementRegistry;
   readonly limits: MutationLimits;
+  readonly user: Readonly<BoardUser> | null;
+  checkPermission(action: PermissionAction, element: Readonly<ElementRecord> | null): boolean;
   createId(): string;
   emitError(code: BoardErrorCode, message: string, cause: unknown): void;
   assertUsable(): void;
@@ -218,6 +221,15 @@ export function createElementRecord<P = Record<string, unknown>>(
     meta: { ...(partial.meta ?? {}) },
   };
 
+  if (!ctx.checkPermission('create', element as unknown as ElementRecord)) {
+    ctx.emitError(
+      'forbidden',
+      `Operasi "create" pada elemen bertipe "${element.type}" ditolak oleh hook izin.`,
+      { action: 'create', element, user: ctx.user },
+    );
+    return undefined;
+  }
+
   ctx.transact(
     (tx) => {
       tx.put(element as ElementRecord);
@@ -257,6 +269,15 @@ export function updateElementRecord<P = Record<string, unknown>>(
   if (!current) return undefined;
 
   if (current.locked && options?.force !== true) {
+    return undefined;
+  }
+
+  if (!ctx.checkPermission('update', current)) {
+    ctx.emitError('forbidden', `Operasi "update" pada elemen "${id}" ditolak oleh hook izin.`, {
+      action: 'update',
+      element: current,
+      user: ctx.user,
+    });
     return undefined;
   }
 
@@ -365,6 +386,21 @@ export function deleteElementRecords(
     if (rec.kind === 'binding') {
       if (toDelete.has(rec.fromId) || toDelete.has(rec.toId)) {
         toDelete.add(id);
+      }
+    }
+  }
+
+  // Periksa izin delete untuk setiap elemen yang akan dihapus
+  for (const id of toDelete) {
+    const rec = doc.records[id];
+    if (rec && rec.kind === 'element') {
+      if (!ctx.checkPermission('delete', rec)) {
+        ctx.emitError('forbidden', `Operasi "delete" pada elemen "${id}" ditolak oleh hook izin.`, {
+          action: 'delete',
+          element: rec,
+          user: ctx.user,
+        });
+        return Object.freeze([]);
       }
     }
   }

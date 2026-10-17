@@ -115,7 +115,15 @@ export interface BoardUser {
 
 /**
  * Hook izin untuk memeriksa apakah aksi terhadap elemen diizinkan (BOARD-212).
- * Mengembalikan `false` untuk membatalkan operasi.
+ * Mengembalikan `false` untuk membatalkan operasi dan memancarkan event `error` berkode `'forbidden'`.
+ *
+ * @remarks
+ * **PENTING — Keamanan & Penegakan Izin:**
+ * Hook ini berjalan sepenuhnya di sisi klien (in-memory) dan dirancang semata-mata untuk kenyamanan UI
+ * (seperti menonaktifkan tombol aksi, menyembunyikan menu kontekstual, atau membatalkan operasi lokal sebelum
+ * dikirim ke jaringan). Hook ini **TIDAK** memberikan jaminan keamanan. Penegakan otorisasi dan kontrol akses
+ * yang sesungguhnya **WAJIB** ditegakkan di sisi server (misalnya saat memvalidasi pembaruan Yjs atau endpoint
+ * API penyimpanan). Klien tidak boleh dipercaya.
  *
  * @beta
  */
@@ -170,8 +178,7 @@ export type PluginCommandMapEntry =
  * @public
  */
 export type PluginCommandsInput =
-  | readonly AnyCommandDefinition[]
-  | Readonly<Record<string, PluginCommandMapEntry>>;
+  readonly AnyCommandDefinition[] | Readonly<Record<string, PluginCommandMapEntry>>;
 
 // ---------- Definisi plugin ----------
 
@@ -272,10 +279,7 @@ export type AnyPluginDefinition = PluginDefinition<
  * @public
  */
 export type PluginErrorCode =
-  | 'invalid-plugin'
-  | 'duplicate-plugin'
-  | 'missing-dependency'
-  | 'circular-dependency';
+  'invalid-plugin' | 'duplicate-plugin' | 'missing-dependency' | 'circular-dependency';
 
 /**
  * Error saat mendefinisikan atau memasang plugin.
@@ -409,7 +413,9 @@ function normalizeCommands(commands: unknown, errors: string[]): AnyCommandDefin
   }
 
   if (!isPlainObject(commands)) {
-    errors.push('commands wajib berupa array definisi perintah atau objek peta { [id]: perintah }.');
+    errors.push(
+      'commands wajib berupa array definisi perintah atau objek peta { [id]: perintah }.',
+    );
     return result;
   }
 
@@ -511,7 +517,10 @@ function checkToolbarItems(toolbarItems: unknown, errors: string[]): void {
         errors.push(`toolbarItems[${i}].${key} wajib berupa string tidak kosong.`);
       }
     }
-    if (item.order !== undefined && (typeof item.order !== 'number' || !Number.isFinite(item.order))) {
+    if (
+      item.order !== undefined &&
+      (typeof item.order !== 'number' || !Number.isFinite(item.order))
+    ) {
       errors.push(`toolbarItems[${i}].order wajib berupa angka berhingga.`);
     }
   }
@@ -565,7 +574,9 @@ function collectPluginErrors(definition: unknown): string[] {
   const errors: string[] = [];
 
   if (typeof definition.id !== 'string' || !PLUGIN_ID.test(definition.id)) {
-    errors.push('id wajib huruf kecil, angka, titik, atau tanda hubung (misalnya "default-elements").');
+    errors.push(
+      'id wajib huruf kecil, angka, titik, atau tanda hubung (misalnya "default-elements").',
+    );
   }
   if (definition.dependsOn !== undefined) checkPluginIdList(definition.dependsOn, errors);
   if (definition.elements !== undefined) checkElements(definition.elements, errors);
@@ -756,15 +767,18 @@ export interface PluginRuntime {
   readonly api: BoardPlugins;
   install(): void;
   dispose(): void;
+  getPermissions(): readonly PermissionHook[];
 }
 
 /** @internal */
 export function createPluginRuntime(options: PluginRuntimeOptions): PluginRuntime {
   const { getBoard, elements, tools, commands } = options;
-  const ordered = options.plugins === undefined ? Object.freeze([]) : resolvePluginOrder(options.plugins);
+  const ordered =
+    options.plugins === undefined ? Object.freeze([]) : resolvePluginOrder(options.plugins);
   const byId = new Map<string, AnyPluginDefinition>();
   const teardowns: PluginTeardown[] = [];
   const unregisters: (() => void)[] = [];
+  const permissionHooks: PermissionHook[] = [];
 
   function rollback(): void {
     for (let i = teardowns.length - 1; i >= 0; i--) {
@@ -779,6 +793,7 @@ export function createPluginRuntime(options: PluginRuntimeOptions): PluginRuntim
       unregisters[i]!();
     }
     unregisters.length = 0;
+    permissionHooks.length = 0;
     byId.clear();
   }
 
@@ -803,6 +818,9 @@ export function createPluginRuntime(options: PluginRuntimeOptions): PluginRuntim
             for (const cmdDef of normalizeCommands(plugin.commands, [])) {
               unregisters.push(commands.register(cmdDef));
             }
+          }
+          if (typeof plugin.permissions === 'function') {
+            permissionHooks.push(plugin.permissions);
           }
           byId.set(plugin.id, plugin);
           if (plugin.setup) {
@@ -835,8 +853,12 @@ export function createPluginRuntime(options: PluginRuntimeOptions): PluginRuntim
         }
       }
       unregisters.length = 0;
+      permissionHooks.length = 0;
       byId.clear();
       if (hasError) throw firstError;
+    },
+    getPermissions() {
+      return Object.freeze([...permissionHooks]);
     },
   };
 }

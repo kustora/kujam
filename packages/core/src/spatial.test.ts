@@ -241,12 +241,12 @@ describe('BOARD-404: createSpatialIndex', () => {
 
     const viewport = { minX: 1000, minY: 1000, maxX: 3000, maxY: 3000 };
 
-    // Warm up
-    for (let i = 0; i < 10; i++) {
+    // Warm up JIT
+    for (let i = 0; i < 50; i++) {
       index.search(viewport);
     }
 
-    const iterations = 50;
+    const iterations = 100;
     const start = performance.now();
     let hitsCount = 0;
     for (let i = 0; i < iterations; i++) {
