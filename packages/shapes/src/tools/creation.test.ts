@@ -312,30 +312,70 @@ describe('BOARD-913: Element creation tools', () => {
   describe('Eraser tool (E)', () => {
     it('deletes hit element on click', () => {
       const board = setup();
-      board.create({ id: 'rect1', type: 'geo', x: 50, y: 50, w: 100, h: 100 });
-      board.create({ id: 'rect2', type: 'geo', x: 300, y: 300, w: 100, h: 100 });
+      board.create({
+        id: 'stroke1',
+        type: 'draw',
+        x: 50,
+        y: 50,
+        w: 100,
+        h: 100,
+        props: { points: [[0, 0, 0.5], [100, 100, 0.5]], color: 'black', thickness: 4, brush: 'pen' },
+      });
+      board.create({
+        id: 'stroke2',
+        type: 'draw',
+        x: 300,
+        y: 300,
+        w: 100,
+        h: 100,
+        props: { points: [[0, 0, 0.5], [100, 100, 0.5]], color: 'black', thickness: 4, brush: 'pen' },
+      });
       expect(board.query()).toHaveLength(2);
 
       board.setTool('eraser');
       click(board, { x: 80, y: 80 });
 
-      expect(board.getElement('rect1')).toBeUndefined();
-      expect(board.getElement('rect2')).toBeDefined();
+      expect(board.getElement('stroke1')).toBeUndefined();
+      expect(board.getElement('stroke2')).toBeDefined();
       expect(board.tool).toBe('eraser');
     });
 
     it('deletes multiple elements during drag and coalesces into 1 undo step', () => {
       const board = setup();
-      board.create({ id: 'el1', type: 'geo', x: 100, y: 100, w: 50, h: 50 });
-      board.create({ id: 'el2', type: 'geo', x: 200, y: 100, w: 50, h: 50 });
-      board.create({ id: 'el3', type: 'geo', x: 300, y: 100, w: 50, h: 50 });
+      board.create({
+        id: 'el1',
+        type: 'draw',
+        x: 100,
+        y: 100,
+        w: 50,
+        h: 50,
+        props: { points: [[0, 0, 0.5], [50, 50, 0.5]], color: 'black', thickness: 4, brush: 'pen' },
+      });
+      board.create({
+        id: 'el2',
+        type: 'draw',
+        x: 200,
+        y: 100,
+        w: 50,
+        h: 50,
+        props: { points: [[0, 0, 0.5], [50, 50, 0.5]], color: 'black', thickness: 4, brush: 'pen' },
+      });
+      board.create({
+        id: 'el3',
+        type: 'draw',
+        x: 300,
+        y: 100,
+        w: 50,
+        h: 50,
+        props: { points: [[0, 0, 0.5], [50, 50, 0.5]], color: 'black', thickness: 4, brush: 'pen' },
+      });
       board.history.clear();
 
       board.setTool('eraser');
       drag(board, [
-        { x: 120, y: 120 },
-        { x: 220, y: 120 },
-        { x: 320, y: 120 },
+        { x: 125, y: 125 },
+        { x: 225, y: 125 },
+        { x: 325, y: 125 },
       ]);
 
       expect(board.query()).toHaveLength(0);
@@ -347,10 +387,19 @@ describe('BOARD-913: Element creation tools', () => {
 
     it('does not delete locked elements', () => {
       const board = setup();
-      board.create({ id: 'locked1', type: 'geo', x: 100, y: 100, w: 50, h: 50, locked: true });
+      board.create({
+        id: 'locked1',
+        type: 'draw',
+        x: 100,
+        y: 100,
+        w: 50,
+        h: 50,
+        locked: true,
+        props: { points: [[0, 0, 0.5], [50, 50, 0.5]], color: 'black', thickness: 4, brush: 'pen' },
+      });
 
       board.setTool('eraser');
-      click(board, { x: 120, y: 120 });
+      click(board, { x: 125, y: 125 });
 
       expect(board.getElement('locked1')).toBeDefined();
     });

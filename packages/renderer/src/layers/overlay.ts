@@ -86,6 +86,17 @@ function renderStrokeOutline(
   g.fill();
 }
 
+function isBoxBounds(b: unknown): b is BoxBounds {
+  return (
+    typeof b === 'object' &&
+    b !== null &&
+    Number.isFinite((b as BoxBounds).minX) &&
+    Number.isFinite((b as BoxBounds).minY) &&
+    Number.isFinite((b as BoxBounds).maxX) &&
+    Number.isFinite((b as BoxBounds).maxY)
+  );
+}
+
 /**
  * Manages rendering of the overlay canvas layer.
  *
@@ -130,9 +141,10 @@ export class OverlayRenderer {
       }
     }
 
-    // 2. Gather tool data (brush, snap guides, active stroke)
+    // 2. Gather tool data (selection brush, snap guides, active stroke)
     const toolData = board.toolData as ToolOverlayData | null;
     const brush = toolData?.brush ?? null;
+    const selectionBrush = isBoxBounds(brush) ? brush : null;
     const guides = toolData?.guides ?? [];
     const activeStroke = toolData?.activeStroke ?? null;
     const hasActiveStroke = Boolean(activeStroke && activeStroke.points && activeStroke.points.length > 0);
@@ -149,7 +161,7 @@ export class OverlayRenderer {
 
     const hasContent =
       selectedElements.length > 0 ||
-      brush !== null ||
+      selectionBrush !== null ||
       guides.length > 0 ||
       hoveredEl !== null ||
       this.cursors.length > 0 ||
@@ -252,9 +264,9 @@ export class OverlayRenderer {
     }
 
     // --- C. Selection Area Brush ---
-    if (brush) {
-      const p1 = camera.boardToScreen({ x: brush.minX, y: brush.minY });
-      const p2 = camera.boardToScreen({ x: brush.maxX, y: brush.maxY });
+    if (selectionBrush) {
+      const p1 = camera.boardToScreen({ x: selectionBrush.minX, y: selectionBrush.minY });
+      const p2 = camera.boardToScreen({ x: selectionBrush.maxX, y: selectionBrush.maxY });
       const bx = Math.min(p1.x, p2.x);
       const by = Math.min(p1.y, p2.y);
       const bw = Math.abs(p2.x - p1.x);
@@ -370,7 +382,7 @@ export class OverlayRenderer {
     return {
       rendered: true,
       selectedCount: selectedElements.length,
-      hasBrush: brush !== null,
+      hasBrush: selectionBrush !== null,
       hasActiveStroke,
       guidesCount: guides.length,
       hoveredId: this.hoveredId,

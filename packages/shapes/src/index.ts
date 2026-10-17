@@ -25,7 +25,13 @@ import { textTool } from './tools/text.js';
 export { DEFAULT_BRUSHES, highlighterBrush, penBrush } from './brushes.js';
 export { stickyElement } from './elements/sticky.js';
 export { drawElement, MAX_DRAW_POINTS } from './elements/draw.js';
-export { chunkPoints, simplifyPoints } from './elements/stroke-utils.js';
+export {
+  chunkPoints,
+  cutStrokePoints,
+  distanceToSegment,
+  segmentDistance,
+  simplifyPoints,
+} from './elements/stroke-utils.js';
 export { textElement } from './elements/text.js';
 export { geoElement, geoGeometry, GEO_KINDS, type GeoKind } from './elements/geo.js';
 export {
@@ -51,6 +57,8 @@ export {
 export {
   createEraserTool,
   eraserTool,
+  type EraserMode,
+  type EraserTargets,
   type EraserToolData,
   type EraserToolOptions,
 } from './tools/eraser.js';

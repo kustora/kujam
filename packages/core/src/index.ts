@@ -152,6 +152,7 @@ export {
 export {
   DEFAULT_TOOL_ID,
   defineTool,
+  ERASER_TOOL_ID,
   HAND_TOOL_ID,
   ToolError,
   type AnyToolDefinition,

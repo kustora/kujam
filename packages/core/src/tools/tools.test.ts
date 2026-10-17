@@ -619,6 +619,93 @@ describe('Esc, oneShot, dan spasi', () => {
   });
 });
 
+describe('tombol penghapus stylus (BOARD-1005, ADR-004)', () => {
+  it('pointer-down dengan button 5 atau buttons & 32 sementara mengaktifkan tool penghapus', () => {
+    const { board } = setup();
+    const actions: string[] = [];
+    board.tools.register(
+      defineTool({
+        id: 'eraser',
+        initial: 'idle',
+        states: {
+          idle: {
+            onPointerDown() {
+              actions.push('eraser-down');
+              return 'erasing';
+            },
+          },
+          erasing: {
+            onPointerUp() {
+              actions.push('eraser-up');
+              return 'idle';
+            },
+          },
+        },
+      }),
+    );
+
+    board.setTool('box');
+    expect(board.tool).toBe('box');
+
+    // Press down with stylus eraser (button 5)
+    board.dispatch({
+      type: 'pointer-down',
+      pointerId: 1,
+      pointerType: 'pen',
+      point: { x: 10, y: 10 },
+      screen: { x: 10, y: 10 },
+      pressure: 0.5,
+      tiltX: 0,
+      tiltY: 0,
+      button: 5,
+      buttons: 32,
+      modifiers: { shift: false, alt: false, ctrl: false, meta: false },
+    });
+
+    expect(board.tool).toBe('eraser');
+    expect(actions).toEqual(['eraser-down']);
+
+    // Release stylus eraser
+    board.dispatch({
+      type: 'pointer-up',
+      pointerId: 1,
+      pointerType: 'pen',
+      point: { x: 10, y: 10 },
+      screen: { x: 10, y: 10 },
+      pressure: 0,
+      tiltX: 0,
+      tiltY: 0,
+      button: 5,
+      buttons: 0,
+      modifiers: { shift: false, alt: false, ctrl: false, meta: false },
+    });
+
+    expect(board.tool).toBe('box');
+    expect(actions).toEqual(['eraser-down', 'eraser-up']);
+  });
+
+  it('tidak crash atau switch bila tool penghapus tidak terdaftar', () => {
+    const { board } = setup();
+    board.setTool('box');
+
+    board.dispatch({
+      type: 'pointer-down',
+      pointerId: 1,
+      pointerType: 'pen',
+      point: { x: 10, y: 10 },
+      screen: { x: 10, y: 10 },
+      pressure: 0.5,
+      tiltX: 0,
+      tiltY: 0,
+      button: 5,
+      buttons: 32,
+      modifiers: { shift: false, alt: false, ctrl: false, meta: false },
+    });
+
+    expect(board.tool).toBe('box');
+  });
+});
+
 describe('event keyboard, wheel, dan pinch', () => {
   it('diteruskan ke handler state; tanpa handler, dispatch mengembalikan false', () => {
     const seen: string[] = [];

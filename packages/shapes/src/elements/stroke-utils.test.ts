@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { chunkPoints, simplifyPoints } from './stroke-utils.js';
+import {
+  chunkPoints,
+  cutStrokePoints,
+  segmentDistance,
+  simplifyPoints,
+} from './stroke-utils.js';
 
 describe('BOARD-1002: Stroke Utilities', () => {
   describe('Ramer-Douglas-Peucker simplification (simplifyPoints)', () => {
@@ -133,6 +138,103 @@ describe('BOARD-1002: Stroke Utilities', () => {
       }
       expect(chunks[0]![0]).toEqual(points[0]);
       expect(chunks[chunks.length - 1]!.at(-1)).toEqual(points[points.length - 1]);
+    });
+  });
+
+  describe('BOARD-1005: segmentDistance and cutStrokePoints', () => {
+    describe('segmentDistance', () => {
+      it('returns 0 when segments intersect', () => {
+        const d = segmentDistance([0, 10], [20, 10], [10, 0], [10, 20]);
+        expect(d).toBe(0);
+      });
+
+      it('returns Euclidean distance for parallel or non-intersecting segments', () => {
+        const d = segmentDistance([0, 0], [10, 0], [0, 5], [10, 5]);
+        expect(d).toBeCloseTo(5);
+
+        const dEnd = segmentDistance([0, 0], [10, 0], [15, 0], [20, 0]);
+        expect(dEnd).toBeCloseTo(5);
+      });
+    });
+
+    describe('cutStrokePoints', () => {
+      it('returns empty array when given empty stroke', () => {
+        expect(cutStrokePoints([], { x: 0, y: 0 }, { x: 10, y: 10 }, 5)).toEqual([]);
+      });
+
+      it('returns stroke unchanged when eraser is far away', () => {
+        const points = [
+          [0, 100, 0.5],
+          [200, 100, 0.5],
+        ];
+        const res = cutStrokePoints(points, { x: 50, y: 500 }, { x: 100, y: 500 }, 10);
+        expect(res).toHaveLength(1);
+        expect(res[0]).toEqual(points);
+      });
+
+      it('returns empty array when entire stroke is inside eraser', () => {
+        const points = [
+          [50, 50, 0.5],
+          [60, 50, 0.5],
+        ];
+        const res = cutStrokePoints(points, { x: 55, y: 50 }, { x: 55, y: 50 }, 20);
+        expect(res).toEqual([]);
+      });
+
+      it('cuts stroke into two pieces when eraser touches middle', () => {
+        const points = [
+          [0, 100, 0.5],
+          [200, 100, 0.5],
+        ];
+        // Eraser at (100, 100) with radius 10
+        const res = cutStrokePoints(points, { x: 100, y: 100 }, { x: 100, y: 100 }, 10);
+        expect(res).toHaveLength(2);
+
+        // First piece starts at 0 and ends near 90
+        expect(res[0]![0]![0]).toBeCloseTo(0);
+        expect(res[0]!.at(-1)![0]).toBeCloseTo(90, 0);
+
+        // Second piece starts near 110 and ends at 200
+        expect(res[1]![0]![0]).toBeCloseTo(110, 0);
+        expect(res[1]!.at(-1)![0]).toBeCloseTo(200);
+      });
+
+      it('trims start of stroke when eraser touches start', () => {
+        const points = [
+          [0, 100, 0.5],
+          [200, 100, 0.5],
+        ];
+        // Eraser at (0, 100) with radius 20
+        const res = cutStrokePoints(points, { x: 0, y: 100 }, { x: 0, y: 100 }, 20);
+        expect(res).toHaveLength(1);
+        expect(res[0]![0]![0]).toBeCloseTo(20, 0);
+        expect(res[0]!.at(-1)![0]).toBeCloseTo(200);
+      });
+
+      it('trims end of stroke when eraser touches end', () => {
+        const points = [
+          [0, 100, 0.5],
+          [200, 100, 0.5],
+        ];
+        // Eraser at (200, 100) with radius 20
+        const res = cutStrokePoints(points, { x: 200, y: 100 }, { x: 200, y: 100 }, 20);
+        expect(res).toHaveLength(1);
+        expect(res[0]![0]![0]).toBeCloseTo(0);
+        expect(res[0]!.at(-1)![0]).toBeCloseTo(180, 0);
+      });
+
+      it('cuts stroke using swept capsule between two points', () => {
+        // Vertical line
+        const points = [
+          [100, 0, 0.5],
+          [100, 200, 0.5],
+        ];
+        // Horizontal eraser sweep crossing at y = 100 with radius 5
+        const res = cutStrokePoints(points, { x: 80, y: 100 }, { x: 120, y: 100 }, 5);
+        expect(res).toHaveLength(2);
+        expect(res[0]!.at(-1)![1]).toBeCloseTo(95, 0);
+        expect(res[1]![0]![1]).toBeCloseTo(105, 0);
+      });
     });
   });
 });

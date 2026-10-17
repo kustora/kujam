@@ -372,6 +372,13 @@ export function defineTool<S extends string, D = Record<string, unknown>>(
 export const HAND_TOOL_ID = 'hand';
 
 /**
+ * Name of the eraser tool activated by stylus eraser button (BOARD-1005).
+ *
+ * @beta
+ */
+export const ERASER_TOOL_ID = 'eraser';
+
+/**
  * Default tool when `createBoard({ defaultTool })` is not set.
  *
  * @beta
@@ -459,6 +466,8 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
   let active: Active | null = null;
   /** Tool restored when Space is released, or `null` when the hand tool is not temporary. */
   let springFrom: string | null = null;
+  /** Tool restored when stylus eraser interaction finishes, or `null`. */
+  let stylusEraserFrom: string | null = null;
 
   function makeData(definition: AnyToolDefinition): unknown {
     return definition.data ? definition.data() : {};
@@ -539,7 +548,11 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
     const gen = a.generation;
     const chained = call(a, 'onEnter');
     if (active === a && gen === a.generation) transition(a, chained, depth + 1);
-    if (completed && active === a && a.definition.oneShot && a.state === a.definition.initial) {
+    if (completed && active === a && stylusEraserFrom !== null && a.state === a.definition.initial) {
+      const returnTo = stylusEraserFrom;
+      stylusEraserFrom = null;
+      switchTo(byId.has(returnTo) ? returnTo : defaultTool);
+    } else if (completed && active === a && a.definition.oneShot && a.state === a.definition.initial) {
       switchTo(defaultTool);
     }
   }
@@ -567,6 +580,11 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
       if (active === a) {
         a.state = a.definition.initial;
         a.pointerId = null;
+      }
+      if (stylusEraserFrom !== null) {
+        const back = stylusEraserFrom;
+        stylusEraserFrom = null;
+        switchTo(byId.has(back) ? back : defaultTool);
       }
     }
     return true;
@@ -722,6 +740,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
     setTool(id) {
       if (typeof id !== 'string') throw new TypeError('ID tool wajib berupa string.');
       springFrom = null;
+      stylusEraserFrom = null;
       switchTo(id);
     },
     dispatch(event) {
@@ -738,7 +757,16 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
         event.type === 'pointer-up' ||
         event.type === 'pointer-cancel'
       ) {
-        return dispatchPointer(active, event);
+        if (
+          event.type === 'pointer-down' &&
+          (event.button === 5 || (event.buttons & 32) !== 0) &&
+          byId.has(ERASER_TOOL_ID) &&
+          active?.definition.id !== ERASER_TOOL_ID
+        ) {
+          stylusEraserFrom = active ? active.definition.id : null;
+          switchTo(ERASER_TOOL_ID);
+        }
+        return active ? dispatchPointer(active, event) : false;
       }
       return deliver(active, event);
     },
@@ -756,6 +784,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
       interaction.discard();
       active = null;
       springFrom = null;
+      stylusEraserFrom = null;
       byId.clear();
     },
   };
