@@ -12,6 +12,7 @@ import type {
   BoardUser,
   Bounds,
   BoxBounds,
+  BoardPages,
   CameraState,
   ChangeEvent,
   CreateBoardOptions,
@@ -31,6 +32,7 @@ import type {
   PathGeometry,
   Point,
   SnapPoint,
+  PageInput,
   PageRecord,
   PartialElement,
   PermissionAction,
@@ -241,6 +243,14 @@ export type Tests = [
   Expect<Equal<DocumentTooNewReason['kind'], 'schema' | 'element' | 'plugin'>>,
   Expect<Equal<ElementRecord['typeVersion'], number | undefined>>,
   Expect<Equal<BoardDocument['pluginVersions'], Record<string, number> | undefined>>,
+  // BOARD-208: page API type tests
+  Expect<Equal<Board['pages'], BoardPages>>,
+  Expect<Equal<BoardPages['current'], string>>,
+  Expect<Equal<ReturnType<BoardPages['list']>, readonly Readonly<PageRecord>[]>>,
+  Expect<Equal<Parameters<BoardPages['create']>[0], PageInput | undefined>>,
+  Expect<Equal<ReturnType<BoardPages['create']>, Readonly<PageRecord> | undefined>>,
+  Expect<Equal<ReturnType<BoardPages['delete']>, readonly string[]>>,
+  Expect<Equal<QueryFilter['allPages'], boolean | undefined>>,
 ];
 
 declare const _dummyBoard: Board;

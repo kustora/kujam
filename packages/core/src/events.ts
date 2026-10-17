@@ -46,6 +46,18 @@ export interface SelectionEvent {
 }
 
 /**
+ * Payload of the `page` event: emitted when the current page changes (BOARD-208).
+ *
+ * @beta
+ */
+export interface PageEvent {
+  /** ID of the now-current page. */
+  readonly id: string;
+  /** ID of the previous current page. */
+  readonly previous: string;
+}
+
+/**
  * Payload of the `tool` event: emitted when the active tool changes (BOARD-501).
  *
  * @beta
@@ -138,6 +150,13 @@ export interface BoardEventMap {
    * @beta
    */
   tool: ToolEvent;
+  /**
+   * The current page changed via `board.pages.setCurrent`, or because the current page was
+   * deleted (BOARD-208).
+   *
+   * @beta
+   */
+  page: PageEvent;
   /**
    * Plugin action. It has no source in this release yet (BOARD-605).
    *
