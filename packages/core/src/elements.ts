@@ -334,6 +334,13 @@ export interface ElementDefinition<
   geometry?(el: ElementRecord<InferShape<S>>): Geometry;
   /** Resize behavior; defaults to `'free'`. */
   readonly resize?: ElementResize<InferShape<S>>;
+  /**
+   * Smallest size interactive resizing may produce, in board units (BOARD-406). Defaults to
+   * `{ w: 1, h: 1 }`.
+   *
+   * @beta
+   */
+  readonly minSize?: ElementSize;
   /** How the element is drawn. */
   readonly render?: ElementRenderers<InferShape<S>, D>;
   /** Called when the element is double-clicked, for example to enter edit mode. */
@@ -544,6 +551,13 @@ function collectElementDefinitionErrors(definition: unknown): string[] {
   ) {
     errors.push(`resize wajib salah satu dari ${RESIZE_MODES.join(', ')}, atau fungsi.`);
   }
+  if (def.minSize !== undefined) {
+    const min = isPlainObject(def.minSize) ? def.minSize : undefined;
+    const ok = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+    if (!min || !ok(min.w) || !ok(min.h)) {
+      errors.push('minSize wajib berupa objek { w, h } dengan angka berhingga dan tidak negatif.');
+    }
+  }
   if (def.render !== undefined) {
     if (isPlainObject(def.render))
       checkFunctions(def.render, 'render.', ['canvas', 'html'], errors);
@@ -659,8 +673,7 @@ export interface ElementRegistry {
  */
 export function createElementRegistry(
   definitions:
-    | Iterable<AnyElementDefinition>
-    | { readonly elements?: Iterable<AnyElementDefinition> } = [],
+    Iterable<AnyElementDefinition> | { readonly elements?: Iterable<AnyElementDefinition> } = [],
 ): ElementRegistry {
   const byType = new Map<string, AnyElementDefinition>();
 
@@ -687,12 +700,10 @@ export function createElementRegistry(
   };
 
   const items: Iterable<AnyElementDefinition> =
-    definitions !== null &&
-    typeof definitions === 'object' &&
-    Symbol.iterator in definitions
+    definitions !== null && typeof definitions === 'object' && Symbol.iterator in definitions
       ? (definitions as Iterable<AnyElementDefinition>)
       : ((definitions as { readonly elements?: Iterable<AnyElementDefinition> } | null)?.elements ??
-          []);
+        []);
   for (const definition of items) registry.register(definition);
   return registry;
 }

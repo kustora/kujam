@@ -67,6 +67,11 @@ export interface ToolPointerEvent {
   /** Bitmask of pressed buttons (`PointerEvent.buttons`); 32 = stylus eraser. */
   readonly buttons: number;
   readonly modifiers: InputModifiers;
+  /**
+   * Consecutive click count on `pointer-down` (`PointerEvent.detail`): 2 for the second press of a
+   * double click. Optional; treated as 1 when missing (BOARD-502).
+   */
+  readonly clickCount?: number;
 }
 
 /**
@@ -402,6 +407,8 @@ export interface ToolRuntime {
   readonly tool: string | null;
   readonly state: string | null;
   readonly cursor: string;
+  /** `ctx.data` of the active tool, or `undefined` when no tool is active. */
+  readonly data: unknown;
   /** Whether the tool is outside its initial state (an interaction is in progress). */
   readonly busy: boolean;
   setTool(id: string): void;
@@ -700,6 +707,9 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
     get cursor() {
       if (!active) return 'default';
       return stateDef(active).cursor ?? active.definition.cursor ?? 'default';
+    },
+    get data() {
+      return active?.data;
     },
     get busy() {
       return active !== null && (active.state !== active.definition.initial || interaction.active);

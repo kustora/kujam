@@ -1,4 +1,4 @@
-import type { attachStorage } from './index.js';
+import type { attachStorage, resizeElements, rotateElements, snapTranslation } from './index.js';
 import type {
   AssetAdapter,
   AssetRecord,
@@ -10,6 +10,16 @@ import type {
   BoardRecord,
   BoardResolvers,
   BoardUser,
+  ElementDefinition,
+  ElementSize,
+  ResizeHandle,
+  ResizeOptions,
+  ElementContext,
+  ToolPointerEvent,
+  SnapGuide,
+  SnapOptions,
+  RotateOptions,
+  TransformResult,
   Bounds,
   BoxBounds,
   BoardPages,
@@ -262,6 +272,39 @@ export type Tests = [
   Expect<Equal<BoardHistory['mergeWindowMs'], number>>,
   Expect<Equal<ReturnType<typeof _dummyBoard.history.batch<number>>, number>>,
   Expect<Equal<Parameters<BoardHistory['batch']>[0], string>>,
+  // BOARD-406: transform type tests
+  Expect<Equal<ResizeHandle, 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w'>>,
+  Expect<
+    Equal<
+      Parameters<typeof resizeElements>,
+      [
+        elements: readonly Readonly<ElementRecord>[],
+        handle: ResizeHandle,
+        start: Point,
+        current: Point,
+        options?: ResizeOptions,
+      ]
+    >
+  >,
+  Expect<Equal<ReturnType<typeof rotateElements>, TransformResult[]>>,
+  Expect<Equal<RotateOptions['snap'], number | undefined>>,
+  Expect<Equal<ElementDefinition['minSize'], ElementSize | undefined>>,
+  // BOARD-407: snap type tests
+  Expect<Equal<Board['snapOptions'], Readonly<SnapOptions>>>,
+  Expect<Equal<Parameters<Board['setSnapOptions']>, [patch: Partial<SnapOptions>]>>,
+  Expect<Equal<CreateBoardOptions['snap'], Partial<SnapOptions> | undefined>>,
+  Expect<Equal<SnapOptions['grid'], number | null>>,
+  Expect<Equal<SnapGuide['axis'], 'x' | 'y'>>,
+  Expect<
+    Equal<
+      ReturnType<typeof snapTranslation>,
+      { readonly delta: Point; readonly guides: readonly SnapGuide[] }
+    >
+  >,
+  // BOARD-502: tool feedback, element callbacks, and double clicks
+  Expect<Equal<Board['toolData'], unknown>>,
+  Expect<Equal<Board['elementContext'], ElementContext>>,
+  Expect<Equal<ToolPointerEvent['clickCount'], number | undefined>>,
 ];
 
 declare const _dummyBoard: Board;
