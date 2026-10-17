@@ -94,6 +94,26 @@ const pos = (board: Board, id: string) => {
   return { x: el.x, y: el.y, w: el.w, h: el.h, rotation: el.rotation };
 };
 
+describe('BOARD-502 / BOARD-504: tool shortcuts', () => {
+  const press = (key: string, code: string) => ({
+    type: 'key-down' as const,
+    key,
+    code,
+    repeat: false,
+    modifiers: { shift: false, alt: false, ctrl: false, meta: false },
+  });
+
+  it('switches to the hand tool with H and back to select with V', () => {
+    const board = setup();
+    board.setTool('select');
+    expect(board.dispatch(press('h', 'KeyH'))).toBe(true);
+    expect(board.tool).toBe('hand');
+    expect(board.dispatch(press('v', 'KeyV'))).toBe(true);
+    expect(board.tool).toBe('select');
+    expect(board.keybindings.forTarget('tool:hand').map((b) => b.shortcut)).toEqual(['h']);
+  });
+});
+
 describe('BOARD-502: select tool, clicking', () => {
   it('selects the element under the pointer and clears on empty space', () => {
     const board = setup();

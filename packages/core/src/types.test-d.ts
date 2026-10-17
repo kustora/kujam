@@ -1,5 +1,9 @@
 import type { attachStorage, resizeElements, rotateElements, snapTranslation } from './index.js';
 import type {
+  BoardKeybindings,
+  Keybinding,
+  KeyboardPlatform,
+  ToolKeyEvent,
   AssetAdapter,
   AssetRecord,
   BindingRecord,
@@ -301,6 +305,16 @@ export type Tests = [
       { readonly delta: Point; readonly guides: readonly SnapGuide[] }
     >
   >,
+  // BOARD-504: keybindings
+  Expect<Equal<Board['keybindings'], BoardKeybindings>>,
+  Expect<Equal<KeyboardPlatform, 'mac' | 'other'>>,
+  Expect<Equal<CreateBoardOptions['platform'], KeyboardPlatform | undefined>>,
+  Expect<
+    Equal<CreateBoardOptions['keybindings'], Readonly<Record<string, string | null>> | undefined>
+  >,
+  Expect<Equal<Parameters<BoardKeybindings['set']>, [shortcut: string, target: string | null]>>,
+  Expect<Equal<ReturnType<BoardKeybindings['match']>, Keybinding | undefined>>,
+  Expect<Equal<ToolKeyEvent['inTextInput'], boolean | undefined>>,
   // BOARD-502: tool feedback, element callbacks, and double clicks
   Expect<Equal<Board['toolData'], unknown>>,
   Expect<Equal<Board['elementContext'], ElementContext>>,

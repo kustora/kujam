@@ -47,6 +47,7 @@ import {
   DEFAULT_TOOL_ID,
   type BoardInputEvent,
   type BoardTools,
+  type ToolKeyEvent,
 } from './tools.js';
 import {
   createElementRecord,
@@ -76,6 +77,12 @@ import { resolveElementGeometry, toBoardTolerance, type Geometry, type Point } f
 import type { BoardDocument, CameraState, ElementRecord } from './types.js';
 import { CURRENT_SCHEMA_VERSION } from './types.js';
 import { InvalidDocumentError, inspectDocument } from './validate.js';
+import {
+  createKeymap,
+  detectPlatform,
+  type BoardKeybindings,
+  type KeyboardPlatform,
+} from './keybindings.js';
 
 export * from './types.js';
 export { deepClone } from './clone.js';
@@ -189,6 +196,7 @@ export {
   type SpatialIndex,
 } from './spatial.js';
 export { queryElements, type HitTestOptions, type QueryFilter } from './query.js';
+export type { BoardKeybindings, Keybinding, KeyboardPlatform } from './keybindings.js';
 export {
   DEFAULT_MIN_SIZE,
   moveElements,
@@ -420,6 +428,21 @@ export interface CreateBoardOptions {
    * @beta
    */
   defaultTool?: string;
+  /**
+   * Consumer shortcuts (BOARD-504), for example `{ 'Mod+D': 'element.duplicate', k: 'tool:pen' }`.
+   * They win over plugin `keybindings` for the same chord; `null` removes a plugin shortcut. See
+   * {@link BoardKeybindings} for the notation.
+   *
+   * @beta
+   */
+  keybindings?: Readonly<Record<string, string | null>>;
+  /**
+   * Platform that decides what `Mod` means in shortcuts: Cmd on `'mac'`, Ctrl elsewhere. Detected
+   * from `navigator` when available, otherwise `'other'`.
+   *
+   * @beta
+   */
+  platform?: KeyboardPlatform;
 }
 
 /**
@@ -706,7 +729,17 @@ export interface Board {
    */
   readonly elementContext: ElementContext;
   /**
+   * Shortcut map: plugin `keybindings` overridden by the consumer's (BOARD-504).
+   *
+   * @beta
+   */
+  readonly keybindings: BoardKeybindings;
+  /**
    * Sends a normalized input event from the renderer to the active tool.
+   *
+   * Key events run a matching shortcut (BOARD-504) when the tool is idle; during a tool
+   * interaction they only go to the tool, so Esc cancels it. With `inTextInput`, every key except
+   * Escape is ignored.
    *
    * @returns `true` when the event was handled (the renderer should call `preventDefault`).
    * @throws `Error` after `dispose`. Errors from tool handlers are propagated after the interaction
@@ -1046,6 +1079,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   const freeze = options.freezeSnapshots !== false;
   const generateId = resolveIdGenerator(options.createId);
   const defaultTool = options.defaultTool ?? DEFAULT_TOOL_ID;
+  const keymap = createKeymap(options.platform ?? detectPlatform(), options.keybindings);
   if (typeof defaultTool !== 'string') throw new TypeError('Opsi defaultTool wajib berupa string.');
   const historyLimit = resolveHistoryLimit(options.history);
   const mergeWindowMs = resolveMergeWindow(options.history);
@@ -1194,6 +1228,24 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     commands: commands.api,
     plugins: options.plugins,
   });
+
+  /**
+   * Runs the shortcut matching a key-down, if any (BOARD-504). Returns `false` when nothing ran: no
+   * match, a repeat, an unregistered target, or a command whose `isEnabled` rejected it.
+   */
+  function runShortcut(event: ToolKeyEvent): boolean {
+    if (event.repeat) return false;
+    const binding = keymap.api.match(event);
+    if (!binding) return false;
+    if (binding.target.startsWith('tool:')) {
+      const id = binding.target.slice('tool:'.length);
+      if (!tools.api.has(id)) return false;
+      tools.setTool(id);
+      return true;
+    }
+    if (!commands.api.get(binding.target)) return false;
+    return commands.run(binding.target, undefined);
+  }
 
   function assertUsable(): void {
     if (disposed) throw new Error('Papan sudah di-dispose.');
@@ -1431,9 +1483,19 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       return tools.data;
     },
     elementContext,
+    keybindings: keymap.api,
     dispatch(event: BoardInputEvent): boolean {
       assertUsable();
-      return tools.dispatch(event);
+      if (event?.type !== 'key-down' && event?.type !== 'key-up') return tools.dispatch(event);
+      const escape = event.key === 'Escape';
+      if (event.inTextInput === true && !escape) return false;
+      // Esc and keys during an interaction belong to the tool first.
+      if (escape || tools.busy) {
+        const handled = tools.dispatch(event);
+        if (handled || !escape) return handled;
+      }
+      if (runShortcut(event)) return true;
+      return escape ? false : tools.dispatch(event);
     },
     camera,
     get snapOptions() {
@@ -1491,6 +1553,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   // Read-only before plugin setup runs, so `setup` cannot rewrite a document that is too new.
   tooNew = findTooNew(store.getDocument(), elements, []);
   plugins.install();
+  keymap.loadPlugins(plugins.api.list());
   const deferred: (() => void)[] = [];
   if (initial.rejected.length > 0) deferred.push(() => reportRejected(initial.rejected));
   if (options.document) {

@@ -330,12 +330,16 @@ describe('definePlugin', () => {
             keybindings: {
               '   ': 'contoh.aksi',
               k: '   ',
+              'Hyper+K': 'contoh.aksi',
+              'Mod+Kunci': 'contoh.aksi',
             },
           }),
         ),
       ).toEqual([
-        'keybindings tidak boleh memakai kunci shortcut kosong.',
+        'keybindings: Shortcut wajib berupa string tidak kosong.',
         'keybindings["k"] wajib berupa string target tidak kosong.',
+        'keybindings: Shortcut "Hyper+K" memakai modifier "Hyper" yang tidak dikenal.',
+        'keybindings: Shortcut "Mod+Kunci" memakai tombol "Kunci" yang tidak dikenal.',
       ]);
     });
 
