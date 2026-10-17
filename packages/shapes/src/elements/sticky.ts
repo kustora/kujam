@@ -1,5 +1,5 @@
 import { defineElement, enumOf, nullable, rect, schema, string } from '@kujam/core';
-import { drawPlainText } from '../canvas.js';
+import { drawRichText, layoutStickyText } from '../canvas.js';
 import {
   STICKY_COLOR_NAMES,
   STICKY_COLOR_VALUES,
@@ -7,7 +7,7 @@ import {
   STICKY_TEXT_COLOR,
 } from '../colors.js';
 import { a11yLabel, localize } from '../i18n.js';
-import { EMPTY_RICH_TEXT, richTextSchema, richTextToPlainText } from '../richtext.js';
+import { EMPTY_RICH_TEXT, isRichTextEmpty, richTextSchema, richTextToPlainText } from '../richtext.js';
 
 const PADDING = 16;
 
@@ -29,22 +29,32 @@ export const stickyElement = defineElement({
   defaults: { text: EMPTY_RICH_TEXT, color: 'yellow', authorId: null },
   geometry: (el) => rect(el.w, el.h),
   resize: 'fixed-ratio',
+  onDoubleClick: (el, ctx) => {
+    ctx.emit('edit', { id: el.id });
+  },
   render: {
-    // TODO(BOARD-1001): auto-shrinking font, ellipsis, HTML editor while editing.
     canvas: (g, el, _data, _lod, ctx) => {
       // Sticky notes have sharp corners (radius 0) per DESIGN.md
       g.beginPath();
       g.rect(0, 0, el.w, el.h);
       g.fillStyle = ctx?.theme?.sticky[el.props.color] ?? STICKY_COLOR_VALUES[el.props.color];
       g.fill();
-      drawPlainText(g, richTextToPlainText(el.props.text), {
-        x: PADDING,
-        y: PADDING,
-        maxWidth: Math.max(0, el.w - PADDING * 2),
-        fontSize: 20,
-        color: ctx?.theme?.stickyText ?? STICKY_TEXT_COLOR,
-        align: 'start',
-      });
+
+      if (!isRichTextEmpty(el.props.text)) {
+        const layout = layoutStickyText(el.props.text, {
+          boxW: el.w,
+          boxH: el.h,
+          padding: PADDING,
+          fontFamily: ctx?.theme?.typography.fontFamily,
+        });
+
+        drawRichText(g, layout, {
+          x: PADDING,
+          y: PADDING,
+          color: ctx?.theme?.stickyText ?? STICKY_TEXT_COLOR,
+          fontFamily: ctx?.theme?.typography.fontFamily,
+        });
+      }
     },
   },
   a11y: (el, _data, ctx) => {

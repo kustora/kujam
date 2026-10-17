@@ -55,6 +55,19 @@ export function traceRoundedRect(
   g.closePath();
 }
 
+export {
+  drawRichText,
+  formatFont,
+  layoutRichText,
+  layoutStickyText,
+  type DrawRichTextOptions,
+  type StickyLayoutOptions,
+  type TextLayout,
+  type TextLayoutLine,
+  type TextLayoutOptions,
+  type TextRun,
+} from './text/layout.js';
+
 /** Options for {@link drawPlainText}. */
 export interface PlainTextOptions {
   readonly x: number;
@@ -66,7 +79,6 @@ export interface PlainTextOptions {
   readonly align: 'start' | 'center' | 'end';
 }
 
-// TODO(BOARD-1003a): replace with the rich text renderer (wrap, measure, lists, bold/italic).
 /** Draws plain text per `\n`-separated line, without wrapping. */
 export function drawPlainText(g: ElementCanvasContext, text: string, o: PlainTextOptions): void {
   if (!text) return;
@@ -79,3 +91,4 @@ export function drawPlainText(g: ElementCanvasContext, text: string, o: PlainTex
   const lineHeight = o.fontSize * 1.3;
   text.split('\n').forEach((line, i) => g.fillText(line, x, o.y + i * lineHeight, o.maxWidth));
 }
+

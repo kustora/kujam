@@ -76,10 +76,38 @@ export {
   MAX_LINK_LENGTH,
   MAX_LIST_INDENT,
   MAX_RICH_TEXT_LENGTH,
+  isRichTextEmpty,
+  normalizeRichText,
   richTextSchema,
   richTextToPlainText,
+  sanitizeLink,
+  validateRichText,
   type RichText,
+  type RichTextAttributes,
+  type RichTextOp,
 } from './richtext.js';
+export {
+  drawRichText,
+  formatFont,
+  layoutRichText,
+  layoutStickyText,
+  type DrawRichTextOptions,
+  type ListMarker,
+  type StickyLayoutOptions,
+  type TextLayout,
+  type TextLayoutLine,
+  type TextLayoutOptions,
+  type TextRun,
+} from './text/layout.js';
+export {
+  attachTextEditor,
+  domToRichText,
+  richTextToDom,
+  sanitizePastedHtml,
+  type TextEditorAttachment,
+  type TextEditorHost,
+  type TextEditorOptions,
+} from './text/editor.js';
 
 /**
  * Built-in elements plugin for release 0.1 (`sticky`, `draw`, `text`, `geo`) with the `pen` and

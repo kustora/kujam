@@ -1,8 +1,8 @@
 import { defineElement, enumOf, rect, schema } from '@kujam/core';
-import { drawPlainText } from '../canvas.js';
+import { drawRichText, layoutRichText } from '../canvas.js';
 import { COLOR_KEYS, COLOR_VALUES } from '../colors.js';
 import { a11yLabel, localize } from '../i18n.js';
-import { EMPTY_RICH_TEXT, richTextSchema, richTextToPlainText } from '../richtext.js';
+import { EMPTY_RICH_TEXT, isRichTextEmpty, richTextSchema, richTextToPlainText } from '../richtext.js';
 
 /** @internal */
 export const TEXT_FONT_SIZES = { s: 16, m: 24, l: 32, xl: 48 } as const;
@@ -34,17 +34,26 @@ export const textElement = defineElement({
   geometry: (el) => rect(el.w, el.h),
   // Height follows content (computed by the BOARD-1003a text layout), so resize only changes width.
   resize: (el, proposed) => ({ w: proposed.w, h: el.h }),
+  onDoubleClick: (el, ctx) => {
+    ctx.emit('edit', { id: el.id });
+  },
   render: {
-    // TODO(BOARD-1003a): rich text renderer (wrap, lists, bold/italic, links).
     canvas: (g, el, _data, _lod, ctx) => {
-      drawPlainText(g, richTextToPlainText(el.props.text), {
-        x: 0,
-        y: 0,
-        maxWidth: el.w,
+      if (isRichTextEmpty(el.props.text)) return;
+      const maxWidth = el.props.widthMode === 'fixed' ? el.w : undefined;
+      const layout = layoutRichText(el.props.text, {
+        maxWidth,
+        boxWidth: el.w,
         fontSize: TEXT_FONT_SIZES[el.props.size],
         fontFamily: ctx?.theme?.typography.fontFamily,
-        color: ctx?.theme?.colors[el.props.color] ?? COLOR_VALUES[el.props.color],
         align: el.props.align,
+      });
+
+      drawRichText(g, layout, {
+        x: 0,
+        y: 0,
+        color: ctx?.theme?.colors[el.props.color] ?? COLOR_VALUES[el.props.color],
+        fontFamily: ctx?.theme?.typography.fontFamily,
       });
     },
   },
