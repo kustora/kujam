@@ -56,7 +56,8 @@ import {
 } from './mutate.js';
 import { createSelection, type SelectionInput } from './selection.js';
 import { createSpatialIndex, type BoxBounds, type SpatialIndex } from './spatial.js';
-import { queryElements, type QueryFilter } from './query.js';
+import { hitTestElements, queryElements, type HitTestOptions, type QueryFilter } from './query.js';
+import { resolveElementGeometry, toBoardTolerance, type Geometry, type Point } from './geometry.js';
 import type { BoardDocument, CameraState, ElementRecord } from './types.js';
 import { CURRENT_SCHEMA_VERSION } from './types.js';
 import { InvalidDocumentError, validateDocument } from './validate.js';
@@ -163,7 +164,7 @@ export {
   type RectBounds,
   type SpatialIndex,
 } from './spatial.js';
-export { queryElements, type QueryFilter } from './query.js';
+export { queryElements, type HitTestOptions, type QueryFilter } from './query.js';
 export type { SelectionInput } from './selection.js';
 
 /**
@@ -418,6 +419,19 @@ export interface Board {
   query<T = Record<string, unknown>>(
     filter?: QueryFilter,
   ): readonly Readonly<ElementRecord<ResolveElementProps<T>>>[];
+  /**
+   * Finds the topmost element at a board point, using the spatial index (BOARD-403, BOARD-404).
+   *
+   * Elements are tested against their `geometry` (or their `w × h` box), with rotation applied.
+   * The topmost element follows paint order: siblings by layer index, and children of a frame or
+   * group above their container. `locked` elements are skipped unless `includeLocked` is set.
+   *
+   * @param point - Point in board coordinates.
+   * @returns The hit element, or `undefined` when nothing is under the point.
+   * @throws `TypeError` when `point` or `tolerance` is not a finite number, or `Error` after `dispose`.
+   * @beta
+   */
+  hitTest(point: Point, options?: HitTestOptions): Readonly<ElementRecord> | undefined;
   /**
    * Runs `fn` as a single transaction and returns its result.
    *
@@ -872,6 +886,12 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     return def?.geometry ? def.geometry(el as never) : undefined;
   });
 
+  /** Element geometry for hit-testing; same fallbacks as the spatial index bounds. */
+  function hitGeometry(el: ElementRecord): Geometry {
+    const def = elements.get(el.type);
+    return resolveElementGeometry(el, def?.geometry && (() => def.geometry!(el as never)));
+  }
+
   const store = createRecordStore(
     options.document ? toOwnedDocument(options.document) : createEmptyDocument(),
     {
@@ -1080,6 +1100,28 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     query(filter) {
       assertUsable();
       return queryElements(store.getDocument(), spatial, filter) as never;
+    },
+    hitTest(point, hitOptions = {}) {
+      assertUsable();
+      if (
+        !isPlainObject(point) ||
+        !Number.isFinite(point.x as number) ||
+        !Number.isFinite(point.y as number)
+      ) {
+        throw new TypeError('Argumen point pada board.hitTest wajib berupa { x, y } berhingga.');
+      }
+      const tolerancePx = hitOptions.tolerance ?? 0;
+      if (typeof tolerancePx !== 'number' || !Number.isFinite(tolerancePx)) {
+        throw new TypeError('Opsi tolerance pada board.hitTest wajib berupa angka berhingga.');
+      }
+      return hitTestElements(
+        store.getDocument(),
+        spatial,
+        hitGeometry,
+        { x: point.x, y: point.y },
+        toBoardTolerance(tolerancePx, camera.zoom),
+        hitOptions,
+      );
     },
     spatial,
     transact<T>(fn: (tx: Transaction) => T, txOptions?: TransactOptions): T {

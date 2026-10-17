@@ -25,8 +25,11 @@ export function traceGeometry(g: ElementCanvasContext, geometry: Geometry): void
       return;
     case 'polygon':
     case 'polyline':
+    case 'path':
       geometry.points.forEach((p, i) => (i === 0 ? g.moveTo(p.x, p.y) : g.lineTo(p.x, p.y)));
-      if (geometry.kind === 'polygon') g.closePath();
+      if (geometry.kind === 'polygon' || (geometry.kind === 'path' && geometry.closed)) {
+        g.closePath();
+      }
       return;
   }
 }

@@ -15,6 +15,13 @@ export default defineConfig({
           branches: 85,
           statements: 90,
         },
+        // BOARD-403: the geometry library must stay fully covered.
+        'packages/core/src/geometry.ts': {
+          lines: 100,
+          functions: 100,
+          branches: 100,
+          statements: 100,
+        },
       },
     },
     projects: [
