@@ -95,8 +95,8 @@ export interface ActionEvent {
  * - `document-too-new`: the document's `schemaVersion`, an element `typeVersion`, or a plugin
  *   version is newer than known; the board is now read-only, and `cause` is a
  *   `DocumentTooNewReason` (BOARD-703).
- * - `page-not-found`: `board.create` was given a `pageId` that is not an existing page; `cause` is
- *   `{ pageId }` (BOARD-208).
+ * - `page-not-found`: `board.create` or `board.update` was given a `pageId` that is not an existing
+ *   page; `cause` is `{ pageId }` (BOARD-208).
  *
  * @beta
  */

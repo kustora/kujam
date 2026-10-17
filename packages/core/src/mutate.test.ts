@@ -361,6 +361,55 @@ describe('BOARD-205: board.update', () => {
     board.dispose();
     expect(() => board.update('id', { x: 10 })).toThrow('Papan sudah di-dispose.');
   });
+
+  it('menolak memindahkan elemen ke page yang tidak ada', () => {
+    const board = createBoard({ plugins: [testPlugin] });
+    board.pages.create({ id: 'page:2' });
+    const el = board.create({ id: 'el-1', type: 'note' })!;
+    const errors: BoardErrorEvent[] = [];
+    board.on('error', (e) => errors.push(e));
+
+    expect(board.update(el.id, { pageId: 'page:missing', x: 50 })).toBeUndefined();
+    expect(board.update(el.id, { pageId: 'el-1' })).toBeUndefined();
+    expect(errors.map((e) => e.code)).toEqual(['page-not-found', 'page-not-found']);
+    expect(errors[0]!.cause).toEqual({ pageId: 'page:missing' });
+    // The whole patch is rejected, not just the page change.
+    expect(board.getElement(el.id)).toMatchObject({ pageId: 'page:main', x: 0 });
+
+    expect(board.update(el.id, { pageId: 'page:2' })?.pageId).toBe('page:2');
+    board.dispose();
+  });
+
+  it('tetap bisa mengubah elemen yang sudah berada di page yang tidak ada', () => {
+    const doc = createEmptyDocument();
+    doc.records['orphan'] = {
+      id: 'orphan',
+      kind: 'element',
+      type: 'note',
+      pageId: 'page:gone',
+      parentId: null,
+      index: 'a0',
+      x: 0,
+      y: 0,
+      rotation: 0,
+      w: 10,
+      h: 10,
+      locked: false,
+      opacity: 1,
+      props: { text: '', color: 'yellow' },
+      meta: {},
+    };
+    const board = createBoard({ plugins: [testPlugin], document: doc });
+    const codes: string[] = [];
+    board.on('error', (e) => codes.push(e.code));
+
+    // Same page as before: not a move, so not checked.
+    expect(board.update('orphan', { x: 5, pageId: 'page:gone' })?.x).toBe(5);
+    // Moving it to a real page rescues it.
+    expect(board.update('orphan', { pageId: 'page:main' })?.pageId).toBe('page:main');
+    expect(codes).toEqual([]);
+    board.dispose();
+  });
 });
 
 describe('BOARD-205: board.delete', () => {
