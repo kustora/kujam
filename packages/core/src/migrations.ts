@@ -243,6 +243,60 @@ export function migratePluginDocuments(
 }
 
 /**
+ * Reason a document is newer than this board understands (BOARD-703).
+ *
+ * @beta
+ */
+export type DocumentTooNewReason =
+  | { readonly kind: 'schema'; readonly version: number; readonly supported: number }
+  | {
+      readonly kind: 'element';
+      readonly type: string;
+      readonly version: number;
+      readonly supported: number;
+    }
+  | {
+      readonly kind: 'plugin';
+      readonly id: string;
+      readonly version: number;
+      readonly supported: number;
+    };
+
+/**
+ * Finds why `doc` is newer than this board understands: a `schemaVersion` above
+ * {@link CURRENT_SCHEMA_VERSION}, an element whose `typeVersion` is above its registered
+ * definition's `version`, or a `pluginVersions` entry above an installed plugin's migrations.
+ * Unregistered types and plugins that are not installed are not checked. Returns `null` when
+ * the document is fully supported.
+ *
+ * @internal
+ */
+export function findTooNew(
+  doc: BoardDocument,
+  elements: ElementRegistry,
+  plugins: readonly AnyPluginDefinition[],
+): DocumentTooNewReason | null {
+  if (doc.schemaVersion > CURRENT_SCHEMA_VERSION) {
+    return { kind: 'schema', version: doc.schemaVersion, supported: CURRENT_SCHEMA_VERSION };
+  }
+  for (const rec of Object.values(doc.records)) {
+    if (rec.kind !== 'element' || rec.typeVersion === undefined) continue;
+    const def = elements.get(rec.type);
+    if (def && rec.typeVersion > def.version) {
+      return { kind: 'element', type: rec.type, version: rec.typeVersion, supported: def.version };
+    }
+  }
+  for (const plugin of plugins) {
+    const version = doc.pluginVersions?.[plugin.id];
+    const supported = latestPluginVersion(plugin.migrations);
+    if (version !== undefined && version > supported) {
+      return { kind: 'plugin', id: plugin.id, version, supported };
+    }
+  }
+  return null;
+}
+
+/**
  * Runs every migration that needs the installed element types and plugins, in order: element
  * props migrations, then plugin document migrations. Core schema migrations
  * ({@link migrateSchema}) must already have run. Returns `doc` itself when nothing changed.

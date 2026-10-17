@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   CORE_MIGRATIONS,
   CURRENT_SCHEMA_VERSION,
+  InvalidDocumentError,
   MigrationError,
+  ReadOnlyBoardError,
   createBoard,
   createEmptyDocument,
   deepClone,
@@ -14,10 +16,13 @@ import {
   optional,
   string,
   validateDocument,
+  type Board,
   type BoardDocument,
+  type BoardErrorEvent,
   type ChangeOrigin,
   type ElementRecord,
   type SchemaMigrations,
+  type StorageAdapter,
 } from './index.js';
 
 function docAt(version: number, meta: Record<string, unknown> = {}): BoardDocument {
@@ -340,5 +345,167 @@ describe('BOARD-702: element and plugin migrations', () => {
     ]);
     const badPlugins = { ...createEmptyDocument(), pluginVersions: { p: -1 } };
     expect(validateDocument(badPlugins).valid).toBe(false);
+  });
+});
+
+// ---------- BOARD-703 ----------
+
+/**
+ * Wires a storage adapter the way autosave does: every change except `load` and `remote` is a
+ * rewrite of the document that must be saved.
+ */
+function watchSaves(board: Board): StorageAdapter['save'] {
+  const save = vi.fn<StorageAdapter['save']>(async () => {});
+  board.on('change', (e) => {
+    if (e.origin !== 'load' && e.origin !== 'remote') {
+      void save('board-1', { document: board.getDocument() });
+    }
+  });
+  return save;
+}
+
+/** Plugin whose props and document migrations are spies, to prove they never run. */
+function spyPlugin() {
+  const propsStep = vi.fn((props: Record<string, unknown>) => props);
+  const docStep = vi.fn((doc: BoardDocument) => doc);
+  const plugin = definePlugin({
+    id: 'spy',
+    elements: [
+      defineElement({
+        type: 'card',
+        version: 2,
+        props: object({ label: optional(string()) }),
+        migrate: { 1: propsStep },
+      }),
+    ],
+    migrations: { 0: docStep },
+  });
+  return { plugin, propsStep, docStep };
+}
+
+/** Too-new document that would otherwise need both kinds of migration. */
+function tooNewDoc(patch: Partial<BoardDocument> = {}): BoardDocument {
+  return { ...docWith(element('c', 'card', { label: 'x' })), ...patch };
+}
+
+describe('BOARD-703: documents newer than supported open read-only', () => {
+  it('loadDocument with a newer schemaVersion: read-only, document-too-new, nothing rewritten', () => {
+    const { plugin, propsStep, docStep } = spyPlugin();
+    const board = createBoard({ plugins: [plugin] });
+    const save = watchSaves(board);
+    const errors: BoardErrorEvent[] = [];
+    board.on('error', (e) => errors.push(e));
+
+    const doc = tooNewDoc({ schemaVersion: CURRENT_SCHEMA_VERSION + 1 });
+    board.loadDocument(doc);
+
+    expect(board.readOnly).toBe(true);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({
+      code: 'document-too-new',
+      cause: { kind: 'schema', version: CURRENT_SCHEMA_VERSION + 1 },
+    });
+    expect(board.getDocument()).toEqual(doc);
+    expect(propsStep).not.toHaveBeenCalled();
+    expect(docStep).not.toHaveBeenCalled();
+
+    expect(() => board.create({ type: 'card' })).toThrow(ReadOnlyBoardError);
+    expect(() => board.transact((tx) => tx.remove('c'))).toThrow(ReadOnlyBoardError);
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('an element typeVersion above its definition makes the board read-only', () => {
+    const { plugin, propsStep } = spyPlugin();
+    const board = createBoard({ plugins: [plugin] });
+    const save = watchSaves(board);
+    const errors: BoardErrorEvent[] = [];
+    board.on('error', (e) => errors.push(e));
+
+    board.loadDocument(docWith(element('old', 'card', {}), element('new', 'card', {}, 3)));
+    expect(board.readOnly).toBe(true);
+    expect(errors[0]).toMatchObject({
+      code: 'document-too-new',
+      cause: { kind: 'element', type: 'card', version: 3, supported: 2 },
+    });
+    // Not even the older element is migrated: the document is never rewritten.
+    expect(propsStep).not.toHaveBeenCalled();
+    expect(board.getElement('old')?.typeVersion).toBeUndefined();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('a plugin version above the installed migrations makes the board read-only', () => {
+    const { plugin, docStep } = spyPlugin();
+    const board = createBoard({ plugins: [plugin] });
+    const errors: BoardErrorEvent[] = [];
+    board.on('error', (e) => errors.push(e));
+
+    board.loadDocument(tooNewDoc({ pluginVersions: { spy: 5 } }));
+    expect(board.readOnly).toBe(true);
+    expect(errors[0]?.cause).toEqual({ kind: 'plugin', id: 'spy', version: 5, supported: 1 });
+    expect(docStep).not.toHaveBeenCalled();
+  });
+
+  it('ignores versions of types and plugins that are not installed', () => {
+    const board = createBoard();
+    board.loadDocument(tooNewDoc({ pluginVersions: { elsewhere: 9 } }));
+    expect(board.readOnly).toBe(false);
+  });
+
+  it('createBoard with a too-new document is read-only and reports it asynchronously', async () => {
+    const { plugin, propsStep, docStep } = spyPlugin();
+    const doc = tooNewDoc({ schemaVersion: CURRENT_SCHEMA_VERSION + 1 });
+    const board = createBoard({ plugins: [plugin], document: doc });
+    const save = watchSaves(board);
+    const errors: BoardErrorEvent[] = [];
+    board.on('error', (e) => errors.push(e));
+
+    expect(board.readOnly).toBe(true);
+    expect(board.getDocument()).toEqual(doc);
+    await Promise.resolve();
+    expect(errors.map((e) => e.code)).toEqual(['document-too-new']);
+    expect(propsStep).not.toHaveBeenCalled();
+    expect(docStep).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('plugin setup cannot rewrite a document with a newer schemaVersion', () => {
+    const plugin = definePlugin({
+      id: 'writer',
+      setup(board) {
+        expect(board.readOnly).toBe(true);
+        expect(() => board.transact((tx) => tx.remove('page:main'))).toThrow(ReadOnlyBoardError);
+      },
+    });
+    createBoard({ plugins: [plugin], document: docAt(CURRENT_SCHEMA_VERSION + 1) });
+  });
+
+  it('does not report after the board is disposed', async () => {
+    const report = vi.fn();
+    const board = createBoard({ document: docAt(CURRENT_SCHEMA_VERSION + 1) });
+    board.on('error', report);
+    board.dispose();
+    await Promise.resolve();
+    expect(report).not.toHaveBeenCalled();
+  });
+
+  it('loading a supported document lifts the forced read-only mode, not the configured one', () => {
+    const board = createBoard();
+    board.loadDocument(docAt(CURRENT_SCHEMA_VERSION + 1));
+    expect(board.readOnly).toBe(true);
+    board.loadDocument(createEmptyDocument());
+    expect(board.readOnly).toBe(false);
+
+    const configured = createBoard({ readOnly: true });
+    configured.loadDocument(docAt(CURRENT_SCHEMA_VERSION + 1));
+    configured.loadDocument(createEmptyDocument());
+    expect(configured.readOnly).toBe(true);
+  });
+
+  it('still rejects structurally invalid newer documents, and validateDocument still rejects them', () => {
+    const board = createBoard();
+    const broken = { ...docAt(CURRENT_SCHEMA_VERSION + 1), records: 'nope' };
+    expect(() => board.loadDocument(broken as never)).toThrow(InvalidDocumentError);
+    expect(board.readOnly).toBe(false);
+    expect(validateDocument(docAt(CURRENT_SCHEMA_VERSION + 1)).valid).toBe(false);
   });
 });

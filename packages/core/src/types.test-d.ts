@@ -13,9 +13,12 @@ import type {
   ChangeEvent,
   CreateBoardOptions,
   DeleteOptions,
+  DocumentTooNewReason,
   ElementAction,
   ElementPatch,
   ElementRecord,
+  MigrationError,
+  MigrationSource,
   MutateOptions,
   PageRecord,
   PartialElement,
@@ -23,10 +26,13 @@ import type {
   PermissionHook,
   QueryFilter,
   RectBounds,
+  SchemaMigration,
+  SchemaMigrations,
   SelectionInput,
   SpatialIndex,
   UpdateOptions,
 } from './index.js';
+import type { migrateSchema } from './index.js';
 
 declare module './index.js' {
   interface BoardElementTypes {
@@ -160,6 +166,19 @@ export type Tests = [
   Expect<Equal<Parameters<Board['addToSelection']>, [ids: SelectionInput]>>,
   Expect<Equal<Parameters<Board['removeFromSelection']>, [ids: SelectionInput]>>,
   Expect<Equal<ReturnType<Board['clearSelection']>, void>>,
+  // BOARD-701..703: migration type tests
+  Expect<Equal<SchemaMigration, (doc: BoardDocument) => BoardDocument>>,
+  Expect<Equal<SchemaMigrations, Readonly<Record<number, SchemaMigration>>>>,
+  Expect<
+    Equal<
+      Parameters<typeof migrateSchema>,
+      [doc: BoardDocument, migrations?: SchemaMigrations, targetVersion?: number]
+    >
+  >,
+  Expect<Equal<MigrationError['source'], MigrationSource | undefined>>,
+  Expect<Equal<DocumentTooNewReason['kind'], 'schema' | 'element' | 'plugin'>>,
+  Expect<Equal<ElementRecord['typeVersion'], number | undefined>>,
+  Expect<Equal<BoardDocument['pluginVersions'], Record<string, number> | undefined>>,
 ];
 
 declare const _dummyBoard: Board;

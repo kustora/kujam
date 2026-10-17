@@ -80,7 +80,9 @@ export interface ActionEvent {
  *   (BOARD-210, BOARD-1502).
  * - `forbidden`: a permission hook rejected the operation (BOARD-212).
  * - `limit-exceeded`: a board size limit was reached (BOARD-005, BOARD-210).
- * - `document-too-new`: the document schema version is newer than known (BOARD-703).
+ * - `document-too-new`: the document's `schemaVersion`, an element `typeVersion`, or a plugin
+ *   version is newer than known; the board is now read-only, and `cause` is a
+ *   `DocumentTooNewReason` (BOARD-703).
  *
  * @beta
  */

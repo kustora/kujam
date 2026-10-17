@@ -133,7 +133,8 @@ export class ReadOnlyBoardError extends Error {
 /** @internal */
 export interface StoreOptions {
   freeze: boolean;
-  readOnly: boolean;
+  /** Read on every transaction, since a board can become read-only after loading (BOARD-703). */
+  isReadOnly: () => boolean;
   onChange: (event: ChangeEvent) => void;
 }
 
@@ -185,7 +186,7 @@ function resolveLabel(label: unknown): string | undefined {
  * @internal
  */
 export function createRecordStore(initial: BoardDocument, options: StoreOptions): RecordStore {
-  const { freeze, readOnly, onChange } = options;
+  const { freeze, isReadOnly, onChange } = options;
   const seal = <T>(value: T): T => (freeze ? deepFreeze(value) : value);
   const sealShallow = <T extends object>(value: T): T => (freeze ? Object.freeze(value) : value);
 
@@ -336,7 +337,7 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
 
       const origin = resolveOrigin(txOptions.origin);
       const label = resolveLabel(txOptions.label);
-      if (readOnly && origin === 'local') throw new ReadOnlyBoardError();
+      if (origin === 'local' && isReadOnly()) throw new ReadOnlyBoardError();
 
       const state = openTransaction(origin, label);
       active = state;

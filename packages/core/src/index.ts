@@ -55,13 +55,19 @@ import {
   type PartialElement,
   type UpdateOptions,
 } from './mutate.js';
-import { latestPluginVersion, migrateContent, migrateSchema } from './migrations.js';
+import {
+  findTooNew,
+  latestPluginVersion,
+  migrateContent,
+  migrateSchema,
+  type DocumentTooNewReason,
+} from './migrations.js';
 import { createSelection, type SelectionInput } from './selection.js';
 import { createSpatialIndex, type BoxBounds, type SpatialIndex } from './spatial.js';
 import { queryElements, type QueryFilter } from './query.js';
 import type { BoardDocument, CameraState, ElementRecord } from './types.js';
 import { CURRENT_SCHEMA_VERSION } from './types.js';
-import { InvalidDocumentError, validateDocument } from './validate.js';
+import { InvalidDocumentError, validateDocumentShape } from './validate.js';
 
 export * from './types.js';
 export { deepClone } from './clone.js';
@@ -170,6 +176,7 @@ export {
   CORE_MIGRATIONS,
   MigrationError,
   migrateSchema,
+  type DocumentTooNewReason,
   type MigrationSource,
   type SchemaMigration,
   type SchemaMigrations,
@@ -319,6 +326,12 @@ export interface CreateBoardOptions {
   /**
    * Read-only mode. Local document changes are rejected; camera and selection can still change,
    * and `loadDocument` is still allowed so documents from the server can be received.
+   *
+   * Independently of this option, a document newer than this board understands (its
+   * `schemaVersion`, an element `typeVersion`, or a plugin version) is opened read-only and is
+   * never migrated; an `error` event with code `document-too-new` is emitted (BOARD-703). For the
+   * initial document, that event is emitted asynchronously so listeners registered right after
+   * `createBoard` receive it.
    */
   readOnly?: boolean;
   /** UI locale. Defaults to `'id'`. */
@@ -593,7 +606,10 @@ export interface Board {
    * @beta
    */
   dispatch(event: BoardInputEvent): boolean;
-  /** Read-only mode (see {@link CreateBoardOptions.readOnly}). */
+  /**
+   * Read-only mode: the `readOnly` option, or forced while the loaded document is too new
+   * (see {@link CreateBoardOptions.readOnly}). Loading a supported document lifts the forced mode.
+   */
   readonly readOnly: boolean;
   readonly locale: BoardLocale;
   /**
@@ -706,11 +722,13 @@ export function createEmptyDocument(meta: Record<string, unknown> = {}): BoardDo
 
 /**
  * Runs core schema migrations (BOARD-701), validates, and then copies the input document so it is
- * not linked to board state.
+ * not linked to board state. With `allowNewerSchema`, a document newer than
+ * {@link CURRENT_SCHEMA_VERSION} is accepted as-is (no migration) so it can be opened read-only
+ * (BOARD-703).
  */
-function toOwnedDocument(input: BoardDocument): BoardDocument {
+function toOwnedDocument(input: BoardDocument, allowNewerSchema = false): BoardDocument {
   const doc = migrateSchema(input);
-  const result = validateDocument(doc);
+  const result = validateDocumentShape(doc, allowNewerSchema);
   if (!result.valid) {
     throw new InvalidDocumentError(result.errors);
   }
@@ -733,6 +751,20 @@ function createDocumentFor(plugins: unknown): BoardDocument {
     if (version > 0) versions[plugin.id] = version;
   }
   return Object.keys(versions).length > 0 ? { ...doc, pluginVersions: versions } : doc;
+}
+
+/** `error` event message for a document newer than this board understands (BOARD-703). */
+function tooNewMessage(reason: DocumentTooNewReason): string {
+  const what =
+    reason.kind === 'schema'
+      ? 'schemaVersion dokumen'
+      : reason.kind === 'element'
+        ? `Versi tipe elemen "${reason.type}"`
+        : `Versi dokumen plugin "${reason.id}"`;
+  return (
+    `${what} (${reason.version}) lebih baru dari yang didukung (${reason.supported}); ` +
+    'papan dibuka dalam mode baca saja.'
+  );
 }
 
 function resolveIdGenerator(generator: unknown): IdGenerator {
@@ -875,7 +907,9 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   assertOptionsObject(options);
   const zoomRange = resolveZoomRange(options.zoomRange);
   const locale = resolveLocale(options.locale);
-  const readOnly = resolveReadOnly(options.readOnly);
+  const configuredReadOnly = resolveReadOnly(options.readOnly);
+  /** Why the loaded document is too new for this board, or `null` (BOARD-703). */
+  let tooNew: DocumentTooNewReason | null = null;
   const resolvers = resolveResolvers(options.resolvers);
   const assets = resolveAssets(options.assets);
   const user = resolveUser(options.user);
@@ -916,10 +950,10 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   });
 
   const store = createRecordStore(
-    options.document ? toOwnedDocument(options.document) : createDocumentFor(options.plugins),
+    options.document ? toOwnedDocument(options.document, true) : createDocumentFor(options.plugins),
     {
       freeze,
-      readOnly,
+      isReadOnly: () => configuredReadOnly || tooNew !== null,
       onChange: (event) => {
         // Update the spatial index incrementally (BOARD-404, BOARD-206)
         if (event.origin === 'load') {
@@ -1044,7 +1078,9 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   };
 
   const board: Board = {
-    readOnly,
+    get readOnly(): boolean {
+      return configuredReadOnly || tooNew !== null;
+    },
     locale,
     resolvers,
     assets,
@@ -1107,14 +1143,18 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     },
     loadDocument(doc: BoardDocument): void {
       assertUsable();
-      const owned = toOwnedDocument(doc);
+      const owned = toOwnedDocument(doc, true);
+      const reason = findTooNew(owned, elements, plugins.api.list());
       // Every migration runs before the store is touched, so a failing step leaves state unchanged.
-      const migrated = migrateDocumentContent(owned);
+      // A document that is too new is never migrated: it would be rewritten in a lossy way.
+      const migrated = reason ? owned : migrateDocumentContent(owned);
       // The diff of an in-progress interaction does not apply to the new document.
       tools.reset();
       history.api.clear();
+      tooNew = reason;
       store.replaceDocument(owned, 'load');
       if (migrated !== owned) store.replaceDocument(migrated, 'migration');
+      if (reason) emitError('document-too-new', tooNewMessage(reason), reason);
     },
     getElement(id: string) {
       const rec = store.getRecord(id);
@@ -1230,16 +1270,27 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     },
   };
 
+  // Read-only before plugin setup runs, so `setup` cannot rewrite a document that is too new.
+  tooNew = findTooNew(store.getDocument(), elements, []);
   plugins.install();
   if (options.document) {
-    // Element and plugin migrations need the installed registries, so they run after install.
-    try {
-      const current = store.getDocument();
-      const migrated = migrateDocumentContent(current);
-      if (migrated !== current) store.replaceDocument(migrated, 'migration');
-    } catch (error) {
-      board.dispose();
-      throw error;
+    // Element types and plugins are only known after install.
+    tooNew = findTooNew(store.getDocument(), elements, plugins.api.list());
+    if (tooNew) {
+      const reason = tooNew;
+      // Deferred so listeners registered right after `createBoard` receive it.
+      void Promise.resolve().then(() => {
+        if (!disposed) emitError('document-too-new', tooNewMessage(reason), reason);
+      });
+    } else {
+      try {
+        const current = store.getDocument();
+        const migrated = migrateDocumentContent(current);
+        if (migrated !== current) store.replaceDocument(migrated, 'migration');
+      } catch (error) {
+        board.dispose();
+        throw error;
+      }
     }
   }
   return board;

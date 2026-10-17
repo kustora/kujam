@@ -148,6 +148,16 @@ function validateRecord(id: string, rec: unknown, errors: string[]): void {
  * @public
  */
 export function validateDocument(doc: unknown): ValidationResult {
+  return validateDocumentShape(doc, false);
+}
+
+/**
+ * {@link validateDocument} with an option to accept a `schemaVersion` newer than
+ * {@link CURRENT_SCHEMA_VERSION}, so the board can open such a document read-only (BOARD-703).
+ *
+ * @internal
+ */
+export function validateDocumentShape(doc: unknown, allowNewerSchema: boolean): ValidationResult {
   if (!isPlainObject(doc)) {
     return { valid: false, errors: ['Dokumen harus berupa objek JSON.'] };
   }
@@ -158,7 +168,7 @@ export function validateDocument(doc: unknown): ValidationResult {
   const version = candidate.schemaVersion;
   if (!Number.isInteger(version) || (version as number) < 1) {
     errors.push('Field schemaVersion wajib berupa bilangan bulat positif.');
-  } else if ((version as number) > CURRENT_SCHEMA_VERSION) {
+  } else if (!allowNewerSchema && (version as number) > CURRENT_SCHEMA_VERSION) {
     errors.push(
       `schemaVersion ${version} lebih baru dari versi yang didukung (${CURRENT_SCHEMA_VERSION}).`,
     );
