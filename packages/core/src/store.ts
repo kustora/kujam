@@ -75,6 +75,11 @@ export interface ChangeEvent extends RecordsDiff {
   readonly origin: ChangeOrigin;
   /** Transaction label for undo and logs; `undefined` when not provided. */
   readonly label: string | undefined;
+  /**
+   * Undo merge key from {@link TransactOptions.mergeKey} (BOARD-302). Present only when the
+   * transaction was given one.
+   */
+  readonly mergeKey?: string;
 }
 
 /**
@@ -87,6 +92,15 @@ export interface TransactOptions {
   label?: string;
   /** Change origin. Defaults to `'local'`. */
   origin?: ChangeOrigin;
+  /**
+   * Undo merge key (BOARD-302). A local transaction merges into the previous undo step when that
+   * step has the same key, is still the latest step, and was last extended at most
+   * `history.mergeWindowMs` ago (a pause longer than the window starts a new step). Any undo, redo,
+   * remote change, or tool interaction in between also starts a new step. Use one key per continuous
+   * gesture, for example `'text:' + elementId` while typing; change the key to split steps, for
+   * example per word.
+   */
+  mergeKey?: string;
 }
 
 /**
@@ -155,6 +169,7 @@ type Pending = Map<string, BoardRecord | undefined>;
 interface ActiveTransaction {
   readonly origin: ChangeOrigin;
   readonly label: string | undefined;
+  readonly mergeKey: string | undefined;
   pending: Pending;
   closed: boolean;
   readonly tx: Transaction;
@@ -177,6 +192,11 @@ function resolveOrigin(origin: unknown): ChangeOrigin {
 function resolveLabel(label: unknown): string | undefined {
   if (label === undefined || typeof label === 'string') return label;
   throw new TypeError('label transaksi wajib berupa string.');
+}
+
+function resolveMergeKey(mergeKey: unknown): string | undefined {
+  if (mergeKey === undefined || typeof mergeKey === 'string') return mergeKey;
+  throw new TypeError('mergeKey transaksi wajib berupa string.');
 }
 
 /**
@@ -217,7 +237,11 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
     return snapshot;
   }
 
-  function openTransaction(origin: ChangeOrigin, label: string | undefined): ActiveTransaction {
+  function openTransaction(
+    origin: ChangeOrigin,
+    label: string | undefined,
+    mergeKey: string | undefined,
+  ): ActiveTransaction {
     function check(): void {
       if (state.closed) {
         throw new Error(
@@ -232,6 +256,7 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
     const state: ActiveTransaction = {
       origin,
       label,
+      mergeKey,
       pending: new Map(),
       closed: false,
       tx: {
@@ -261,6 +286,7 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
     added: Record<string, BoardRecord>,
     updated: Record<string, RecordUpdate>,
     removed: Record<string, BoardRecord>,
+    mergeKey?: string,
   ): ChangeEvent {
     return sealShallow({
       added: sealShallow(added),
@@ -268,6 +294,7 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
       removed: sealShallow(removed),
       origin,
       label,
+      ...(mergeKey !== undefined ? { mergeKey } : {}),
     });
   }
 
@@ -300,7 +327,7 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
       else records.set(id, rec);
     }
     snapshot = null;
-    return buildEvent(state.origin, state.label, added, updated, removed);
+    return buildEvent(state.origin, state.label, added, updated, removed, state.mergeKey);
   }
 
   function runNested<T>(state: ActiveTransaction, fn: (tx: Transaction) => T): T {
@@ -337,9 +364,10 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
 
       const origin = resolveOrigin(txOptions.origin);
       const label = resolveLabel(txOptions.label);
+      const mergeKey = resolveMergeKey(txOptions.mergeKey);
       if (origin === 'local' && isReadOnly()) throw new ReadOnlyBoardError();
 
-      const state = openTransaction(origin, label);
+      const state = openTransaction(origin, label, mergeKey);
       active = state;
       let result: T;
       try {

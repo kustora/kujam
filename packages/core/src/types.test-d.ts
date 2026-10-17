@@ -14,7 +14,9 @@ import type {
   BoxBounds,
   BoardPages,
   CameraState,
+  BoardHistory,
   ChangeEvent,
+  HistoryOptions,
   CreateBoardOptions,
   DeleteOptions,
   DocumentPropsValidator,
@@ -29,6 +31,7 @@ import type {
   MigrationError,
   MigrationSource,
   MutateOptions,
+  TransactOptions,
   PathGeometry,
   Point,
   SnapPoint,
@@ -251,6 +254,14 @@ export type Tests = [
   Expect<Equal<ReturnType<BoardPages['create']>, Readonly<PageRecord> | undefined>>,
   Expect<Equal<ReturnType<BoardPages['delete']>, readonly string[]>>,
   Expect<Equal<QueryFilter['allPages'], boolean | undefined>>,
+  // BOARD-302: undo coalescing type tests
+  Expect<Equal<TransactOptions['mergeKey'], string | undefined>>,
+  Expect<Equal<MutateOptions['mergeKey'], string | undefined>>,
+  Expect<Equal<ChangeEvent['mergeKey'], string | undefined>>,
+  Expect<Equal<HistoryOptions['mergeWindowMs'], number | undefined>>,
+  Expect<Equal<BoardHistory['mergeWindowMs'], number>>,
+  Expect<Equal<ReturnType<typeof _dummyBoard.history.batch<number>>, number>>,
+  Expect<Equal<Parameters<BoardHistory['batch']>[0], string>>,
 ];
 
 declare const _dummyBoard: Board;

@@ -23,6 +23,8 @@ export interface MutateOptions {
   readonly label?: string;
   /** Change origin; defaults to `'local'`. */
   readonly origin?: ChangeOrigin;
+  /** Undo merge key (BOARD-302); see {@link TransactOptions.mergeKey}. */
+  readonly mergeKey?: string;
 }
 
 /**
@@ -249,6 +251,7 @@ export function createElementRecord<P = Record<string, unknown>>(
     {
       label: options?.label ?? 'create',
       origin: options?.origin ?? 'local',
+      mergeKey: options?.mergeKey,
     },
   );
 
@@ -341,6 +344,7 @@ export function updateElementRecord<P = Record<string, unknown>>(
     {
       label: options?.label ?? 'update',
       origin: options?.origin ?? 'local',
+      mergeKey: options?.mergeKey,
     },
   );
 
@@ -438,6 +442,7 @@ export function deleteElementRecords(
     {
       label: options?.label ?? 'delete',
       origin: options?.origin ?? 'local',
+      mergeKey: options?.mergeKey,
     },
   );
 
