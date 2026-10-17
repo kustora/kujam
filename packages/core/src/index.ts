@@ -54,6 +54,7 @@ import {
   type PartialElement,
   type UpdateOptions,
 } from './mutate.js';
+import { createCamera, resolveZoomRange, type BoardCamera, type ZoomRange } from './camera.js';
 import { createSelection, type SelectionInput } from './selection.js';
 import { createSpatialIndex, type BoxBounds, type SpatialIndex } from './spatial.js';
 import { queryElements, type QueryFilter } from './query.js';
@@ -165,6 +166,12 @@ export {
 } from './spatial.js';
 export { queryElements, type QueryFilter } from './query.js';
 export type { SelectionInput } from './selection.js';
+export {
+  DEFAULT_ZOOM_RANGE,
+  type BoardCamera,
+  type ViewportSize,
+  type ZoomRange,
+} from './camera.js';
 
 /**
  * Global map from element type to props type, for declaration merging (BOARD-607).
@@ -201,23 +208,6 @@ export type ResolveElementProps<T> = T extends keyof BoardElementTypes
  * @public
  */
 export type BoardLocale = 'id' | 'en';
-
-/**
- * Camera zoom bounds.
- *
- * @public
- */
-export interface ZoomRange {
-  min: number;
-  max: number;
-}
-
-/**
- * Default zoom bounds: 10% to 400%.
- *
- * @public
- */
-export const DEFAULT_ZOOM_RANGE: Readonly<ZoomRange> = Object.freeze({ min: 0.1, max: 4 });
 
 /**
  * Function that fetches external data by ID (BOARD-604).
@@ -439,11 +429,19 @@ export interface Board {
   on<K extends keyof BoardEventMap>(type: K, listener: Listener<BoardEventMap[K]>): Unsubscribe;
   /** Creates a new record ID using the `createId` option (nanoid by default). */
   createId(): string;
-  /** Frozen camera snapshot. */
+  /**
+   * Camera: position, zoom, viewport size, and screen/board coordinate conversion (BOARD-401).
+   * Camera changes are local UI state: not part of the document, not saved, not in undo history,
+   * and allowed on `readOnly` boards.
+   *
+   * @beta
+   */
+  readonly camera: BoardCamera;
+  /** Frozen camera snapshot. Same as `board.camera.get()`. */
   getCamera(): Readonly<CameraState>;
   /**
    * Changes the camera. Non-finite values are ignored, and zoom is clamped to `zoomRange`.
-   * Emits a `camera` event when the camera actually changes.
+   * Emits a `camera` event when the camera actually changes. Same as `board.camera.set()`.
    */
   setCamera(patch: Partial<CameraState>): void;
   /**
@@ -698,15 +696,6 @@ function resolveIdGenerator(generator: unknown): IdGenerator {
   throw new TypeError('Opsi createId wajib berupa fungsi.');
 }
 
-function resolveZoomRange(range: ZoomRange | undefined): ZoomRange {
-  if (!range) return DEFAULT_ZOOM_RANGE;
-  const { min, max } = range;
-  if (!Number.isFinite(min) || !Number.isFinite(max) || min <= 0 || max < min) {
-    throw new RangeError('zoomRange wajib berisi angka berhingga dengan 0 < min <= max.');
-  }
-  return { min, max };
-}
-
 function resolveLocale(locale: unknown): BoardLocale {
   if (locale === undefined) return 'id';
   if (locale === 'id' || locale === 'en') return locale;
@@ -921,7 +910,10 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     limit: historyLimit,
     onStateChange: (state) => events.emit('history', state),
   });
-  let camera: CameraState = Object.freeze({ x: 0, y: 0, zoom: 1 });
+  const camera = createCamera({
+    zoomRange,
+    onChange: (event) => events.emit('camera', event),
+  });
   const selection = createSelection({
     isElement: (id) => store.getRecord(id)?.kind === 'element',
     getBounds: (id) => spatial.getBounds(id),
@@ -1133,21 +1125,12 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       assertUsable();
       return tools.dispatch(event);
     },
+    camera,
     getCamera(): Readonly<CameraState> {
-      return camera;
+      return camera.get();
     },
     setCamera(patch: Partial<CameraState>): void {
-      const pick = (next: number | undefined, prev: number): number =>
-        next !== undefined && Number.isFinite(next) ? next : prev;
-      const previous = camera;
-      const next = {
-        x: pick(patch.x, previous.x),
-        y: pick(patch.y, previous.y),
-        zoom: Math.min(zoomRange.max, Math.max(zoomRange.min, pick(patch.zoom, previous.zoom))),
-      };
-      if (next.x === previous.x && next.y === previous.y && next.zoom === previous.zoom) return;
-      camera = Object.freeze(next);
-      events.emit('camera', Object.freeze({ camera, previous }));
+      camera.set(patch);
     },
     get selection() {
       return selection.ids;

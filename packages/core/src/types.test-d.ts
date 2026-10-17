@@ -3,6 +3,7 @@ import type {
   AssetRecord,
   BindingRecord,
   Board,
+  BoardCamera,
   BoardDocument,
   BoardLimits,
   BoardRecord,
@@ -10,6 +11,7 @@ import type {
   BoardUser,
   Bounds,
   BoxBounds,
+  CameraState,
   ChangeEvent,
   CreateBoardOptions,
   DeleteOptions,
@@ -22,10 +24,13 @@ import type {
   PermissionAction,
   PermissionHook,
   QueryFilter,
+  Point,
   RectBounds,
   SelectionInput,
   SpatialIndex,
   UpdateOptions,
+  ViewportSize,
+  ZoomRange,
 } from './index.js';
 
 declare module './index.js' {
@@ -150,6 +155,17 @@ export type Tests = [
     Equal<Parameters<Board['runAction']>, [action: ElementAction, element: Readonly<ElementRecord>]>
   >,
   Expect<Equal<ReturnType<Board['runAction']>, boolean>>,
+  // BOARD-401: camera type tests
+  Expect<Equal<Board['camera'], BoardCamera>>,
+  Expect<Equal<ReturnType<BoardCamera['get']>, Readonly<CameraState>>>,
+  Expect<Equal<Parameters<BoardCamera['set']>, [patch: Partial<CameraState>]>>,
+  Expect<Equal<BoardCamera['zoomRange'], Readonly<ZoomRange>>>,
+  Expect<Equal<BoardCamera['viewport'], Readonly<ViewportSize>>>,
+  Expect<Equal<Parameters<BoardCamera['screenToBoard']>, [point: Point]>>,
+  Expect<Equal<ReturnType<BoardCamera['boardToScreen']>, Point>>,
+  Expect<Equal<ReturnType<BoardCamera['getViewportBounds']>, BoxBounds>>,
+  Expect<Equal<Parameters<BoardCamera['zoomTo']>, [zoom: number, anchor?: Point]>>,
+  Expect<Equal<Parameters<BoardCamera['zoomBy']>, [factor: number, anchor?: Point]>>,
   // BOARD-405: selection type tests
   Expect<Equal<Board['selection'], readonly string[]>>,
   Expect<Equal<Board['selectionBounds'], Readonly<BoxBounds> | null>>,
