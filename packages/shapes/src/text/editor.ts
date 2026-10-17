@@ -6,6 +6,7 @@
 
 import type { Board } from '@kujam/core';
 import {
+  COLOR_VALUES,
   STICKY_COLOR_VALUES,
   STICKY_TEXT_COLOR,
   type ColorKey,
@@ -320,22 +321,25 @@ export function attachTextEditor(
       return;
     }
 
-    const currentDelta = (record.props as { text?: RichText }).text ?? [{ insert: '\n' }];
+    const isGeo = record.type === 'geo';
+    const textPropName = isGeo ? 'label' : 'text';
+    const currentDelta =
+      ((record.props as Record<string, unknown>)[textPropName] as RichText) ?? [{ insert: '\n' }];
     const newDelta = domToRichText(editor);
 
-    // If text is empty (BOARD-1003 criterion: empty text deletes text elements, but keeps sticky notes)
+    // If text is empty (BOARD-1003 criterion: empty text deletes text elements, but keeps sticky notes and geo shapes)
     if (isRichTextEmpty(newDelta)) {
       if (record.type === 'text') {
         board.delete(elId, { label: 'delete-empty-text' });
       } else {
         board.update(
           elId,
-          { props: { text: normalizeRichText([{ insert: '\n' }]) } },
+          { props: { [textPropName]: normalizeRichText([{ insert: '\n' }]) } },
           { label: 'edit-text' },
         );
       }
     } else if (JSON.stringify(newDelta) !== JSON.stringify(currentDelta)) {
-      board.update(elId, { props: { text: newDelta } }, { label: 'edit-text' });
+      board.update(elId, { props: { [textPropName]: newDelta } }, { label: 'edit-text' });
     }
 
     options?.onEditEnd?.(elId);
@@ -349,7 +353,7 @@ export function attachTextEditor(
 
     const record = board.getDocument().records[elementId];
     if (!record || record.kind !== 'element') return;
-    if (record.type !== 'sticky' && record.type !== 'text') return;
+    if (record.type !== 'sticky' && record.type !== 'text' && record.type !== 'geo') return;
 
     activeElementId = elementId;
     options?.onEditStart?.(elementId);
@@ -363,6 +367,7 @@ export function attachTextEditor(
     const theme = board.elementContext.theme;
     const fontFamily = theme.typography.fontFamily;
     const isSticky = record.type === 'sticky';
+    const isGeo = record.type === 'geo';
 
     // Style editor to visually blend over canvas element
     editor.style.boxSizing = 'border-box';
@@ -383,6 +388,16 @@ export function attachTextEditor(
       editor.style.padding = '16px';
       editor.style.fontSize = '20px';
       editor.style.textAlign = 'left';
+    } else if (isGeo) {
+      editor.style.backgroundColor = 'transparent';
+      const colorKey = ((record.props as { textColor?: ColorKey }).textColor ?? 'black') as ColorKey;
+      editor.style.color = theme.colors[colorKey] ?? COLOR_VALUES[colorKey] ?? '#17191E';
+      editor.style.padding = '12px';
+      editor.style.fontSize = '16px';
+      editor.style.textAlign = 'center';
+      editor.style.display = 'flex';
+      editor.style.flexDirection = 'column';
+      editor.style.justifyContent = 'center';
     } else {
       editor.style.backgroundColor = 'transparent';
       const colorKey = ((record.props as { color?: ColorKey }).color ?? 'black') as ColorKey;
@@ -395,7 +410,9 @@ export function attachTextEditor(
       editor.style.textAlign = align === 'end' ? 'right' : align === 'center' ? 'center' : 'left';
     }
 
-    const initialText: RichText = (record.props as { text?: RichText }).text ?? [{ insert: '\n' }];
+    const initialText: RichText = isGeo
+      ? ((record.props as { label?: RichText }).label ?? [{ insert: '\n' }])
+      : ((record.props as { text?: RichText }).text ?? [{ insert: '\n' }]);
     richTextToDom(initialText, editor);
 
     // Stop keydown propagation so board doesn't interpret text as shortcuts

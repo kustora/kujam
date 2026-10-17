@@ -9,10 +9,10 @@ import {
   type Geometry,
   type Point,
 } from '@kujam/core';
-import { drawPlainText, traceGeometry, traceRoundedRect } from '../canvas.js';
+import { drawRichText, layoutRichText, traceGeometry, traceRoundedRect } from '../canvas.js';
 import { COLOR_KEYS, COLOR_VALUES } from '../colors.js';
 import { a11yLabel, localize, type Bilingual } from '../i18n.js';
-import { EMPTY_RICH_TEXT, richTextSchema, richTextToPlainText } from '../richtext.js';
+import { EMPTY_RICH_TEXT, isRichTextEmpty, richTextSchema, richTextToPlainText } from '../richtext.js';
 
 /**
  * Built-in geometric shape kinds (final list agreed during BOARD-1004 grooming).
@@ -61,6 +61,36 @@ function starPoints(w: number, h: number): Point[] {
   return points;
 }
 
+function roundedRectPoints(w: number, h: number, radius: number): Point[] {
+  const r = Math.max(0, Math.min(radius, Math.abs(w) / 2, Math.abs(h) / 2));
+  if (r === 0) {
+    return [
+      { x: 0, y: 0 },
+      { x: w, y: 0 },
+      { x: w, y: h },
+      { x: 0, y: h },
+    ];
+  }
+  const points: Point[] = [];
+  const corners = [
+    { cx: w - r, cy: r, start: -Math.PI / 2, end: 0 },
+    { cx: w - r, cy: h - r, start: 0, end: Math.PI / 2 },
+    { cx: r, cy: h - r, start: Math.PI / 2, end: Math.PI },
+    { cx: r, cy: r, start: Math.PI, end: (3 * Math.PI) / 2 },
+  ];
+  const stepsPerCorner = 4;
+  for (const corner of corners) {
+    for (let i = 0; i <= stepsPerCorner; i++) {
+      const theta = corner.start + ((corner.end - corner.start) * i) / stepsPerCorner;
+      points.push({
+        x: Math.round((corner.cx + r * Math.cos(theta)) * 1000) / 1000,
+        y: Math.round((corner.cy + r * Math.sin(theta)) * 1000) / 1000,
+      });
+    }
+  }
+  return points;
+}
+
 /**
  * Local geometry for one shape kind and size.
  *
@@ -69,8 +99,9 @@ function starPoints(w: number, h: number): Point[] {
 export function geoGeometry(kind: GeoKind, w: number, h: number): Geometry {
   switch (kind) {
     case 'rectangle':
-    case 'rounded-rectangle':
       return rect(w, h);
+    case 'rounded-rectangle':
+      return polygon(roundedRectPoints(w, h, Math.min(w, h) * 0.15));
     case 'ellipse':
       return ellipse(w, h);
     case 'diamond':
@@ -133,6 +164,7 @@ export const geoElement = defineElement({
     strokeColor: enumOf(COLOR_KEYS),
     strokeWidth: number({ min: 0, max: 32 }),
     dash: enumOf(['solid', 'dashed', 'dotted']),
+    textColor: enumOf(COLOR_KEYS),
     label: richTextSchema,
   }),
   defaults: {
@@ -142,13 +174,16 @@ export const geoElement = defineElement({
     strokeColor: 'black',
     strokeWidth: 2,
     dash: 'solid',
+    textColor: 'black',
     label: EMPTY_RICH_TEXT,
   },
   geometry: (el) => geoGeometry(el.props.geo, el.w, el.h),
   // Shift locks the aspect ratio in the BOARD-406 transform.
   resize: 'free',
+  onDoubleClick: (el, ctx) => {
+    ctx.emit('edit', { id: el.id });
+  },
   render: {
-    // TODO(BOARD-1004): centered rich text label with wrapping; hit-testing follows the shape (BOARD-403).
     canvas: (g, el, _data, _lod, ctx) => {
       const { props } = el;
       if (props.geo === 'rounded-rectangle')
@@ -168,17 +203,28 @@ export const geoElement = defineElement({
         g.stroke();
         g.setLineDash([]);
       }
-      const label = richTextToPlainText(props.label);
-      const fontSize = 20;
-      const lines = label ? label.split('\n').length : 0;
-      drawPlainText(g, label, {
-        x: 0,
-        y: (el.h - lines * fontSize * 1.3) / 2,
-        maxWidth: el.w,
-        fontSize,
-        color: ctx?.theme?.colors.black ?? COLOR_VALUES.black,
-        align: 'center',
-      });
+      if (!isRichTextEmpty(props.label)) {
+        const padX = Math.min(16, Math.max(4, el.w * 0.1));
+        const padY = Math.min(16, Math.max(4, el.h * 0.1));
+        const wrapWidth = Math.max(0, el.w - padX * 2);
+        const layout = layoutRichText(props.label, {
+          maxWidth: wrapWidth,
+          align: 'center',
+          fontSize: 16,
+          fontFamily: ctx?.theme?.typography.fontFamily,
+        });
+        const textY = Math.max(padY, (el.h - layout.height) / 2);
+        drawRichText(g, layout, {
+          x: padX,
+          y: textY,
+          color:
+            ctx?.theme?.colors[props.textColor] ??
+            COLOR_VALUES[props.textColor] ??
+            ctx?.theme?.colors.black ??
+            COLOR_VALUES.black,
+          fontFamily: ctx?.theme?.typography.fontFamily,
+        });
+      }
     },
   },
   a11y: (el, _data, ctx) => ({

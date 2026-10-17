@@ -61,6 +61,8 @@ export {
   DEFAULT_LIGHT_THEME,
   STICKY_COLORS,
   STICKY_TEXT_COLOR,
+  COLOR_VALUES,
+  STICKY_COLOR_VALUES,
   type ColorKey,
   type CustomThemeOverrides,
   type StickyColor,

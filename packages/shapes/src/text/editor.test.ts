@@ -251,6 +251,37 @@ describe('Inline HTML contenteditable rich text editor (BOARD-1003b, 1003c, 1003
       expect(stickyRecord).toBeDefined();
       expect(stickyRecord?.props.text).toEqual([{ insert: '\n' }]);
 
+      // 3. Edit geo element (BOARD-1004)
+      board.create({
+        id: 'geo1',
+        type: 'geo',
+        x: 400,
+        y: 0,
+        w: 120,
+        h: 80,
+        props: {
+          geo: 'rectangle',
+          fill: 'none',
+          fillColor: 'white',
+          strokeColor: 'black',
+          strokeWidth: 2,
+          dash: 'solid',
+          textColor: 'black',
+          label: [{ insert: 'Geo Label\n' }],
+        },
+      });
+
+      attachment.edit('geo1');
+      expect(attachment.activeElementId).toBe('geo1');
+      if (mountedEditor) {
+        mountedEditor.replaceChildren(); // empty
+        mountedEditor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      }
+      // Geo shape MUST NOT be deleted when label is cleared
+      const geoRecord = board.getDocument().records['geo1'];
+      expect(geoRecord).toBeDefined();
+      expect(geoRecord?.props.label).toEqual([{ insert: '\n' }]);
+
       attachment.detach();
     });
   });

@@ -391,7 +391,7 @@ describe('geo', () => {
         'setLineDash(8,8)',
         'stroke()',
         'setLineDash()',
-        'fillText(Mulai,100,37,200)',
+        'fillText(Mulai,78,39)',
       ]),
     );
   });
