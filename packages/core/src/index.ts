@@ -4,6 +4,7 @@
  * @packageDocumentation
  */
 
+import { createBrushRegistry, type BrushDefinition, type BrushRegistry } from './brushes.js';
 import { deepClone } from './clone.js';
 import { createCommandRegistry, type BoardCommands } from './commands.js';
 import {
@@ -139,6 +140,18 @@ export {
   type ToolStateDefinition,
   type ToolWheelEvent,
 } from './tools.js';
+export {
+  BRUSH_BLEND_MODES,
+  BrushError,
+  DEFAULT_BRUSH_ID,
+  defineBrush,
+  type BrushBlendMode,
+  type BrushDefinition,
+  type BrushErrorCode,
+  type BrushInput,
+  type BrushRegistry,
+  type BrushStrokeOptions,
+} from './brushes.js';
 export { createId, DEFAULT_ID_LENGTH, type IdGenerator } from './ids.js';
 export { compareIndex, indexAbove, indexBelow, indexBetween, indicesBetween } from './indexing.js';
 export type {
@@ -665,6 +678,13 @@ export interface Board {
    */
   readonly tools: BoardTools;
   /**
+   * This board's freehand brush registry (BOARD-603). Plugins register their `brushes` here; the
+   * renderer and pen tool look strokes up with `resolve`, which falls back to the default pen.
+   *
+   * @beta
+   */
+  readonly brushes: BrushRegistry;
+  /**
    * Activates a tool. The previous tool's interaction is cancelled (rolled back). Emits a `tool`
    * event when the tool changes.
    *
@@ -1082,6 +1102,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   }
 
   const elements = createElementRegistry();
+  const brushes = createBrushRegistry();
   const initial = options.document
     ? toOwnedDocument(options.document, previewElementRegistry(options.plugins), limits, true)
     : { document: createDocumentFor(options.plugins), rejected: [] };
@@ -1150,6 +1171,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   });
   const elementContext: ElementContext = Object.freeze({
     locale,
+    resolveBrush: (id: string): Readonly<BrushDefinition> => brushes.api.resolve(id),
     emit(name: string, payload?: unknown): void {
       if (typeof name !== 'string' || name === '') {
         throw new TypeError('Nama aksi wajib berupa string tidak kosong.');
@@ -1192,6 +1214,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     elements,
     tools: tools.api,
     commands: commands.api,
+    brushes: brushes.api,
     plugins: options.plugins,
   });
 
@@ -1414,6 +1437,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     elements,
     plugins: plugins.api,
     tools: tools.api,
+    brushes: brushes.api,
     setTool(id: string): void {
       assertUsable();
       tools.setTool(id);
@@ -1482,6 +1506,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
         events.clear();
         commands.clear();
         tools.clear();
+        brushes.clear();
         history.dispose();
         store.dispose();
       }

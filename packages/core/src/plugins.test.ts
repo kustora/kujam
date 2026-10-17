@@ -313,8 +313,8 @@ describe('definePlugin', () => {
         'brushes[2]: kuas "pen" duplikat di dalam plugin yang sama.',
         'brushes[2].label wajib berupa string tidak kosong.',
         'brushes[2].strokeOptions wajib berupa objek.',
-        'brushes[2].blend wajib berupa string tidak kosong.',
-        'brushes[3].id wajib berupa string ID yang valid.',
+        expect.stringMatching(/^brushes\[2\]\.blend wajib salah satu dari: source-over, /),
+        'brushes[3].id wajib huruf kecil, angka, titik, atau tanda hubung (misalnya "pen").',
       ]);
     });
 

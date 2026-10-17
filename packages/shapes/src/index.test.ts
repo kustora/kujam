@@ -1,6 +1,9 @@
 import {
   createBoard,
   createElementRegistry,
+  DEFAULT_BRUSH_ID,
+  defineBrush,
+  definePlugin,
   PluginError,
   validate,
   type AnyElementDefinition,
@@ -18,12 +21,15 @@ import {
   GEO_KINDS,
   geoElement,
   geoGeometry,
+  highlighterBrush,
+  penBrush,
   richTextSchema,
   richTextToPlainText,
   stickyElement,
   textElement,
   type RichText,
 } from './index.js';
+import { builtInBrush } from './brushes.js';
 import { a11yLabel } from './i18n.js';
 
 function element<P>(type: string, props: P, w = 200, h = 100): ElementRecord<P> {
@@ -70,7 +76,11 @@ function recorder(): { g: ElementCanvasContext; calls: string[] } {
 }
 
 const lod = { zoom: 1, compact: false };
-const ctx = (locale: string): ElementContext => ({ locale, emit: () => {} });
+const ctx = (locale: string): ElementContext => ({
+  locale,
+  emit: () => {},
+  resolveBrush: builtInBrush,
+});
 const rich = (text: string): RichText => [{ insert: `${text}\n` }];
 
 describe('defaultElements dan defaultTools', () => {
@@ -235,6 +245,46 @@ describe('draw', () => {
     ({ g, calls } = recorder());
     drawElement.render?.canvas?.(g, withDefaults(drawElement), undefined, lod);
     expect(calls).toEqual([]);
+  });
+
+  it('render canvas memakai kuas dari board, dengan pena untuk kuas yang tidak dikenal (BOARD-603)', () => {
+    const marker = definePlugin({
+      id: 'marker',
+      dependsOn: ['default-elements'],
+      brushes: [defineBrush({ id: 'marker', blend: 'screen' })],
+    });
+    const board = createBoard({ plugins: [defaultElements, marker] });
+    const stroke = (brush: string) => withDefaults(drawElement, { points: [[1, 1]], brush });
+
+    let { g, calls } = recorder();
+    drawElement.render?.canvas?.(g, stroke('marker'), undefined, lod, board.elementContext);
+    expect(calls).toContain('globalCompositeOperation=screen');
+
+    ({ g, calls } = recorder());
+    drawElement.render?.canvas?.(
+      g,
+      stroke('dari-plugin-lain'),
+      undefined,
+      lod,
+      board.elementContext,
+    );
+    expect(calls).toContain('globalCompositeOperation=source-over');
+
+    // Without a board context, built-in brushes still apply and anything else is a pen.
+    ({ g, calls } = recorder());
+    drawElement.render?.canvas?.(g, stroke('marker'), undefined, lod);
+    expect(calls).toContain('globalCompositeOperation=source-over');
+    board.dispose();
+  });
+
+  it('defaultElements mendaftarkan kuas pen dan highlighter (BOARD-603)', () => {
+    const board = createBoard({ plugins: [defaultElements] });
+    expect(board.brushes.list().map((b) => b.id)).toEqual(['pen', 'highlighter']);
+    expect(board.brushes.get('highlighter')).toBe(highlighterBrush);
+    expect(highlighterBrush.blend).toBe('multiply');
+    expect(penBrush.id).toBe(DEFAULT_BRUSH_ID);
+    expect(board.brushes.resolve('tidak-ada')).toBe(penBrush);
+    board.dispose();
   });
 
   it('a11y dan ekspor', () => {
