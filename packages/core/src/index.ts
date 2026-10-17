@@ -229,7 +229,6 @@ export type { BoardKeybindings, Keybinding, KeyboardPlatform } from './keybindin
 export {
   DEFAULT_DUPLICATE_OFFSET,
   defaultCommands,
-  ZOOM_TO_FIT_PADDING_PX,
   type DuplicateArgs,
 } from './default-commands.js';
 export {

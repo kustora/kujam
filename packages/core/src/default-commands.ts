@@ -11,7 +11,6 @@ import type { Point } from './geometry.js';
 import type { Board } from './index.js';
 import { compareIndex, indicesBetween } from './indexing.js';
 import { definePlugin } from './plugins.js';
-import type { BoxBounds } from './spatial.js';
 import type { ElementRecord } from './types.js';
 
 /**
@@ -20,14 +19,6 @@ import type { ElementRecord } from './types.js';
  * @beta
  */
 export const DEFAULT_DUPLICATE_OFFSET: Readonly<Point> = Object.freeze({ x: 16, y: 16 });
-
-/**
- * Space kept around the content by `camera.zoom-to-fit` and `camera.zoom-to-selection`, in CSS
- * pixels.
- *
- * @beta
- */
-export const ZOOM_TO_FIT_PADDING_PX = 32;
 
 /**
  * Arguments of `element.duplicate`.
@@ -206,40 +197,9 @@ function selectableElements(board: Board): Readonly<ElementRecord>[] {
     .filter((el) => !el.locked && (el.parentId === null || !board.getElement(el.parentId)));
 }
 
-function unionBounds(board: Board, ids: Iterable<string>): BoxBounds | null {
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const id of ids) {
-    const b = board.spatial.getBounds(id);
-    if (!b) continue;
-    minX = Math.min(minX, b.minX);
-    minY = Math.min(minY, b.minY);
-    maxX = Math.max(maxX, b.maxX);
-    maxY = Math.max(maxY, b.maxY);
-  }
-  return minX === Infinity ? null : { minX, minY, maxX, maxY };
-}
-
 function hasViewport(board: Board): boolean {
   const { width, height } = board.camera.viewport;
   return width > 0 && height > 0;
-}
-
-/** Centers `bounds` in the viewport at the largest zoom that fits, within the zoom range. */
-function fitCamera(board: Board, bounds: BoxBounds): void {
-  const { width, height } = board.camera.viewport;
-  const { min, max } = board.camera.zoomRange;
-  // Keep the padding from eating a tiny viewport entirely.
-  const availW = Math.max(width - 2 * ZOOM_TO_FIT_PADDING_PX, width / 2);
-  const availH = Math.max(height - 2 * ZOOM_TO_FIT_PADDING_PX, height / 2);
-  const w = Math.max(bounds.maxX - bounds.minX, 1);
-  const h = Math.max(bounds.maxY - bounds.minY, 1);
-  const zoom = Math.min(max, Math.max(min, Math.min(availW / w, availH / h)));
-  const cx = (bounds.minX + bounds.maxX) / 2;
-  const cy = (bounds.minY + bounds.maxY) / 2;
-  board.camera.set({ zoom, x: cx - width / (2 * zoom), y: cy - height / (2 * zoom) });
 }
 
 const layerCommand = (id: string, mode: LayerMode) =>
@@ -327,22 +287,14 @@ const commands: readonly AnyCommandDefinition[] = [
     id: 'camera.zoom-to-fit',
     label: 'command.camera.zoom-to-fit',
     isEnabled: (board) => hasViewport(board) && board.query().length > 0,
-    run: (board) => {
-      const bounds = unionBounds(
-        board,
-        board.query().map((el) => el.id),
-      );
-      if (bounds) fitCamera(board, bounds);
-    },
+    // Same fit as `board.camera.zoomToFit` (BOARD-402): padding, and at most 100% zoom.
+    run: (board) => void board.camera.zoomToFit(),
   }),
   defineCommand({
     id: 'camera.zoom-to-selection',
     label: 'command.camera.zoom-to-selection',
     isEnabled: (board) => hasViewport(board) && board.selectionBounds !== null,
-    run: (board) => {
-      const bounds = board.selectionBounds;
-      if (bounds) fitCamera(board, bounds);
-    },
+    run: (board) => void board.camera.zoomToSelection(),
   }),
 ];
 

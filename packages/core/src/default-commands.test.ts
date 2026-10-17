@@ -240,12 +240,13 @@ describe('BOARD-505: zoom commands', () => {
     expect(board.camera.boardToScreen({ x: 250, y: 50 })).toEqual({ x: 282, y: 82 });
   });
 
-  it('Shift+2 fits the selection and clamps to the zoom range', () => {
+  it('Shift+2 fits the selection, at most 100% like camera.zoomToSelection', () => {
     const board = setup();
     board.camera.setViewport({ width: 800, height: 600 });
     board.select(['c']);
     expect(board.dispatch(keyDown('@', 'Digit2', { shift: true }))).toBe(true);
-    expect(board.camera.get().zoom).toBe(board.camera.zoomRange.max);
+    // A small selection would fit far above 100%; the BOARD-402 default caps it.
+    expect(board.camera.get().zoom).toBe(1);
     const center = board.camera.screenToBoard({ x: 400, y: 300 });
     expect(center.x).toBeCloseTo(250);
     expect(center.y).toBeCloseTo(50);
