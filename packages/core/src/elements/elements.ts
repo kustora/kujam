@@ -10,6 +10,7 @@ import type { BrushDefinition } from './brushes.js';
 import type { Geometry } from '../geometry/geometry.js';
 import type { InferShape, ObjectSchema, SchemaResult, SchemaShape } from '../document/schema.js';
 import { object, validate } from '../document/schema.js';
+import type { ThemeDefinition } from '../theme/theme.js';
 import type { ElementRecord } from '../types.js';
 
 // ---------- Render context and callbacks ----------
@@ -108,6 +109,8 @@ export interface ElementLodState {
 export interface ElementContext {
   /** Board UI locale (for example `'id'` or `'en'`), for a11y labels and default text. */
   readonly locale: string;
+  /** Active whiteboard theme definition (BOARD-1006). */
+  readonly theme: Readonly<ThemeDefinition>;
   /**
    * Emits an `action` event the application can listen to (BOARD-605).
    *

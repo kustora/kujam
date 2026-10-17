@@ -91,6 +91,11 @@ import {
   type BoardKeybindings,
   type KeyboardPlatform,
 } from './tools/keybindings.js';
+import {
+  resolveTheme,
+  type ThemeDefinition,
+  type ThemeMode,
+} from './theme/theme.js';
 
 export * from './types.js';
 export { deepClone } from './utils/clone.js';
@@ -294,6 +299,21 @@ export {
   type StorageEventMap,
   type StorageStatus,
 } from './storage/storage.js';
+export {
+  COLOR_KEYS,
+  createTheme,
+  DEFAULT_DARK_THEME,
+  DEFAULT_LIGHT_THEME,
+  STICKY_COLORS,
+  type ColorKey,
+  type CustomThemeOverrides,
+  type StickyColor,
+  type ThemeCanvasTokens,
+  type ThemeDefinition,
+  type ThemeMode,
+  type ThemeSelectionTokens,
+  type ThemeTypographyTokens,
+} from './theme/theme.js';
 
 /**
  * Global map from element type to props type, for declaration merging (BOARD-607).
@@ -496,6 +516,12 @@ export interface CreateBoardOptions {
    * @beta
    */
   platform?: KeyboardPlatform;
+  /**
+   * Whiteboard theme: `'light'` (default), `'dark'`, or a custom {@link ThemeDefinition} (BOARD-1006).
+   *
+   * @beta
+   */
+  theme?: ThemeMode | ThemeDefinition;
 }
 
 /**
@@ -841,6 +867,18 @@ export interface Board {
    */
   readonly readOnly: boolean;
   readonly locale: BoardLocale;
+  /**
+   * Active whiteboard theme (BOARD-1006).
+   *
+   * @beta
+   */
+  readonly theme: Readonly<ThemeDefinition>;
+  /**
+   * Updates the active whiteboard theme and emits a `theme` event (BOARD-1006).
+   *
+   * @beta
+   */
+  setTheme(theme: ThemeMode | ThemeDefinition): void;
   /**
    * External data resolver map for custom elements (BOARD-211, BOARD-604).
    *
@@ -1280,8 +1318,13 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     scheduler: frameScheduler,
     reducedMotion,
   });
+  let activeTheme: Readonly<ThemeDefinition> = resolveTheme(options.theme);
+
   const elementContext: ElementContext = Object.freeze({
     locale,
+    get theme() {
+      return activeTheme;
+    },
     resolveBrush: (id: string): Readonly<BrushDefinition> => brushes.api.resolve(id),
     emit(name: string, payload?: unknown): void {
       if (typeof name !== 'string' || name === '') {
@@ -1598,6 +1641,16 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       return tools.data;
     },
     elementContext,
+    get theme() {
+      return activeTheme;
+    },
+    setTheme(theme: ThemeMode | ThemeDefinition): void {
+      assertUsable();
+      const resolved = resolveTheme(theme);
+      if (activeTheme === resolved) return;
+      activeTheme = resolved;
+      events.emit('theme', activeTheme);
+    },
     keybindings: keymap.api,
     dispatch(event: BoardInputEvent): boolean {
       assertUsable();

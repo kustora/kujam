@@ -198,8 +198,10 @@ describe('sticky', () => {
   it('render canvas menggambar latar dan teks', () => {
     const { g, calls } = recorder();
     stickyElement.render?.canvas?.(g, el, undefined, lod);
+    expect(calls).toContain('rect(0,0,200,100)');
     expect(calls).toContain('fill()');
-    expect(calls).toContain('fillStyle=#fff3a3');
+    expect(calls).toContain('fillStyle=#FBE7A1');
+    expect(calls).toContain('fillStyle=#17191E');
     expect(calls).toContain('fillText(Ide rapat,16,16,168)');
   });
 
@@ -389,7 +391,7 @@ describe('geo', () => {
       expect.arrayContaining([
         'moveTo(100,0)',
         'closePath()',
-        'fillStyle=#1971c2',
+        'fillStyle=#2F6FDB',
         'globalAlpha=0.5',
         'setLineDash(8,8)',
         'stroke()',

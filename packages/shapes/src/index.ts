@@ -54,7 +54,22 @@ export {
   type EraserToolData,
   type EraserToolOptions,
 } from './tools/eraser.js';
-export { COLOR_KEYS, STICKY_COLORS, type ColorKey, type StickyColor } from './colors.js';
+export {
+  COLOR_KEYS,
+  createTheme,
+  DEFAULT_DARK_THEME,
+  DEFAULT_LIGHT_THEME,
+  STICKY_COLORS,
+  STICKY_TEXT_COLOR,
+  type ColorKey,
+  type CustomThemeOverrides,
+  type StickyColor,
+  type ThemeCanvasTokens,
+  type ThemeDefinition,
+  type ThemeMode,
+  type ThemeSelectionTokens,
+  type ThemeTypographyTokens,
+} from './colors.js';
 export {
   EMPTY_RICH_TEXT,
   LINK_URL_SCHEMES,

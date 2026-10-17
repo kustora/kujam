@@ -17,10 +17,15 @@ export {
 } from './mount.js';
 export {
   OverlayRenderer,
+  BRUSH_FILL_COLOR,
+  BRUSH_STROKE_COLOR,
+  DEFAULT_COLLAB_COLORS,
   HANDLE_SIZE_PX,
+  HOVER_STROKE_COLOR,
   ROTATE_HANDLE_OFFSET_PX,
   ROTATE_HANDLE_RADIUS_PX,
   SELECTION_COLOR,
+  SELECTION_LINE_WIDTH,
   SNAP_GUIDE_COLOR,
   type RemoteCursor,
 } from './layers/overlay.js';

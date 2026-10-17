@@ -10,7 +10,7 @@
  * views, so several boards (or iframes) on one page never affect each other.
  */
 
-import type { Board, ViewportSize } from '@kujam/core';
+import type { Board, ThemeDefinition, ThemeMode, ViewportSize } from '@kujam/core';
 import { HtmlLayer, type EditorBounds } from './layers/html-layer.js';
 import { attachInput } from './input/input.js';
 import { CanvasRenderer, type RenderStats } from './layers/render-canvas.js';
@@ -37,6 +37,11 @@ export interface RendererOptions {
    * and tracks render statistics (BOARD-802).
    */
   readonly debug?: boolean;
+  /**
+   * Initial whiteboard theme mode or custom theme definition (BOARD-1006).
+   * When provided, updates `board.setTheme(theme)`.
+   */
+  readonly theme?: ThemeMode | ThemeDefinition;
 }
 
 /**
@@ -96,6 +101,10 @@ export interface BoardView {
    * render. No effect after unmount.
    */
   requestRender(): void;
+  /** Active whiteboard theme (BOARD-1006). */
+  readonly theme: Readonly<ThemeDefinition>;
+  /** Changes the active whiteboard theme (BOARD-1006). */
+  setTheme(theme: ThemeMode | ThemeDefinition): void;
   /**
    * Removes the DOM layers and releases the `ResizeObserver`, board listeners, and any pending
    * animation frame. Safe to call more than once. Also runs automatically when the board is
@@ -220,12 +229,17 @@ export function mountRenderer(
   let targetPixelRatio = resolvePixelRatio(options, win);
   let effectivePixelRatio = targetPixelRatio;
 
+  if (options.theme !== undefined) {
+    board.setTheme(options.theme);
+  }
+
   const root = doc.createElement('div');
   root.dataset.kujamViewport = '';
   root.style.position = 'relative';
   root.style.width = '100%';
   root.style.height = '100%';
   root.style.overflow = 'hidden';
+  root.style.backgroundColor = board.theme.canvas.background;
 
   const canvas = createLayer(doc, 'canvas', 'canvas', true);
   const html = createLayer(doc, 'div', 'html', false);
@@ -361,6 +375,11 @@ export function mountRenderer(
     }),
     board.on('selection', scheduleRender),
     board.on('tool', scheduleRender),
+    board.on('theme', (theme) => {
+      root.style.backgroundColor = theme.canvas.background;
+      canvasRenderer.markAllDirty();
+      scheduleRender();
+    }),
     board.on('dispose', unmount),
   ];
 
@@ -417,6 +436,12 @@ export function mountRenderer(
     },
     get overlayStats() {
       return overlayStats;
+    },
+    get theme() {
+      return board.theme;
+    },
+    setTheme(theme: ThemeMode | ThemeDefinition): void {
+      board.setTheme(theme);
     },
     mountEditor: (editor, bounds) => htmlLayer.mountEditor(editor, bounds),
     requestRender,

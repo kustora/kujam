@@ -15,15 +15,16 @@ import {
 } from '@kujam/core';
 import { getStroke } from 'perfect-freehand';
 
-export const SELECTION_COLOR = '#2f80ed';
-export const SELECTION_LINE_WIDTH = 1.5;
+export const SELECTION_COLOR = '#2F6FDB';
+export const SELECTION_LINE_WIDTH = 2;
 export const HANDLE_SIZE_PX = 8;
 export const ROTATE_HANDLE_RADIUS_PX = 4;
 export const ROTATE_HANDLE_OFFSET_PX = 24;
 export const SNAP_GUIDE_COLOR = '#e02874';
-export const BRUSH_FILL_COLOR = 'rgba(47, 128, 237, 0.08)';
-export const BRUSH_STROKE_COLOR = 'rgba(47, 128, 237, 0.8)';
-export const HOVER_STROKE_COLOR = 'rgba(47, 128, 237, 0.5)';
+export const BRUSH_FILL_COLOR = 'rgba(47, 111, 219, 0.08)';
+export const BRUSH_STROKE_COLOR = 'rgba(47, 111, 219, 0.8)';
+export const HOVER_STROKE_COLOR = 'rgba(47, 111, 219, 0.5)';
+export const DEFAULT_COLLAB_COLORS = ['#2F6FDB', '#6B4FA0', '#16754C', '#C2410C', '#9B3D7F'] as const;
 
 export interface RemoteCursor {
   readonly id: string;
@@ -165,6 +166,14 @@ export class OverlayRenderer {
       };
     }
 
+    const theme = board.theme;
+    const selectionStroke = theme?.selection?.stroke ?? SELECTION_COLOR;
+    const selectionLineWidth = theme?.selection?.lineWidth ?? SELECTION_LINE_WIDTH;
+    const brushFill = theme?.selection?.brushFill ?? BRUSH_FILL_COLOR;
+    const brushStroke = theme?.selection?.brushStroke ?? BRUSH_STROKE_COLOR;
+    const hoverStroke = theme?.selection?.hoverStroke ?? HOVER_STROKE_COLOR;
+    const collabColors = theme?.collab ?? DEFAULT_COLLAB_COLORS;
+
     // --- A. Hover Indicator ---
     if (hoveredEl) {
       const center = camera.boardToScreen({
@@ -179,7 +188,7 @@ export class OverlayRenderer {
       }
       const sw = hoveredEl.w * zoom;
       const sh = hoveredEl.h * zoom;
-      ctx.strokeStyle = HOVER_STROKE_COLOR;
+      ctx.strokeStyle = hoverStroke;
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
       ctx.strokeRect(-sw / 2, -sh / 2, sw, sh);
@@ -204,8 +213,8 @@ export class OverlayRenderer {
         if (frame.rotation) {
           ctx.rotate((frame.rotation * Math.PI) / 180);
         }
-        ctx.strokeStyle = SELECTION_COLOR;
-        ctx.lineWidth = SELECTION_LINE_WIDTH;
+        ctx.strokeStyle = selectionStroke;
+        ctx.lineWidth = selectionLineWidth;
         ctx.strokeRect(-sw / 2, -sh / 2, sw, sh);
 
         // Connector to rotate handle
@@ -226,15 +235,15 @@ export class OverlayRenderer {
             ctx.arc(s.x, s.y, ROTATE_HANDLE_RADIUS_PX, 0, Math.PI * 2);
             ctx.fillStyle = '#ffffff';
             ctx.fill();
-            ctx.strokeStyle = SELECTION_COLOR;
-            ctx.lineWidth = SELECTION_LINE_WIDTH;
+            ctx.strokeStyle = selectionStroke;
+            ctx.lineWidth = selectionLineWidth;
             ctx.stroke();
           } else {
             const hs = HANDLE_SIZE_PX;
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(s.x - hs / 2, s.y - hs / 2, hs, hs);
-            ctx.strokeStyle = SELECTION_COLOR;
-            ctx.lineWidth = SELECTION_LINE_WIDTH;
+            ctx.strokeStyle = selectionStroke;
+            ctx.lineWidth = selectionLineWidth;
             ctx.strokeRect(s.x - hs / 2, s.y - hs / 2, hs, hs);
           }
         }
@@ -253,9 +262,9 @@ export class OverlayRenderer {
 
       ctx.save();
       ctx.scale(pixelRatio, pixelRatio);
-      ctx.fillStyle = BRUSH_FILL_COLOR;
+      ctx.fillStyle = brushFill;
       ctx.fillRect(bx, by, bw, bh);
-      ctx.strokeStyle = BRUSH_STROKE_COLOR;
+      ctx.strokeStyle = brushStroke;
       ctx.lineWidth = 1;
       ctx.strokeRect(bx, by, bw, bh);
       ctx.restore();
@@ -289,9 +298,9 @@ export class OverlayRenderer {
     if (this.cursors.length > 0) {
       ctx.save();
       ctx.scale(pixelRatio, pixelRatio);
-      for (const cursor of this.cursors) {
+      this.cursors.forEach((cursor, cursorIdx) => {
         const s = camera.boardToScreen({ x: cursor.x, y: cursor.y });
-        const color = cursor.color ?? '#f2994a';
+        const color = cursor.color ?? collabColors[cursorIdx % collabColors.length] ?? '#2F6FDB';
 
         // Draw cursor pointer arrow
         ctx.beginPath();
@@ -314,7 +323,7 @@ export class OverlayRenderer {
           ctx.fillStyle = '#ffffff';
           ctx.fillText(cursor.name, badgeX + 4, badgeY + 12);
         }
-      }
+      });
       ctx.restore();
     }
 

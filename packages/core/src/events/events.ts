@@ -5,6 +5,7 @@
 
 import type { HistoryEvent } from '../history/history.js';
 import type { ChangeEvent } from '../document/store.js';
+import type { ThemeDefinition } from '../theme/theme.js';
 import type { CameraState } from '../types.js';
 
 /**
@@ -171,6 +172,12 @@ export interface BoardEventMap {
   error: BoardErrorEvent;
   /** `canUndo` or `canRedo` changed (BOARD-301). */
   history: HistoryEvent;
+  /**
+   * The board theme changed via `setTheme` (BOARD-1006).
+   *
+   * @beta
+   */
+  theme: Readonly<ThemeDefinition>;
   /**
    * The board is being disposed. Emitted once at the start of `board.dispose()`, before plugin
    * teardowns, while the document is still readable (used by `attachStorage` for the final save).

@@ -36,13 +36,14 @@ export const textElement = defineElement({
   resize: (el, proposed) => ({ w: proposed.w, h: el.h }),
   render: {
     // TODO(BOARD-1003a): rich text renderer (wrap, lists, bold/italic, links).
-    canvas: (g, el) => {
+    canvas: (g, el, _data, _lod, ctx) => {
       drawPlainText(g, richTextToPlainText(el.props.text), {
         x: 0,
         y: 0,
         maxWidth: el.w,
         fontSize: TEXT_FONT_SIZES[el.props.size],
-        color: COLOR_VALUES[el.props.color],
+        fontFamily: ctx?.theme?.typography.fontFamily,
+        color: ctx?.theme?.colors[el.props.color] ?? COLOR_VALUES[el.props.color],
         align: el.props.align,
       });
     },

@@ -101,7 +101,7 @@ describe('BOARD-913: Element creation tools', () => {
   });
 
   describe('Sticky tool (S)', () => {
-    it('click creates default 200×200 sticky, selects it, emits edit action, and stays active', () => {
+    it('click creates default 192×144 sticky, selects it, emits edit action, and stays active', () => {
       const board = setup();
       board.setTool('sticky');
 
@@ -116,8 +116,8 @@ describe('BOARD-913: Element creation tools', () => {
       expect(sticky.type).toBe('sticky');
       expect(sticky.x).toBe(50);
       expect(sticky.y).toBe(100);
-      expect(sticky.w).toBe(200);
-      expect(sticky.h).toBe(200);
+      expect(sticky.w).toBe(192);
+      expect(sticky.h).toBe(144);
       expect(board.selection).toEqual([sticky.id]);
 
       // Emits edit action immediately after creation

@@ -61,6 +61,7 @@ export interface PlainTextOptions {
   readonly y: number;
   readonly maxWidth: number;
   readonly fontSize: number;
+  readonly fontFamily?: string;
   readonly color: string;
   readonly align: 'start' | 'center' | 'end';
 }
@@ -70,7 +71,7 @@ export interface PlainTextOptions {
 export function drawPlainText(g: ElementCanvasContext, text: string, o: PlainTextOptions): void {
   if (!text) return;
   g.fillStyle = o.color;
-  g.font = `${o.fontSize}px sans-serif`;
+  g.font = `${o.fontSize}px ${o.fontFamily ?? 'sans-serif'}`;
   g.textBaseline = 'top';
   g.textAlign = o.align;
   const x =

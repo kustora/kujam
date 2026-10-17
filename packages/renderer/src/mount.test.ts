@@ -72,10 +72,13 @@ const fakeContext = {
 let boards: Board[] = [];
 let views: BoardView[] = [];
 
-function setup(container: HTMLElement = document.body.appendChild(document.createElement('div'))) {
+function setup(
+  container: HTMLElement = document.body.appendChild(document.createElement('div')),
+  options?: RendererOptions,
+) {
   const board = createBoard();
   boards.push(board);
-  const view = mountRenderer(board, container);
+  const view = mountRenderer(board, container, options);
   views.push(view);
   return { board, view, container, observer: FakeResizeObserver.instances.at(-1)! };
 }
@@ -336,5 +339,19 @@ describe('BOARD-801: mountRenderer', () => {
     const container = document.createElement('div');
     expect(() => mountRenderer(board, container)).toThrow('Papan sudah di-dispose.');
     expect(container.children).toHaveLength(0);
+  });
+
+  it('applies theme canvas background to root element and updates dynamically (BOARD-1006)', () => {
+    const { board, view } = setup(undefined, { theme: 'light' });
+    expect(view.layers.root.style.backgroundColor).toBe('#F4F3EF');
+    expect(view.theme.mode).toBe('light');
+
+    view.setTheme('dark');
+    expect(view.theme.mode).toBe('dark');
+    expect(view.layers.root.style.backgroundColor).toBe('#121317');
+
+    board.setTheme('light');
+    expect(view.theme.mode).toBe('light');
+    expect(view.layers.root.style.backgroundColor).toBe('#F4F3EF');
   });
 });

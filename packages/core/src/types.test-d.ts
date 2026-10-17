@@ -87,6 +87,8 @@ import type {
   ZoomToOptions,
   CameraAnimation,
   FrameScheduler,
+  ThemeDefinition,
+  ThemeMode,
   ValidateDocumentOptions,
   ValidationResult,
 } from './index.js';
@@ -362,6 +364,10 @@ export type Tests = [
   Expect<Equal<PluginBrushDefinition, BrushInput>>,
   Expect<Equal<BrushInput['strokeOptions'], BrushStrokeOptions | undefined>>,
   Expect<Equal<ReturnType<ElementContext['resolveBrush']>, Readonly<BrushDefinition>>>,
+  Expect<Equal<ElementContext['theme'], Readonly<ThemeDefinition>>>,
+  Expect<Equal<Board['theme'], Readonly<ThemeDefinition>>>,
+  Expect<Equal<Parameters<Board['setTheme']>, [theme: ThemeMode | ThemeDefinition]>>,
+  Expect<Equal<CreateBoardOptions['theme'], ThemeMode | ThemeDefinition | undefined>>,
   Expect<
     Equal<
       Parameters<NonNullable<ElementRenderers<unknown, undefined>['canvas']>>[4],

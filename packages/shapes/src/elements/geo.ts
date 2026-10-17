@@ -149,20 +149,20 @@ export const geoElement = defineElement({
   resize: 'free',
   render: {
     // TODO(BOARD-1004): centered rich text label with wrapping; hit-testing follows the shape (BOARD-403).
-    canvas: (g, el) => {
+    canvas: (g, el, _data, _lod, ctx) => {
       const { props } = el;
       if (props.geo === 'rounded-rectangle')
         traceRoundedRect(g, el.w, el.h, Math.min(el.w, el.h) * 0.15);
       else traceGeometry(g, geoGeometry(props.geo, el.w, el.h));
       if (props.fill !== 'none') {
         g.save();
-        g.fillStyle = COLOR_VALUES[props.fillColor];
+        g.fillStyle = ctx?.theme?.colors[props.fillColor] ?? COLOR_VALUES[props.fillColor];
         if (props.fill === 'semi') g.globalAlpha *= 0.5;
         g.fill();
         g.restore();
       }
       if (props.strokeWidth > 0) {
-        g.strokeStyle = COLOR_VALUES[props.strokeColor];
+        g.strokeStyle = ctx?.theme?.colors[props.strokeColor] ?? COLOR_VALUES[props.strokeColor];
         g.lineWidth = props.strokeWidth;
         g.setLineDash(DASHES[props.dash].map((d) => d * props.strokeWidth));
         g.stroke();
@@ -176,7 +176,7 @@ export const geoElement = defineElement({
         y: (el.h - lines * fontSize * 1.3) / 2,
         maxWidth: el.w,
         fontSize,
-        color: COLOR_VALUES.black,
+        color: ctx?.theme?.colors.black ?? COLOR_VALUES.black,
         align: 'center',
       });
     },

@@ -40,7 +40,7 @@ export const drawElement = defineElement({
       const points = el.props.points.filter((p) => p.length >= 2);
       if (points.length === 0) return;
       const brush = ctx ? ctx.resolveBrush(el.props.brush) : builtInBrush(el.props.brush);
-      g.fillStyle = COLOR_VALUES[el.props.color] ?? el.props.color;
+      g.fillStyle = ctx?.theme?.colors[el.props.color] ?? COLOR_VALUES[el.props.color] ?? el.props.color;
       g.globalCompositeOperation = brush.blend;
       const strokeOptions = getStrokeOptions(el.props.thickness, brush, true);
       const outline = getStroke(points as number[][], strokeOptions);

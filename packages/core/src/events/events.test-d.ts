@@ -11,6 +11,7 @@ import type {
   HistoryEvent,
   PageEvent,
   SelectionEvent,
+  ThemeDefinition,
   ToolEvent,
 } from '../index.js';
 
@@ -33,6 +34,7 @@ export type Tests = [
       | 'action'
       | 'error'
       | 'history'
+      | 'theme'
       | 'dispose'
     >
   >,
@@ -45,6 +47,7 @@ export type Tests = [
   Expect<Equal<BoardEventMap['error'], BoardErrorEvent>>,
   Expect<Equal<BoardEventMap['dispose'], undefined>>,
   Expect<Equal<BoardEventMap['history'], HistoryEvent>>,
+  Expect<Equal<BoardEventMap['theme'], Readonly<ThemeDefinition>>>,
   Expect<Equal<ListenerArg<'camera'>, CameraEvent>>,
   Expect<
     Equal<

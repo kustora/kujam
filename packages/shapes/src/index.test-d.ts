@@ -41,7 +41,7 @@ export type Checks = [
       StickyProps,
       {
         text: RichText;
-        color: 'yellow' | 'orange' | 'pink' | 'green' | 'blue' | 'violet';
+        color: 'yellow' | 'green' | 'pink' | 'blue' | 'purple' | 'gray';
         authorId: string | null;
       }
     >
