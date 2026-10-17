@@ -146,6 +146,13 @@ export interface BoardEventMap {
   error: BoardErrorEvent;
   /** `canUndo` or `canRedo` changed (BOARD-301). */
   history: HistoryEvent;
+  /**
+   * The board is being disposed. Emitted once at the start of `board.dispose()`, before plugin
+   * teardowns, while the document is still readable (used by `attachStorage` for the final save).
+   *
+   * @beta
+   */
+  dispose: undefined;
 }
 
 /**

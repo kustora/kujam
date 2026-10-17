@@ -24,7 +24,7 @@ export type Tests = [
   Expect<
     Equal<
       keyof BoardEventMap,
-      'change' | 'selection' | 'camera' | 'tool' | 'action' | 'error' | 'history'
+      'change' | 'selection' | 'camera' | 'tool' | 'action' | 'error' | 'history' | 'dispose'
     >
   >,
   Expect<Equal<BoardEventMap['change'], ChangeEvent>>,
@@ -33,6 +33,7 @@ export type Tests = [
   Expect<Equal<BoardEventMap['tool'], ToolEvent>>,
   Expect<Equal<BoardEventMap['action'], ActionEvent>>,
   Expect<Equal<BoardEventMap['error'], BoardErrorEvent>>,
+  Expect<Equal<BoardEventMap['dispose'], undefined>>,
   Expect<Equal<BoardEventMap['history'], HistoryEvent>>,
   Expect<Equal<ListenerArg<'camera'>, CameraEvent>>,
   Expect<
