@@ -61,6 +61,7 @@ import type {
   PageInput,
   PageRecord,
   PartialElement,
+  PreparedDocument,
   PermissionAction,
   PermissionHook,
   QueryFilter,
@@ -280,6 +281,10 @@ export type Tests = [
   Expect<Equal<ReturnType<BoardPages['create']>, Readonly<PageRecord> | undefined>>,
   Expect<Equal<ReturnType<BoardPages['delete']>, readonly string[]>>,
   Expect<Equal<QueryFilter['allPages'], boolean | undefined>>,
+  // BOARD-1701: preparing incoming documents without touching the board
+  Expect<Equal<Parameters<Board['prepareDocument']>, [doc: BoardDocument]>>,
+  Expect<Equal<ReturnType<Board['prepareDocument']>, PreparedDocument>>,
+  Expect<Equal<PreparedDocument['tooNew'], DocumentTooNewReason | null>>,
   // BOARD-302: undo coalescing type tests
   Expect<Equal<TransactOptions['mergeKey'], string | undefined>>,
   Expect<Equal<MutateOptions['mergeKey'], string | undefined>>,

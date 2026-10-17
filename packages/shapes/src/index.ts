@@ -34,6 +34,7 @@ export { handTool, type HandToolData } from './tools/hand.js';
 export { COLOR_KEYS, STICKY_COLORS, type ColorKey, type StickyColor } from './colors.js';
 export {
   EMPTY_RICH_TEXT,
+  LINK_URL_SCHEMES,
   MAX_LINK_LENGTH,
   MAX_LIST_INDENT,
   MAX_RICH_TEXT_LENGTH,

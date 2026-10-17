@@ -22,6 +22,7 @@ import {
   geoElement,
   geoGeometry,
   highlighterBrush,
+  LINK_URL_SCHEMES,
   penBrush,
   richTextSchema,
   richTextToPlainText,
@@ -139,6 +140,23 @@ describe('rich text', () => {
       false,
     );
     expect(validate(richTextSchema, [{ insert: '' }]).ok).toBe(false);
+  });
+
+  it('tautan hanya boleh https, http, atau mailto (BOARD-2002)', () => {
+    const withLink = (link: string) => [{ insert: 'x', attributes: { link } }, { insert: '\n' }];
+    expect(LINK_URL_SCHEMES).toEqual(['https:', 'http:', 'mailto:']);
+    expect(validate(richTextSchema, withLink('https://example.com')).ok).toBe(true);
+    expect(validate(richTextSchema, withLink('mailto:a@example.com')).ok).toBe(true);
+    for (const bad of [
+      'javascript:alert(1)',
+      ' JavaScript:alert(1)',
+      'java\tscript:x',
+      '/relatif',
+    ]) {
+      const result = validate(richTextSchema, withLink(bad));
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.issues[0]!.code).toBe('unsafe_url');
+    }
   });
 
   it('teks polos membuang \\n penutup', () => {

@@ -6,7 +6,17 @@
  * a line; documents always end with `\n`. Normalization and the Canvas text renderer follow in
  * BOARD-1003a; this module only holds the structural schema and conversion to plain text.
  */
-import { array, enumOf, literal, number, object, optional, string, type Infer } from '@kujam/core';
+import {
+  array,
+  enumOf,
+  literal,
+  number,
+  object,
+  optional,
+  string,
+  url,
+  type Infer,
+} from '@kujam/core';
 
 /**
  * Rich text length limit per element, in UTF-16 code units (ADR-008).
@@ -21,6 +31,14 @@ export const MAX_RICH_TEXT_LENGTH = 20_000;
  * @beta
  */
 export const MAX_LINK_LENGTH = 2048;
+
+/**
+ * Schemes allowed for rich text links (ADR-008, BOARD-2002). Anything else, including
+ * `javascript:`, is rejected by {@link richTextSchema}.
+ *
+ * @beta
+ */
+export const LINK_URL_SCHEMES: readonly string[] = Object.freeze(['https:', 'http:', 'mailto:']);
 
 /**
  * Maximum list indentation depth (ADR-008).
@@ -41,7 +59,7 @@ export const richTextSchema = array(
       object({
         bold: optional(literal(true)),
         italic: optional(literal(true)),
-        link: optional(string({ maxLength: MAX_LINK_LENGTH })),
+        link: optional(url({ schemes: LINK_URL_SCHEMES, maxLength: MAX_LINK_LENGTH })),
         list: optional(enumOf(['bullet', 'ordered'])),
         indent: optional(number({ int: true, min: 1, max: MAX_LIST_INDENT })),
       }),

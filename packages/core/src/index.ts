@@ -96,6 +96,15 @@ export {
 } from './validate.js';
 export { DEFAULT_BOARD_LIMITS, type BoardLimits } from './limits.js';
 export * from './schema.js';
+export {
+  DEFAULT_URL_SCHEMES,
+  isSafeUrl,
+  MAX_URL_LENGTH,
+  SAFE_LINK_REL,
+  safeLinkAttributes,
+  sanitizeUrl,
+  type SafeUrlOptions,
+} from './url.js';
 export * from './elements.js';
 export * from './geometry.js';
 export {
@@ -462,6 +471,20 @@ export interface CreateBoardOptions {
 }
 
 /**
+ * Result of {@link Board.prepareDocument}.
+ *
+ * @beta
+ */
+export interface PreparedDocument {
+  /** Validated, migrated copy, not linked to the input or the board; invalid records removed. */
+  readonly document: BoardDocument;
+  /** Records left out because they are invalid, with the reasons (same as `invalid-record`). */
+  readonly rejected: readonly { readonly id: string; readonly errors: readonly string[] }[];
+  /** Why the document is newer than this board understands, or `null` (BOARD-703). */
+  readonly tooNew: DocumentTooNewReason | null;
+}
+
+/**
  * Public interface of a `Board` instance.
  *
  * @public
@@ -490,6 +513,20 @@ export interface Board {
    * {@link InvalidDocumentError} and leave the state unchanged.
    */
   loadDocument(doc: BoardDocument): void;
+  /**
+   * Runs the same incoming-document pipeline as {@link Board.loadDocument} without touching the
+   * board: core schema migrations, validation against this board's element registry and `limits`,
+   * then element and plugin migrations (BOARD-210, BOARD-701, BOARD-702). Emits no events.
+   * Used to import content into an existing board (BOARD-1701).
+   *
+   * A document newer than this board understands is returned unmigrated with `tooNew` set
+   * (BOARD-703); callers must not write it into the board.
+   *
+   * @throws {@link InvalidDocumentError} for document-level problems, or {@link MigrationError}
+   *   when a migration fails.
+   * @beta
+   */
+  prepareDocument(doc: BoardDocument): PreparedDocument;
   /**
    * Creates a new element with default values and stores it in the document (BOARD-205).
    *
@@ -1401,6 +1438,20 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       }
       reportRejected([...rejected, ...(migrated?.rejected ?? [])]);
       if (reason) emitError('document-too-new', tooNewMessage(reason), reason);
+    },
+    prepareDocument(doc: BoardDocument): PreparedDocument {
+      assertUsable();
+      const { document: owned, rejected } = toOwnedDocument(doc, elements, limits, true);
+      const reason = findTooNew(owned, elements, plugins.api.list());
+      const migrated = reason ? null : migrateDocumentContent(owned);
+      return {
+        document: migrated?.document ?? owned,
+        rejected: [...rejected, ...(migrated?.rejected ?? [])].map(({ id, errors }) => ({
+          id,
+          errors,
+        })),
+        tooNew: reason,
+      };
     },
     getElement(id: string) {
       const rec = store.getRecord(id);
