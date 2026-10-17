@@ -88,6 +88,15 @@ export {
 } from './validate.js';
 export { DEFAULT_BOARD_LIMITS, type BoardLimits } from './limits.js';
 export * from './schema.js';
+export {
+  DEFAULT_URL_SCHEMES,
+  isSafeUrl,
+  MAX_URL_LENGTH,
+  SAFE_LINK_REL,
+  safeLinkAttributes,
+  sanitizeUrl,
+  type SafeUrlOptions,
+} from './url.js';
 export * from './elements.js';
 export * from './geometry.js';
 export {

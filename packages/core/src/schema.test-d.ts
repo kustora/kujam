@@ -1,5 +1,5 @@
 // Type tests for BOARD-203: checked by `tsc --noEmit` (pnpm typecheck), with no runtime code.
-import type { Infer, OptionalSchema, Schema } from './schema.js';
+import type { Infer, OptionalSchema, Schema, SchemaIssueCode } from './schema.js';
 import type {
   array,
   enumOf,
@@ -9,6 +9,7 @@ import type {
   optional,
   schema,
   string,
+  url,
 } from './schema.js';
 
 type Equal<A, B> =
@@ -23,6 +24,7 @@ declare const opt: typeof optional;
 declare const nul: typeof nullable;
 declare const arr: typeof array;
 declare const lit: typeof literal;
+declare const _link: typeof url;
 
 const _props = s({
   kind: lit('sticky'),
@@ -52,4 +54,7 @@ export type Checks = [
   Expect<Equal<Infer<Schema<{ a: 1 }>>, { a: 1 }>>,
   // Negative test: required keys must not read as optional.
   Expect<Equal<Equal<Infer<typeof _props>, { kind: 'sticky' }>, false>>,
+  // BOARD-2002: url() infers a plain string and has its own issue code.
+  Expect<Equal<Infer<ReturnType<typeof _link>>, string>>,
+  Expect<Equal<Extract<SchemaIssueCode, 'unsafe_url'>, 'unsafe_url'>>,
 ];
