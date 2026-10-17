@@ -1,5 +1,5 @@
 /**
- * `@kujam/vue` — Adapter tipis komponen `Board` dan composables untuk Vue 3.
+ * `@kujam/vue` — Thin `Board` component adapter and composables for Vue 3.
  *
  * @packageDocumentation
  */
@@ -9,7 +9,7 @@ import type { Board as CoreBoard } from '@kujam/core';
 import { mountRenderer, type BoardView } from '@kujam/renderer';
 
 /**
- * Komponen Vue 3 `Board` untuk memasang `@kujam/renderer`.
+ * Vue 3 `Board` component for mounting `@kujam/renderer`.
  *
  * @public
  */
@@ -32,7 +32,7 @@ export const Board = defineComponent({
 
     onMounted(mount);
 
-    // Pasang ulang renderer bila instance board diganti (sama dengan dependensi [board] di React).
+    // Remount the renderer when the board instance is replaced (same as the [board] dependency in React).
     watch(
       () => props.board,
       () => {

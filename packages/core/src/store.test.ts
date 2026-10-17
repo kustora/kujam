@@ -43,7 +43,7 @@ function recordEvents(board: ReturnType<typeof createBoard>): ChangeEvent[] {
   return events;
 }
 
-/** Menerapkan diff ke peta record biasa (cara pemakai menerapkan event ke salinannya). */
+/** Applies a diff to a plain record map (how consumers apply events to their own copy). */
 function applyEvent(records: Record<string, BoardRecord>, event: ChangeEvent): void {
   for (const id of Object.keys(event.removed)) delete records[id];
   for (const [id, rec] of Object.entries(event.added)) records[id] = rec;
@@ -106,7 +106,7 @@ describe('transact (BOARD-204)', () => {
     const before = board.getDocument();
 
     board.transact(() => {});
-    board.transact((tx) => tx.put(makeElement())); // isi sama
+    board.transact((tx) => tx.put(makeElement())); // same content
     board.transact((tx) => {
       tx.put(makeElement({ id: 'el:baru' }));
       tx.remove('el:baru');
@@ -206,7 +206,7 @@ describe('rollback (BOARD-204c)', () => {
     expect(board.getElement('el:2')).toBeUndefined();
     expect(board.getElement('el:1')?.x).toBe(0);
 
-    // Board tetap bisa dipakai setelah rollback.
+    // The board is still usable after rollback.
     board.transact((tx) => tx.put(makeElement({ id: 'el:3' })));
     expect(events).toHaveLength(1);
   });
@@ -272,7 +272,7 @@ describe('transaksi bersarang', () => {
           { origin: 'remote', label: 'dalam' },
         );
         expect(inner).toBe(42);
-        // Belum di-commit sampai transaksi terluar selesai.
+        // Not committed until the outermost transaction finishes.
         expect(board.getElement('el:2')).toBeUndefined();
       },
       { label: 'luar' },
@@ -364,7 +364,7 @@ describe('loadDocument sebagai transaksi origin load', () => {
     board.loadDocument(createEmptyDocument({ versi: 3 }));
     expect(Object.keys(events[1]!.removed).sort()).toEqual(['el:1', 'el:2', 'el:3']);
 
-    // Dokumen identik tetap memancarkan satu event (meta bisa berubah), dengan diff kosong.
+    // An identical document still emits one event (meta may change), with an empty diff.
     board.loadDocument(createEmptyDocument({ versi: 4 }));
     expect(events).toHaveLength(3);
     expect(events[2]!.added).toEqual({});
@@ -462,7 +462,7 @@ describe('snapshot immutable dan structural sharing (BOARD-204a)', () => {
       }
       const elapsed = performance.now() - start;
       expect(board.getElement('el:999')?.x).toBe(1000);
-      // Batas longgar agar tidak flaky di CI; terukur jauh di bawahnya di mesin pengembang.
+      // Loose bound so CI is not flaky; measured far below it on developer machines.
       expect(elapsed).toBeLessThan(5000);
     }
   });
@@ -483,7 +483,7 @@ describe('meta tidak pernah disentuh package (BOARD-201)', () => {
     expect(board.getDocument().meta).toEqual(meta);
     expect('kosong' in (board.getDocument().meta.nested as object)).toBe(true);
     expect(board.getElement('el:1')!.meta).toEqual({ custom: { deep: [true] }, n: Number.NaN });
-    // Masukan pemakai tidak dibekukan atau diubah.
+    // Consumer input is not frozen or modified.
     expect(Object.isFrozen(meta)).toBe(false);
     expect(Object.isFrozen(doc.records['el:1']!)).toBe(false);
   });
@@ -520,8 +520,8 @@ describe('event change', () => {
   });
 
   it('listener yang melempar tidak menghentikan listener lain; error diteruskan ke event error', () => {
-    // BOARD-207 mengganti perilaku BOARD-204: error listener tidak lagi dilempar ulang dari
-    // transact, melainkan dipancarkan sebagai event `error` (satu per listener yang melempar).
+    // BOARD-207 replaces the BOARD-204 behavior: listener errors are no longer rethrown from
+    // transact, but emitted as an `error` event (one per throwing listener).
     const board = createBoard();
     const later = vi.fn();
     const errors: unknown[] = [];
@@ -617,7 +617,7 @@ describe('deepEqual', () => {
   });
 });
 
-// --- Tes property-based ---------------------------------------------------------------
+// --- Property-based tests ---------------------------------------------------------------
 
 const IDS = ['el:a', 'el:b', 'el:c', 'el:d', 'page:main'] as const;
 
@@ -661,7 +661,7 @@ function recordFor(id: string, x: number, text: string): BoardRecord {
   return makeElement({ id, x, props: { text } });
 }
 
-/** Model referensi: Map sederhana dengan rollback lewat salinan. */
+/** Reference model: a plain Map with rollback via copies. */
 function applyModel(model: Map<string, BoardRecord>, ops: Op[]): void {
   for (const op of ops) {
     if (op.kind === 'put') model.set(op.id, recordFor(op.id, op.x, op.text));
@@ -688,7 +688,7 @@ function applyBoard(board: ReturnType<typeof createBoard>, tx: Transaction, ops:
           if (op.fail) throw new Error('gagal bersarang');
         });
       } catch {
-        // Ditangkap oleh transaksi luar: hanya perubahan dalam yang dibatalkan.
+        // Caught by the outer transaction: only the inner changes are rolled back.
       }
     }
   }
@@ -707,7 +707,7 @@ describe('property-based (BOARD-204)', () => {
         let previous = board.getDocument().records;
         board.on('change', (event) => {
           events.push(event);
-          // Diff konsisten dengan snapshot sebelumnya.
+          // The diff is consistent with the previous snapshot.
           for (const [id, rec] of Object.entries(event.removed)) {
             expect(previous[id]).toBe(rec);
           }
@@ -741,7 +741,7 @@ describe('property-based (BOARD-204)', () => {
           } else {
             applyModel(model, t.ops);
           }
-          // Satu transaksi menghasilkan paling banyak satu event.
+          // One transaction produces at most one event.
           expect(events.length - countBefore).toBeLessThanOrEqual(1);
         }
 

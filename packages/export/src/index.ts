@@ -1,5 +1,5 @@
 /**
- * `@kujam/export` — Utilitas ekspor dokumen papan ke JSON, PNG, SVG, PDF, dan teks polos.
+ * `@kujam/export` — Utilities for exporting board documents to JSON, PNG, SVG, PDF, and plain text.
  *
  * @packageDocumentation
  */
@@ -7,7 +7,7 @@
 import { deepClone, type Board, type BoardDocument } from '@kujam/core';
 
 /**
- * Mengekspor dokumen papan sebagai objek JSON terkloning.
+ * Exports a board document as a cloned JSON object.
  *
  * @public
  */

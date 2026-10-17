@@ -1,6 +1,6 @@
 /**
- * Lab rich text (BOARD-008, ADR-008): editor Quill dari prototipe spike, delta kanonik, dan log
- * event input untuk uji IME manual. Sementara memakai kode spike sampai BOARD-1003 selesai.
+ * Rich text lab (BOARD-008, ADR-008): the Quill editor from the spike prototype, canonical delta, and an
+ * input event log for manual IME testing. Uses the spike code for now until BOARD-1003 is done.
  */
 import 'quill/dist/quill.core.css';
 import { mount as mountQuill } from '@kujam/spike-board-008-richtext/src/editors/quill.ts';
@@ -49,7 +49,7 @@ const MALICIOUS_HTML = `<p>Halo <b>tebal</b> <span style="color:red;font-size:40
 
 const LOG_LIMIT = 200;
 
-/** Perbandingan struktural (urutan kunci objek diabaikan: Quill menulis `attributes` sebelum `insert`). */
+/** Structural comparison (object key order is ignored: Quill writes `attributes` before `insert`). */
 function sameDelta(a: readonly unknown[], b: RichText): boolean {
   const key = (op: unknown) => {
     const { insert, attributes } = op as { insert?: unknown; attributes?: Record<string, unknown> };
@@ -109,7 +109,7 @@ export default defineScenario({
       return false;
     });
 
-    // ---------- Panel debug ----------
+    // ---------- Debug panel ----------
     const canonicalBadge = h('div', { class: 'status', role: 'status' });
     const normalizedOut = h('pre', {});
     const rawOut = h('pre', {});
@@ -169,7 +169,7 @@ export default defineScenario({
     ];
     for (const [type, fn] of listeners) quill.root.addEventListener(type, fn);
 
-    // ---------- Panel kontrol ----------
+    // ---------- Control panel ----------
     const toggle = (format: 'bold' | 'italic') => () =>
       quill.format(format, !quill.getFormat()[format]);
     const list = (kind: 'bullet' | 'ordered') => () =>

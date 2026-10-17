@@ -1,11 +1,11 @@
 /**
- * Kunci warna elemen bawaan. Dokumen menyimpan kunci, bukan hex, agar tema bisa diganti
- * (BOARD-1006). Nilai hex di sini sementara sampai objek tema BOARD-1006 tersedia.
+ * Built-in element color keys. Documents store keys, not hex, so the theme can be swapped
+ * (BOARD-1006). The hex values here are temporary until the BOARD-1006 theme object exists.
  */
 import type { Bilingual } from './i18n.js';
 
 /**
- * Kunci warna untuk coretan, teks, dan shape.
+ * Color keys for strokes, text, and shapes.
  *
  * @beta
  */
@@ -22,27 +22,27 @@ export const COLOR_KEYS = [
 ] as const;
 
 /**
- * Kunci warna untuk coretan, teks, dan shape.
+ * Color keys for strokes, text, and shapes.
  *
  * @beta
  */
 export type ColorKey = (typeof COLOR_KEYS)[number];
 
 /**
- * Enam warna sticky bawaan (PRD); nilai sebenarnya dari tema (BOARD-1006).
+ * The six built-in sticky colors (PRD); actual values come from the theme (BOARD-1006).
  *
  * @beta
  */
 export const STICKY_COLORS = ['yellow', 'orange', 'pink', 'green', 'blue', 'violet'] as const;
 
 /**
- * Kunci warna sticky.
+ * Sticky color key.
  *
  * @beta
  */
 export type StickyColor = (typeof STICKY_COLORS)[number];
 
-// TODO(BOARD-1006): ganti dengan token tema terang/gelap.
+// TODO(BOARD-1006): replace with light/dark theme tokens.
 /** @internal */
 export const COLOR_VALUES: Readonly<Record<ColorKey, string>> = {
   black: '#1d1d1f',
@@ -56,7 +56,7 @@ export const COLOR_VALUES: Readonly<Record<ColorKey, string>> = {
   violet: '#7048e8',
 };
 
-// TODO(BOARD-1006, BOARD-1907): palet sticky dari tema, lolos kontras 4,5:1 untuk teks.
+// TODO(BOARD-1006, BOARD-1907): sticky palette from the theme, passing 4.5:1 text contrast.
 /** @internal */
 export const STICKY_COLOR_VALUES: Readonly<Record<StickyColor, string>> = {
   yellow: '#fff3a3',

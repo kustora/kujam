@@ -1,19 +1,19 @@
 /**
- * Mini-lib skema validasi props dengan inferensi tipe (BOARD-203, keputusan ADR-007).
+ * Mini schema library for props validation with type inference (BOARD-203, decision ADR-007).
  *
- * Validator, bukan parser: nilai tidak pernah diubah, tidak ada transform, coercion, atau default.
- * Validasi tidak melempar exception, objek bersifat ketat, dan issue tidak membawa nilai input.
+ * A validator, not a parser: values are never changed; there are no transforms, coercion, or defaults.
+ * Validation never throws, objects are strict, and issues never carry the input value.
  */
 
 /**
- * Segmen path menuju nilai yang tidak valid: kunci objek atau indeks array.
+ * Path segment leading to the invalid value: an object key or an array index.
  *
  * @public
  */
 export type SchemaPathSegment = string | number;
 
 /**
- * Kode issue validasi. Kode adalah kontrak publik; `message` hanya untuk developer.
+ * Validation issue code. Codes are a public contract; `message` is for developers only.
  *
  * @public
  */
@@ -29,19 +29,19 @@ export type SchemaIssueCode =
   | 'too_many_issues';
 
 /**
- * Satu masalah validasi. Tidak memuat nilai input agar isi papan tidak bocor ke log.
+ * A single validation issue. Does not include the input value, so board content never leaks into logs.
  *
  * @public
  */
 export interface SchemaIssue {
   readonly path: readonly SchemaPathSegment[];
   readonly code: SchemaIssueCode;
-  /** Pesan berbahasa Inggris untuk developer. UI yang butuh teks lokal memetakan `code`. */
+  /** English message for developers. UIs that need localized text map `code`. */
   readonly message: string;
 }
 
 /**
- * Hasil {@link validate}. Bila sukses, `value` adalah objek yang sama dengan input (tanpa salinan).
+ * Result of {@link validate}. On success, `value` is the same object as the input (not a copy).
  *
  * @public
  */
@@ -50,7 +50,7 @@ export type SchemaResult<T> =
   | { readonly ok: false; readonly issues: readonly SchemaIssue[] };
 
 /**
- * Batas jumlah issue per validasi, agar input jahat tidak membuat kerja tak terbatas.
+ * Maximum number of issues per validation, so malicious input cannot cause unbounded work.
  *
  * @public
  */
@@ -62,22 +62,22 @@ interface CheckContext {
 }
 
 /**
- * Skema untuk nilai bertipe `T`. Dibuat lewat primitif seperti {@link string} atau {@link object}.
+ * Schema for a value of type `T`. Created with primitives such as {@link string} or {@link object}.
  *
  * @public
  */
 export interface Schema<T> {
   readonly kind: string;
-  /** @internal Hanya pembawa tipe untuk {@link Infer}; selalu `undefined` saat runtime. */
+  /** @internal Type carrier only, for {@link Infer}; always `undefined` at runtime. */
   readonly _type?: T;
-  /** @internal Penanda kunci opsional di {@link object}. */
+  /** @internal Marks an optional key in {@link object}. */
   readonly _optional?: boolean;
-  /** @internal Memeriksa nilai; mengembalikan `false` bila validasi harus berhenti. */
+  /** @internal Checks a value; returns `false` when validation must stop. */
   _check(value: unknown, path: SchemaPathSegment[], ctx: CheckContext): boolean;
 }
 
 /**
- * Skema hasil {@link optional}: kuncinya boleh tidak ada di objek.
+ * Schema produced by {@link optional}: its key may be absent from the object.
  *
  * @public
  */
@@ -87,7 +87,7 @@ export interface OptionalSchema<T> extends Schema<T | undefined> {
 }
 
 /**
- * Tipe TypeScript yang dihasilkan sebuah skema.
+ * TypeScript type produced by a schema.
  *
  * @example
  * ```ts
@@ -129,10 +129,10 @@ function make<T>(kind: string, check: Schema<T>['_check']): Schema<T> {
   return { kind, _check: check };
 }
 
-// ---------- Primitif ----------
+// ---------- Primitives ----------
 
 /**
- * Opsi {@link string}.
+ * Options for {@link string}.
  *
  * @public
  */
@@ -142,7 +142,7 @@ export interface StringOptions {
 }
 
 /**
- * String, dengan batas panjang opsional (dalam unit UTF-16).
+ * A string, with optional length limits (in UTF-16 code units).
  *
  * @public
  */
@@ -160,7 +160,7 @@ export function string(options: StringOptions = {}): Schema<string> {
 }
 
 /**
- * Opsi {@link number}.
+ * Options for {@link number}.
  *
  * @public
  */
@@ -171,7 +171,7 @@ export interface NumberOptions {
 }
 
 /**
- * Bilangan berhingga. `NaN` dan `Infinity` selalu ditolak karena tidak aman untuk JSON.
+ * A finite number. `NaN` and `Infinity` are always rejected because they are not JSON-safe.
  *
  * @public
  */
@@ -201,7 +201,7 @@ export function boolean(): Schema<boolean> {
 }
 
 /**
- * Tepat satu nilai primitif.
+ * Exactly one primitive value.
  *
  * @public
  */
@@ -212,7 +212,7 @@ export function literal<const T extends string | number | boolean | null>(expect
 }
 
 /**
- * Salah satu dari daftar string.
+ * One of a list of strings.
  *
  * @public
  */
@@ -226,10 +226,10 @@ export function enumOf<const T extends readonly [string, ...string[]]>(
   );
 }
 
-// ---------- Komposisi ----------
+// ---------- Composition ----------
 
 /**
- * Kunci objek yang boleh tidak ada. Nilai `undefined` diperlakukan sama dengan kunci yang tidak ada.
+ * An object key that may be absent. A value of `undefined` is treated the same as an absent key.
  *
  * @public
  */
@@ -242,7 +242,7 @@ export function optional<T>(inner: Schema<T>): OptionalSchema<T> {
 }
 
 /**
- * Nilai yang boleh `null`.
+ * A value that may be `null`.
  *
  * @public
  */
@@ -251,7 +251,7 @@ export function nullable<T>(inner: Schema<T>): Schema<T | null> {
 }
 
 /**
- * Opsi {@link array}.
+ * Options for {@link array}.
  *
  * @public
  */
@@ -260,7 +260,7 @@ export interface ArrayOptions {
 }
 
 /**
- * Array dengan item bertipe sama, dengan batas panjang opsional.
+ * An array of items of the same type, with optional length limits.
  *
  * @public
  */
@@ -281,7 +281,7 @@ export function array<T>(item: Schema<T>, options: ArrayOptions = {}): Schema<T[
 }
 
 /**
- * Bentuk objek: peta nama kunci ke skemanya.
+ * Object shape: a map from key name to its schema.
  *
  * @public
  */
@@ -294,7 +294,7 @@ type OptionalKeys<S extends SchemaShape> = {
 type Simplify<T> = { [K in keyof T]: T[K] } & {};
 
 /**
- * Tipe objek yang dihasilkan sebuah {@link SchemaShape}. Kunci dari {@link optional} menjadi `?:`.
+ * Object type produced by a {@link SchemaShape}. Keys from {@link optional} become `?:`.
  *
  * @public
  */
@@ -305,7 +305,7 @@ export type InferShape<S extends SchemaShape> = Simplify<
 >;
 
 /**
- * Skema objek yang menyimpan bentuknya.
+ * Object schema that keeps its shape.
  *
  * @public
  */
@@ -314,8 +314,8 @@ export interface ObjectSchema<S extends SchemaShape> extends Schema<InferShape<S
 }
 
 /**
- * Objek ketat: semua kunci wajib kecuali yang dibungkus {@link optional}, dan kunci yang tidak
- * dikenal ditolak dengan kode `unknown_key`.
+ * Strict object: every key is required except those wrapped in {@link optional}, and unknown
+ * keys are rejected with code `unknown_key`.
  *
  * @public
  */
@@ -353,7 +353,7 @@ export function object<S extends SchemaShape>(shape: S): ObjectSchema<S> {
 }
 
 /**
- * Nama dari PRD untuk skema `props` tingkat atas di `defineElement`. Sama dengan {@link object}.
+ * Name from the PRD for the top-level `props` schema in `defineElement`. Same as {@link object}.
  *
  * @example
  * ```ts
@@ -364,10 +364,10 @@ export function object<S extends SchemaShape>(shape: S): ObjectSchema<S> {
  */
 export const schema = object;
 
-// ---------- Validasi ----------
+// ---------- Validation ----------
 
 /**
- * Memvalidasi nilai terhadap skema tanpa melempar exception dan tanpa mengubah nilai.
+ * Validates a value against a schema without throwing and without changing the value.
  *
  * @example
  * ```ts

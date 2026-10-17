@@ -1,6 +1,6 @@
 /**
- * Helper kecil untuk membangun DOM tanpa `innerHTML`, agar data dari URL atau input tidak pernah
- * ditafsirkan sebagai HTML.
+ * Small helpers for building DOM without `innerHTML`, so data from the URL or input is never
+ * interpreted as HTML.
  */
 type Child = Node | string | number | null | undefined | false;
 

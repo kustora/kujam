@@ -1,13 +1,13 @@
 /**
- * Kloning dan pembekuan dalam untuk data dokumen papan.
+ * Deep cloning and freezing for board document data.
  *
- * Tidak memakai JSON round-trip agar `NaN`, `Infinity`, `undefined`, dan
- * `Uint8Array` tidak berubah diam-diam saat dokumen dimuat, disimpan, atau diekspor.
+ * Does not use a JSON round-trip, so `NaN`, `Infinity`, `undefined`, and
+ * `Uint8Array` are not silently changed when a document is loaded, saved, or exported.
  */
 
 /**
- * Menyalin nilai secara dalam (deep clone). Mendukung objek biasa, array,
- * `Uint8Array`, dan nilai primitif, yaitu semua bentuk data yang boleh ada di dokumen papan.
+ * Deep-copies a value. Supports plain objects, arrays,
+ * `Uint8Array`, and primitives, i.e. every data shape allowed in a board document.
  *
  * @public
  */
@@ -29,8 +29,8 @@ export function deepClone<T>(value: T): T {
 }
 
 /**
- * Menulis properti milik sendiri, termasuk kunci `__proto__` (dari `JSON.parse`) yang kalau
- * ditulis dengan penugasan biasa justru mengganti prototipe objek.
+ * Writes an own property, including the `__proto__` key (from `JSON.parse`), which when
+ * written with plain assignment would replace the object's prototype instead.
  *
  * @internal
  */
@@ -48,8 +48,8 @@ export function setOwn(target: Record<string, unknown>, key: string, value: unkn
 }
 
 /**
- * Kesetaraan struktural untuk data dokumen papan (objek biasa, array, `Uint8Array`, primitif).
- * `NaN` dianggap sama dengan `NaN`; kunci bernilai `undefined` berbeda dengan kunci yang tidak ada.
+ * Structural equality for board document data (plain objects, arrays, `Uint8Array`, primitives).
+ * `NaN` equals `NaN`; a key with value `undefined` differs from a missing key.
  *
  * @internal
  */
@@ -74,7 +74,7 @@ export function deepEqual(a: unknown, b: unknown): boolean {
 }
 
 /**
- * Membekukan objek secara dalam sehingga snapshot tidak bisa diubah dari luar.
+ * Deep-freezes an object so the snapshot cannot be modified from outside.
  *
  * @internal
  */
@@ -82,7 +82,7 @@ export function deepFreeze<T>(value: T): T {
   if (value === null || typeof value !== 'object' || Object.isFrozen(value)) {
     return value;
   }
-  // Typed array berisi elemen tidak bisa dibekukan; biarkan apa adanya.
+  // Typed arrays with elements cannot be frozen; leave them as-is.
   if (ArrayBuffer.isView(value)) {
     return value;
   }

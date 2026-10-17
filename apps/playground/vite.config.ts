@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 
-// BOARD-2401: alamat LAN untuk QR code "buka di perangkat lain".
+// BOARD-2401: LAN addresses for the "open on another device" QR code.
 function lanInfo(): Plugin {
   return {
     name: 'kujam-playground-lan-info',
@@ -17,7 +17,7 @@ function lanInfo(): Plugin {
 export default defineConfig({
   plugins: [lanInfo()],
   resolve: {
-    // BOARD-2401: Mengimpor package langsung dari source workspace untuk hot reload instan
+    // BOARD-2401: Import packages directly from workspace source for instant hot reload
     alias: {
       '@kujam/core': resolve(__dirname, '../../packages/core/src/index.ts'),
       '@kujam/renderer': resolve(__dirname, '../../packages/renderer/src/index.ts'),

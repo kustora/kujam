@@ -1,30 +1,30 @@
 /**
- * Tipe dokumen papan dan kontrak adapter.
+ * Board document types and adapter contracts.
  */
 
 /**
- * Versi skema dokumen papan saat ini.
+ * Current board document schema version.
  *
  * @public
  */
 export const CURRENT_SCHEMA_VERSION = 1;
 
 /**
- * Representasi record elemen di dalam dokumen papan datar.
+ * Element record stored in the flat board document.
  *
  * @public
  */
 export interface ElementRecord<P = Record<string, unknown>> {
-  /** ID unik, dibuat di klien (lihat `createId`). */
+  /** Unique ID, generated on the client (see `createId`). */
   id: string;
   kind: 'element';
-  /** Tipe elemen, misalnya `'sticky'`, `'draw'`, `'geo'`, atau tipe kustom. */
+  /** Element type, for example `'sticky'`, `'draw'`, `'geo'`, or a custom type. */
   type: string;
-  /** ID page tempat elemen berada. */
+  /** ID of the page the element is on. */
   pageId: string;
-  /** ID frame atau grup induk, atau `null` bila langsung di page. */
+  /** ID of the parent frame or group, or `null` when directly on the page. */
   parentId: string | null;
-  /** Fractional index untuk urutan lapisan (lihat `indexBetween`). */
+  /** Fractional index for layer order (see `indexBetween`). */
   index: string;
   x: number;
   y: number;
@@ -32,16 +32,22 @@ export interface ElementRecord<P = Record<string, unknown>> {
   w: number;
   h: number;
   locked: boolean;
-  /** Opasitas 0 sampai 1. */
+  /** Opacity from 0 to 1. */
   opacity: number;
-  /** Isi khusus per tipe, divalidasi skema tipe. */
+  /** Type-specific content, validated by the type schema. */
   props: P;
-  /** Bebas untuk pemakai; package tidak pernah membaca atau mengubah isinya. */
+  /**
+   * Version of the element type (`version` in `defineElement`) that `props` were written for
+   * (BOARD-702). Missing means `1`. `board.create` and props migrations set it; code that writes
+   * element records with `tx.put` should set it too, or newer props may be migrated again on load.
+   */
+  typeVersion?: number;
+  /** Free for consumers; the package never reads or changes its content. */
   meta: Record<string, unknown>;
 }
 
 /**
- * Representasi record konektor/binding antar elemen.
+ * Connector/binding record between elements.
  *
  * @public
  */
@@ -50,12 +56,12 @@ export interface BindingRecord {
   kind: 'binding';
   fromId: string;
   toId: string;
-  /** Posisi relatif 0..1 di tepi elemen tujuan. */
+  /** Relative position 0..1 on the edge of the target element. */
   anchor: { x: number; y: number };
 }
 
 /**
- * Representasi record halaman (page) di dalam papan.
+ * Page record within the board.
  *
  * @public
  */
@@ -63,14 +69,14 @@ export interface PageRecord {
   id: string;
   kind: 'page';
   name: string;
-  /** Fractional index untuk urutan page. */
+  /** Fractional index for page order. */
   index: string;
-  /** Bebas untuk pemakai; package tidak pernah membaca atau mengubah isinya. */
+  /** Free for consumers; the package never reads or changes its content. */
   meta: Record<string, unknown>;
 }
 
 /**
- * Representasi record aset media di dalam papan.
+ * Media asset record within the board.
  *
  * @public
  */
@@ -80,33 +86,38 @@ export interface AssetRecord {
   mimeType: string;
   w: number;
   h: number;
-  /** Bebas untuk pemakai; package tidak pernah membaca atau mengubah isinya. */
+  /** Free for consumers; the package never reads or changes its content. */
   meta: Record<string, unknown>;
 }
 
 /**
- * Gabungan seluruh jenis record pada dokumen papan.
+ * Union of every record kind in a board document.
  *
  * @public
  */
 export type BoardRecord = ElementRecord | BindingRecord | PageRecord | AssetRecord;
 
 /**
- * Dokumen papan berversi yang menyimpan kumpulan record datar.
+ * Versioned board document holding a flat collection of records.
  *
  * @public
  */
 export interface BoardDocument {
-  /** Versi skema; naik setiap ada migrasi. Lihat {@link CURRENT_SCHEMA_VERSION}. */
+  /** Schema version; incremented with every migration. See {@link CURRENT_SCHEMA_VERSION}. */
   schemaVersion: number;
-  /** Bebas untuk pemakai; package tidak pernah membaca atau mengubah isinya. */
+  /** Free for consumers; the package never reads or changes its content. */
   meta: Record<string, unknown>;
-  /** Kumpulan record datar, dikunci dengan `id` record. */
+  /** Flat collection of records, keyed by record `id`. */
   records: Record<string, BoardRecord>;
+  /**
+   * Document migration version per plugin ID (BOARD-702): how many of the plugin's `migrations`
+   * steps this document has been through. A missing plugin entry means `0`.
+   */
+  pluginVersions?: Record<string, number>;
 }
 
 /**
- * Konfigurasi kamera papan.
+ * Board camera configuration.
  *
  * @public
  */
@@ -117,8 +128,8 @@ export interface CameraState {
 }
 
 /**
- * Perubahan yang diserahkan ke adapter penyimpanan: dokumen JSON utuh,
- * update biner (misalnya state Yjs), atau keduanya.
+ * Change handed to a storage adapter: the full JSON document,
+ * a binary update (for example Yjs state), or both.
  *
  * @public
  */
@@ -128,14 +139,14 @@ export interface StorageChange {
 }
 
 /**
- * Kontrak adapter penyimpanan papan. Diimplementasikan oleh `@kujam/storage-*`
- * atau adapter buatan pemakai.
+ * Board storage adapter contract. Implemented by `@kujam/storage-*`
+ * or by consumer-written adapters.
  *
  * @public
  */
 export interface StorageAdapter {
   load(boardId: string): Promise<BoardDocument | Uint8Array | null>;
   save(boardId: string, change: StorageChange): Promise<void>;
-  /** Jeda debounce penyimpanan otomatis dalam milidetik (bawaan 1000). */
+  /** Autosave debounce delay in milliseconds (defaults to 1000). */
   debounceMs?: number;
 }

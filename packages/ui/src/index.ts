@@ -1,5 +1,5 @@
 /**
- * `@kujam/ui` — Komponen UI Web Components tanpa framework (toolbar, minimap, command palette).
+ * `@kujam/ui` — Framework-free Web Components UI (toolbar, minimap, command palette).
  *
  * @packageDocumentation
  */
@@ -7,7 +7,7 @@
 import type { Board } from '@kujam/core';
 
 /**
- * Opsi pemasangan shell UI bawaan.
+ * Options for mounting the built-in UI shell.
  *
  * @public
  */
@@ -17,7 +17,7 @@ export interface MountUiOptions {
 }
 
 /**
- * Memasang komponen UI Web Components pada kontainer papan.
+ * Mounts the Web Components UI on the board container.
  *
  * @public
  */

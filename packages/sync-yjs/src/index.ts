@@ -1,5 +1,5 @@
 /**
- * `@kujam/sync-yjs` — Adapter sinkronisasi Yjs dan awareness presence untuk `@kujam/core`.
+ * `@kujam/sync-yjs` — Yjs sync adapter and awareness presence for `@kujam/core`.
  *
  * @packageDocumentation
  */
@@ -7,14 +7,14 @@
 import type { Board } from '@kujam/core';
 
 /**
- * Status koneksi sinkronisasi papan.
+ * Board sync connection status.
  *
  * @public
  */
 export type SyncStatus = 'offline' | 'connecting' | 'synced';
 
 /**
- * Antarmuka adapter sinkronisasi untuk papan.
+ * Sync adapter interface for a board.
  *
  * @public
  */
@@ -25,7 +25,7 @@ export interface SyncAdapter {
 }
 
 /**
- * Membuat adapter sinkronisasi berbasis Yjs.
+ * Creates a Yjs-based sync adapter.
  *
  * @public
  */

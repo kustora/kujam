@@ -1,9 +1,9 @@
 /**
- * Tes tooling untuk aturan arsitektur dan build:
- * - BOARD-106: aturan lint arah impor dan larangan DOM di core terbukti menolak fixture pelanggaran.
- * - BOARD-106: `lib` TypeScript core tanpa `dom`, sehingga `window` gagal typecheck.
- * - BOARD-107: istilah domain aplikasi ditolak lint.
- * - BOARD-102: konfigurasi tsup core benar-benar meng-inline rbush, fractional-indexing, dan nanoid.
+ * Tooling tests for architecture and build rules:
+ * - BOARD-106: the import-direction lint rules and the core DOM ban are proven to reject violation fixtures.
+ * - BOARD-106: core's TypeScript `lib` has no `dom`, so `window` fails typecheck.
+ * - BOARD-107: application domain terms are rejected by lint.
+ * - BOARD-102: the core tsup config really inlines rbush, fractional-indexing, and nanoid.
  */
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -26,19 +26,19 @@ const ALL_PACKAGES = readdirSync(join(ROOT, 'packages'), { withFileTypes: true }
   )
   .map((entry) => entry.name);
 
-/** Package yang boleh mengimpor @kujam/renderer (core <- renderer <- ui/react/vue/export). */
+/** Packages allowed to import @kujam/renderer (core <- renderer <- ui/react/vue/export). */
 const RENDERER_CONSUMERS = ['ui', 'react', 'vue', 'export'];
 
 const eslint = new ESLint({ cwd: ROOT });
 
-/** Lint isi fixture seolah-olah berkas itu berada di `packages/<pkg>/src/`. */
+/** Lints fixture content as if the file were in `packages/<pkg>/src/`. */
 async function lintFixtureAs(fixture: string, pkg: string) {
   const code = readFileSync(join(FIXTURES, 'lint', fixture), 'utf8');
   const [result] = await eslint.lintText(code, {
     filePath: join(ROOT, 'packages', pkg, 'src', `__lint_fixture__.ts`),
   });
   if (!result) throw new Error('ESLint tidak mengembalikan hasil.');
-  // Pastikan fixture benar-benar terparse; error parse tidak punya ruleId.
+  // Make sure the fixture actually parses; parse errors have no ruleId.
   expect(result.messages.filter((message) => message.fatal)).toEqual([]);
   return result.messages;
 }
@@ -123,7 +123,7 @@ describe('BOARD-106: core bebas DOM', () => {
       ts
         .getPreEmitDiagnostics(ts.createProgram([fixture], options))
         .map((diagnostic) => ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'));
-    // Opsi proyek tanpa project references/rootDir agar fixture di luar src bisa diperiksa.
+    // Project options without project references/rootDir so fixtures outside src can be checked.
     const options: ts.CompilerOptions = {
       ...parsed.options,
       composite: false,
@@ -132,7 +132,7 @@ describe('BOARD-106: core bebas DOM', () => {
     };
 
     expect(diagnosticsWith(options)).toContain("Cannot find name 'window'.");
-    // Kontrol: dengan `dom`, fixture yang sama lolos. Kegagalan di atas memang karena `lib`.
+    // Control: with `dom`, the same fixture passes. The failure above is indeed caused by `lib`.
     expect(diagnosticsWith({ ...options, lib: [...lib, 'lib.dom.d.ts'] })).toEqual([]);
   });
 });
@@ -163,7 +163,7 @@ describe('BOARD-102: inline dependensi @kujam/core', () => {
   });
 
   it('konfigurasi tsup core menghasilkan bundel ESM mandiri dari rbush, fractional-indexing, nanoid', async () => {
-    // Di dalam repo (bukan tmpdir) agar bundel bisa dimuat lewat loader Vite/Vitest.
+    // Inside the repo (not tmpdir) so the bundle can be loaded through the Vite/Vitest loader.
     const cacheDir = join(ROOT, 'node_modules/.cache');
     mkdirSync(cacheDir, { recursive: true });
     const outDir = mkdtempSync(join(cacheDir, 'kujam-core-inline-'));
@@ -179,17 +179,17 @@ describe('BOARD-102: inline dependensi @kujam/core', () => {
         silent: true,
         esbuildOptions(options, context) {
           config.esbuildOptions?.(options, context);
-          // Fixture berada di luar packages/core; arahkan resolusi ke devDependencies core.
+          // The fixture lives outside packages/core; point resolution at core's devDependencies.
           options.nodePaths = [join(ROOT, 'packages/core/node_modules')];
         },
       });
 
       const output = readFileSync(join(outDir, 'index.js'), 'utf8');
-      // Tidak ada impor tersisa: ketiga library (dan dependensi transitifnya) ikut dibundel.
+      // No imports left: all three libraries (and their transitive dependencies) are bundled.
       expect(output).not.toMatch(/^\s*import\s/m);
       expect(output).not.toMatch(/\bfrom\s*["']/);
       expect(output).not.toMatch(/\brequire\(/);
-      // Build lintas-runtime nanoid (Web Crypto global), bukan build Node yang mengimpor `crypto`.
+      // nanoid's cross-runtime build (global Web Crypto), not the Node build that imports `crypto`.
       expect(output).toContain('crypto.getRandomValues');
 
       const mod = (await import(

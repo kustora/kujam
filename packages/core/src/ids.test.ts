@@ -88,7 +88,7 @@ describe('fractional indexing (BOARD-202)', () => {
   });
 
   it('10.000 sisipan di posisi acak tetap terurut, unik, dan panjangnya wajar', () => {
-    // PRNG deterministik (mulberry32) agar tes bisa diulang.
+    // Deterministic PRNG (mulberry32) so the test is repeatable.
     let seed = 0x5eed;
     const random = (): number => {
       seed = (seed + 0x6d2b79f5) | 0;
@@ -109,7 +109,7 @@ describe('fractional indexing (BOARD-202)', () => {
     }
     expect(new Set(keys).size).toBe(keys.length);
     const maxLength = Math.max(...keys.map((k) => k.length));
-    // Sisipan acak tumbuh kira-kira logaritmik; 10.000 sisipan tetap jauh di bawah 32 karakter.
+    // Random inserts grow roughly logarithmically; 10,000 inserts stay well under 32 characters.
     expect(maxLength).toBeLessThanOrEqual(32);
   });
 

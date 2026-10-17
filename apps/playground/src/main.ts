@@ -1,8 +1,8 @@
 /**
- * Playground pengembangan @kujam/* (BOARD-2401).
+ * Development playground for @kujam/* (BOARD-2401).
  *
- * Route: `/s/<skenario>`. Query global: `bare=1` (hanya area tengah, untuk Playwright),
- * `debug=0` (sembunyikan panel debug). Query lain milik skenario aktif.
+ * Route: `/s/<scenario>`. Global query: `bare=1` (center area only, for Playwright),
+ * `debug=0` (hide the debug panel). Other query params belong to the active scenario.
  */
 import { append, h } from './dom.js';
 import { buildLanPopover } from './lan.js';
@@ -28,7 +28,7 @@ const state: ScenarioState = {
   set: setQuery,
 };
 
-// ---------- Kerangka ----------
+// ---------- Layout ----------
 
 const app = document.getElementById('app')!;
 const params = new URL(location.href).searchParams;

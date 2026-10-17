@@ -1,5 +1,5 @@
-// Uji tipe untuk BOARD-207 dan BOARD-301: peta event `board.on` bertipe lengkap.
-// Diperiksa oleh `tsc --noEmit`.
+// Type tests for BOARD-207 and BOARD-301: the `board.on` event map is fully typed.
+// Checked by `tsc --noEmit`.
 import type {
   ActionEvent,
   Board,
@@ -9,6 +9,7 @@ import type {
   CameraEvent,
   ChangeEvent,
   HistoryEvent,
+  PageEvent,
   SelectionEvent,
   ToolEvent,
 } from './index.js';
@@ -24,15 +25,25 @@ export type Tests = [
   Expect<
     Equal<
       keyof BoardEventMap,
-      'change' | 'selection' | 'camera' | 'tool' | 'action' | 'error' | 'history'
+      | 'change'
+      | 'selection'
+      | 'camera'
+      | 'tool'
+      | 'page'
+      | 'action'
+      | 'error'
+      | 'history'
+      | 'dispose'
     >
   >,
   Expect<Equal<BoardEventMap['change'], ChangeEvent>>,
   Expect<Equal<BoardEventMap['selection'], SelectionEvent>>,
   Expect<Equal<BoardEventMap['camera'], CameraEvent>>,
   Expect<Equal<BoardEventMap['tool'], ToolEvent>>,
+  Expect<Equal<BoardEventMap['page'], PageEvent>>,
   Expect<Equal<BoardEventMap['action'], ActionEvent>>,
   Expect<Equal<BoardEventMap['error'], BoardErrorEvent>>,
+  Expect<Equal<BoardEventMap['dispose'], undefined>>,
   Expect<Equal<BoardEventMap['history'], HistoryEvent>>,
   Expect<Equal<ListenerArg<'camera'>, CameraEvent>>,
   Expect<
@@ -59,7 +70,7 @@ board.on('error', (e) => {
   const code: BoardErrorCode = e.code;
   void code;
 });
-// @ts-expect-error event tidak dikenal ditolak
+// @ts-expect-error unknown events are rejected
 board.on('tidak-ada', () => {});
-// @ts-expect-error isi event `change` bukan CameraEvent
+// @ts-expect-error the `change` payload is not a CameraEvent
 board.on('change', (e: CameraEvent) => void e);

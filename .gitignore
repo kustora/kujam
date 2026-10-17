@@ -5,6 +5,7 @@ node_modules/
 # Build outputs
 dist/
 build/
+!tooling/fixtures/build/
 .turbo/
 *.tsbuildinfo
 
@@ -26,3 +27,5 @@ test-results/
 !.vscode/extensions.json
 *.log
 
+# Claude Code (local settings, subagent worktrees)
+.claude/

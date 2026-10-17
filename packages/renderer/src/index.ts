@@ -1,5 +1,5 @@
 /**
- * `@kujam/renderer` — Renderer tiga lapisan (Canvas 2D utama, lapisan HTML, dan overlay) untuk `@kujam/core`.
+ * `@kujam/renderer` — Three-layer renderer (main Canvas 2D, HTML layer, and overlay) for `@kujam/core`.
  *
  * @packageDocumentation
  */
@@ -7,7 +7,7 @@
 import type { Board } from '@kujam/core';
 
 /**
- * Pegangan (handle) untuk instance tampilan papan yang terpasang di DOM.
+ * Handle for a board view instance mounted in the DOM.
  *
  * @public
  */
@@ -18,7 +18,7 @@ export interface BoardView {
 }
 
 /**
- * Memasang renderer papan tiga lapisan ke dalam elemen kontainer DOM.
+ * Mounts the three-layer board renderer into a DOM container element.
  *
  * @public
  */
@@ -59,7 +59,7 @@ export function mountRenderer(board: Board, container: HTMLElement): BoardView {
   return {
     container,
     requestRender(): void {
-      // Penjadwalan dirty-rect frame render
+      // Dirty-rect render frame scheduling
     },
     unmount(): void {
       root.remove();

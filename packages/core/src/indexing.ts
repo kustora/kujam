@@ -1,9 +1,9 @@
 /**
- * Fractional indexing untuk urutan lapisan dan urutan page (BOARD-202).
+ * Fractional indexing for layer order and page order (BOARD-202).
  *
- * Membungkus `fractional-indexing` (dibundel oleh tsup lewat `noExternal`). Index adalah string
- * base62 yang diurutkan dengan perbandingan string biasa (bukan `localeCompare`), sehingga
- * memindahkan satu elemen hanya mengubah index elemen itu.
+ * Wraps `fractional-indexing` (bundled by tsup via `noExternal`). Indexes are base62
+ * strings sorted with plain string comparison (not `localeCompare`), so
+ * moving one element only changes that element's index.
  */
 
 import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
@@ -24,8 +24,8 @@ function checkPair(a: string | null, b: string | null): void {
 }
 
 /**
- * Membandingkan dua index urutan untuk `Array.prototype.sort`. Memakai perbandingan kode
- * karakter, bukan `localeCompare`, karena urutan index bergantung pada kode karakter.
+ * Compares two order indexes for `Array.prototype.sort`. Uses character code
+ * comparison, not `localeCompare`, because index order depends on character codes.
  *
  * @public
  */
@@ -34,10 +34,10 @@ export function compareIndex(a: string, b: string): number {
 }
 
 /**
- * Membuat index yang terurut di antara `a` dan `b`. `null` berarti batas awal atau akhir;
- * `indexBetween(null, null)` menghasilkan `'a0'`. Urutan argumen boleh terbalik.
+ * Creates an index ordered between `a` and `b`. `null` means the start or end bound;
+ * `indexBetween(null, null)` returns `'a0'`. Arguments may be in either order.
  *
- * @throws `RangeError` bila `a` sama dengan `b` atau salah satunya bukan index yang valid.
+ * @throws `RangeError` when `a` equals `b` or either one is not a valid index.
  * @public
  */
 export function indexBetween(a: string | null, b: string | null): string {
@@ -46,9 +46,9 @@ export function indexBetween(a: string | null, b: string | null): string {
 }
 
 /**
- * Membuat index tepat di atas `index` (setelahnya dalam urutan). `null` berarti daftar kosong.
+ * Creates an index directly above `index` (after it in order). `null` means an empty list.
  *
- * @throws `RangeError` bila `index` bukan index yang valid.
+ * @throws `RangeError` when `index` is not a valid index.
  * @public
  */
 export function indexAbove(index: string | null): string {
@@ -56,9 +56,9 @@ export function indexAbove(index: string | null): string {
 }
 
 /**
- * Membuat index tepat di bawah `index` (sebelumnya dalam urutan). `null` berarti daftar kosong.
+ * Creates an index directly below `index` (before it in order). `null` means an empty list.
  *
- * @throws `RangeError` bila `index` bukan index yang valid.
+ * @throws `RangeError` when `index` is not a valid index.
  * @public
  */
 export function indexBelow(index: string | null): string {
@@ -66,11 +66,11 @@ export function indexBelow(index: string | null): string {
 }
 
 /**
- * Membuat `n` index terurut naik di antara `a` dan `b`, misalnya untuk menyisipkan beberapa
- * elemen sekaligus (tempel, duplikat).
+ * Creates `n` ascending indexes between `a` and `b`, for example to insert several
+ * elements at once (paste, duplicate).
  *
- * @throws `RangeError` bila `n` bukan bilangan bulat tidak negatif, `a` sama dengan `b`, atau
- * salah satunya bukan index yang valid.
+ * @throws `RangeError` when `n` is not a non-negative integer, `a` equals `b`, or
+ * either one is not a valid index.
  * @public
  */
 export function indicesBetween(a: string | null, b: string | null, n: number): string[] {

@@ -1,19 +1,19 @@
 /**
- * Kontrak skenario playground (BOARD-2401). Satu skenario = satu berkas di `src/scenarios/`,
- * didaftarkan otomatis lewat `import.meta.glob`.
+ * Playground scenario contract (BOARD-2401). One scenario = one file in `src/scenarios/`,
+ * registered automatically via `import.meta.glob`.
  */
 export interface ScenarioState {
   get(key: string): string | null;
-  /** Menyimpan state skenario di query string (tanpa entri riwayat baru). `null` menghapus kunci. */
+  /** Stores scenario state in the query string (without a new history entry). `null` removes the key. */
   set(key: string, value: string | null): void;
 }
 
 export interface ScenarioContext {
-  /** Area tengah: papan atau isi lab. */
+  /** Center area: the board or the lab content. */
   main: HTMLElement;
-  /** Panel kiri: kontrol khusus skenario. */
+  /** Left panel: scenario-specific controls. */
   controls: HTMLElement;
-  /** Panel kanan: informasi debug (bisa disembunyikan pemakai). */
+  /** Right panel: debug information (can be hidden by the user). */
   debug: HTMLElement;
   state: ScenarioState;
 }
@@ -22,11 +22,11 @@ export interface Scenario {
   id: string;
   title: string;
   description: string;
-  /** Urutan di pemilih skenario. */
+  /** Order in the scenario picker. */
   order: number;
-  /** `board`: area tengah berlatar grid papan. `lab`: area tengah bebas untuk alat uji. */
+  /** `board`: center area with a board grid background. `lab`: free center area for test tools. */
   layout: 'board' | 'lab';
-  /** Memasang skenario; mengembalikan fungsi pembersih yang dipanggil saat pindah skenario. */
+  /** Mounts the scenario; returns a cleanup function called when switching scenarios. */
   mount(ctx: ScenarioContext): void | (() => void);
 }
 

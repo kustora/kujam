@@ -15,7 +15,7 @@ import { a11yLabel, localize, type Bilingual } from '../i18n.js';
 import { EMPTY_RICH_TEXT, richTextSchema, richTextToPlainText } from '../richtext.js';
 
 /**
- * Bentuk shape geometri bawaan (daftar final disepakati saat grooming BOARD-1004).
+ * Built-in geometric shape kinds (final list agreed during BOARD-1004 grooming).
  *
  * @beta
  */
@@ -31,7 +31,7 @@ export const GEO_KINDS = [
 ] as const;
 
 /**
- * Bentuk shape geometri.
+ * Geometric shape kind.
  *
  * @beta
  */
@@ -62,7 +62,7 @@ function starPoints(w: number, h: number): Point[] {
 }
 
 /**
- * Geometri lokal untuk satu bentuk dan ukuran.
+ * Local geometry for one shape kind and size.
  *
  * @beta
  */
@@ -119,7 +119,7 @@ const DASHES: Readonly<Record<'solid' | 'dashed' | 'dotted', readonly number[]>>
 };
 
 /**
- * Elemen shape geometri (BOARD-1004): bentuk, isi, garis, dan teks di tengah.
+ * Geometric shape element (BOARD-1004): shape kind, fill, stroke, and centered text.
  *
  * @beta
  */
@@ -145,10 +145,10 @@ export const geoElement = defineElement({
     label: EMPTY_RICH_TEXT,
   },
   geometry: (el) => geoGeometry(el.props.geo, el.w, el.h),
-  // Shift mengunci rasio di transformasi BOARD-406.
+  // Shift locks the aspect ratio in the BOARD-406 transform.
   resize: 'free',
   render: {
-    // TODO(BOARD-1004): label rich text di tengah dengan wrap; hit-test mengikuti bentuk (BOARD-403).
+    // TODO(BOARD-1004): centered rich text label with wrapping; hit-testing follows the shape (BOARD-403).
     canvas: (g, el) => {
       const { props } = el;
       if (props.geo === 'rounded-rectangle')

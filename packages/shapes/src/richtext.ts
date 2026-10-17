@@ -1,36 +1,36 @@
 /**
- * Skema rich text untuk sticky, teks, dan label shape (ADR-008).
+ * Rich text schema for sticky notes, text, and shape labels (ADR-008).
  *
- * Format: delta datar yang identik dengan delta `Y.Text` dan Quill. Atribut inline (`bold`,
- * `italic`, `link`) menempel pada teks; atribut blok (`list`, `indent`) hanya pada `\n` penutup
- * baris; dokumen selalu diakhiri `\n`. Normalisasi dan renderer teks Canvas menyusul di
- * BOARD-1003a; modul ini hanya memuat skema struktural dan konversi ke teks polos.
+ * Format: a flat delta identical to the `Y.Text` and Quill delta. Inline attributes (`bold`,
+ * `italic`, `link`) attach to text; block attributes (`list`, `indent`) only to the `\n` that ends
+ * a line; documents always end with `\n`. Normalization and the Canvas text renderer follow in
+ * BOARD-1003a; this module only holds the structural schema and conversion to plain text.
  */
 import { array, enumOf, literal, number, object, optional, string, type Infer } from '@kujam/core';
 
 /**
- * Batas panjang rich text per elemen, dalam unit UTF-16 (ADR-008).
+ * Rich text length limit per element, in UTF-16 code units (ADR-008).
  *
  * @beta
  */
 export const MAX_RICH_TEXT_LENGTH = 20_000;
 
 /**
- * Batas panjang tautan (ADR-008).
+ * Link length limit (ADR-008).
  *
  * @beta
  */
 export const MAX_LINK_LENGTH = 2048;
 
 /**
- * Kedalaman indentasi daftar maksimum (ADR-008).
+ * Maximum list indentation depth (ADR-008).
  *
  * @beta
  */
 export const MAX_LIST_INDENT = 3;
 
 /**
- * Skema struktural rich text untuk data dari peer atau server (ADR-007, ADR-008).
+ * Structural rich text schema for data from peers or the server (ADR-007, ADR-008).
  *
  * @beta
  */
@@ -51,14 +51,14 @@ export const richTextSchema = array(
 );
 
 /**
- * Rich text: daftar op `{ insert, attributes? }`.
+ * Rich text: a list of `{ insert, attributes? }` ops.
  *
  * @beta
  */
 export type RichText = Infer<typeof richTextSchema>;
 
 /**
- * Rich text kosong dalam bentuk kanonik.
+ * Empty rich text in canonical form.
  *
  * @beta
  */
@@ -67,7 +67,7 @@ export const EMPTY_RICH_TEXT: RichText = Object.freeze([
 ]) as unknown as RichText;
 
 /**
- * Teks polos dari rich text, tanpa `\n` penutup dokumen. Format dan penanda daftar dibuang.
+ * Plain text from rich text, without the document's closing `\n`. Formatting and list markers are dropped.
  *
  * @beta
  */
