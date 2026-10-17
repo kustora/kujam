@@ -7,7 +7,7 @@ import { EMPTY_RICH_TEXT, richTextSchema, richTextToPlainText } from '../richtex
 const PADDING = 16;
 
 /**
- * Elemen sticky note (BOARD-1001): rich text, warna dari palet sticky, dan penulis.
+ * Sticky note element (BOARD-1001): rich text, color from the sticky palette, and author.
  *
  * @beta
  */
@@ -17,14 +17,14 @@ export const stickyElement = defineElement({
   props: schema({
     text: richTextSchema,
     color: enumOf(STICKY_COLORS),
-    /** ID penulis dari aplikasi pemakai, atau `null`. */
+    /** Author ID from the consumer application, or `null`. */
     authorId: nullable(string({ maxLength: 256 })),
   }),
   defaults: { text: EMPTY_RICH_TEXT, color: 'yellow', authorId: null },
   geometry: (el) => rect(el.w, el.h),
   resize: 'fixed-ratio',
   render: {
-    // TODO(BOARD-1001): font mengecil otomatis, elipsis, editor HTML saat diedit.
+    // TODO(BOARD-1001): auto-shrinking font, ellipsis, HTML editor while editing.
     canvas: (g, el) => {
       traceRoundedRect(g, el.w, el.h, 4);
       g.fillStyle = STICKY_COLOR_VALUES[el.props.color];

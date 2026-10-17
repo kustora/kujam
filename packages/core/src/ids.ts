@@ -1,25 +1,25 @@
 /**
- * Pembuat ID record (BOARD-202).
+ * Record ID generator (BOARD-202).
  *
- * Memakai `customRandom` dan `urlAlphabet` dari nanoid (dibundel oleh tsup lewat `noExternal`)
- * dengan sumber acak `crypto.getRandomValues` global. Sumber acak bawaan nanoid untuk Node
- * memakai `node:crypto` dan `Buffer`, yang tidak tersedia di Web Worker dan browser, jadi
- * sumber acaknya disuntikkan di sini. `crypto.getRandomValues` global tersedia di Node 20,
- * Web Worker, dan browser.
+ * Uses nanoid's `customRandom` and `urlAlphabet` (bundled by tsup via `noExternal`)
+ * with the global `crypto.getRandomValues` as the random source. nanoid's default random source for Node
+ * uses `node:crypto` and `Buffer`, which are unavailable in Web Workers and browsers, so
+ * the random source is injected here. Global `crypto.getRandomValues` is available in Node 20,
+ * Web Workers, and browsers.
  */
 
 import { customRandom, urlAlphabet } from 'nanoid';
 
 /**
- * Fungsi pembuat ID record. Bisa diganti lewat `createBoard({ createId })`, misalnya pembuat
- * berurutan untuk tes deterministik.
+ * Record ID generator function. Can be replaced via `createBoard({ createId })`, for example with a
+ * sequential generator for deterministic tests.
  *
  * @public
  */
 export type IdGenerator = () => string;
 
 /**
- * Panjang ID bawaan (21 karakter alfabet URL, setara peluang tabrakan UUID v4).
+ * Default ID length (21 URL-alphabet characters, collision probability comparable to UUID v4).
  *
  * @public
  */
@@ -40,10 +40,10 @@ function getRandomBytes(size: number): Uint8Array {
 const generate = customRandom(urlAlphabet, DEFAULT_ID_LENGTH, getRandomBytes);
 
 /**
- * Membuat ID acak yang aman untuk URL (nanoid), dibuat di klien sehingga elemen baru bisa
- * langsung dipakai saat offline tanpa bentrok antar pengguna.
+ * Creates a random URL-safe ID (nanoid), generated on the client so new elements can
+ * be used immediately while offline without clashing between users.
  *
- * @param size - Panjang ID, bilangan bulat positif. Bawaan {@link DEFAULT_ID_LENGTH}.
+ * @param size - ID length, a positive integer. Defaults to {@link DEFAULT_ID_LENGTH}.
  * @public
  */
 export function createId(size: number = DEFAULT_ID_LENGTH): string {

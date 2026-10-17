@@ -1,5 +1,5 @@
 /**
- * `@kujam/storage-indexeddb` — Adapter penyimpanan browser IndexedDB untuk `@kujam/core`.
+ * `@kujam/storage-indexeddb` — Browser IndexedDB storage adapter for `@kujam/core`.
  *
  * @packageDocumentation
  */
@@ -7,7 +7,7 @@
 import type { StorageAdapter } from '@kujam/core';
 
 /**
- * Opsi pembuatan adapter IndexedDB.
+ * Options for creating the IndexedDB adapter.
  *
  * @public
  */
@@ -17,7 +17,7 @@ export interface IndexedDbStorageOptions {
 }
 
 /**
- * Membuat adapter penyimpanan berbasis IndexedDB.
+ * Creates an IndexedDB-backed storage adapter.
  *
  * @public
  */
@@ -28,7 +28,7 @@ export function createIndexedDbStorage(options: IndexedDbStorageOptions = {}): S
       return null;
     },
     async save(_boardId: string, _change) {
-      // Persistensi ke IndexedDB objectStore
+      // Persist to the IndexedDB objectStore
     },
   };
 }

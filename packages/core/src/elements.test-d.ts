@@ -1,4 +1,4 @@
-// Uji tipe untuk BOARD-601: diperiksa oleh `tsc --noEmit` (pnpm typecheck), tanpa kode runtime.
+// Type tests for BOARD-601: checked by `tsc --noEmit` (pnpm typecheck), with no runtime code.
 import type {
   AnyElementDefinition,
   ElementDefinition,
@@ -50,7 +50,7 @@ const card = define({
   export: { text: (el) => el.props.note ?? el.props.refId },
 });
 
-// Elemen dengan data dari luar: `D` diinferensi dari `resolve`.
+// Element with external data: `D` is inferred from `resolve`.
 interface Contact {
   name: string;
 }
@@ -73,7 +73,7 @@ const resolved = define({
   a11y: (_el, data) => ({ role: 'article', label: data?.name ?? '' }),
 });
 
-// Definisi spesifik bisa ditampung sebagai AnyElementDefinition (registri, daftar plugin).
+// Specific definitions fit into AnyElementDefinition (registries, plugin lists).
 const _all: AnyElementDefinition[] = [card, resolved];
 registry([card, resolved]).register(card);
 
@@ -81,7 +81,7 @@ define({
   type: 'bad-defaults',
   version: 1,
   props: s({ size: en(['s', 'm']) }),
-  // @ts-expect-error nilai default di luar enum
+  // @ts-expect-error default value outside the enum
   defaults: { size: 'xl' },
 });
 
@@ -89,7 +89,7 @@ define({
   type: 'bad-key',
   version: 1,
   props: s({ size: en(['s', 'm']) }),
-  // @ts-expect-error kunci default tidak ada di skema
+  // @ts-expect-error default key not in the schema
   defaults: { colour: 'red' },
 });
 
@@ -97,7 +97,7 @@ define({
   type: 'bad-callback',
   version: 1,
   props: s({ size: en(['s', 'm']) }),
-  // @ts-expect-error props tidak punya `refId`
+  // @ts-expect-error props have no `refId`
   export: { text: (el) => el.props.refId },
 });
 
@@ -105,7 +105,7 @@ define({
   type: 'bad-resize',
   version: 1,
   props: s({}),
-  // @ts-expect-error mode resize tidak dikenal
+  // @ts-expect-error unknown resize mode
   resize: 'scale',
 });
 
@@ -124,7 +124,7 @@ export type Checks = [
     >
   >,
 ];
-// Resolver sinkron dari cache: `ResolveError` dibuang dari tipe data.
+// Synchronous resolver from a cache: `ResolveError` is removed from the data type.
 declare function cachedContact(id: string): Contact | ResolveError;
 
 const _sync = define({

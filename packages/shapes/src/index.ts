@@ -1,9 +1,9 @@
 /**
- * `@kujam/shapes` — Elemen dan tool bawaan untuk papan `@kujam/core`.
+ * `@kujam/shapes` — Built-in elements and tools for `@kujam/core` boards.
  *
- * Semua elemen dan tool bawaan didefinisikan dengan `defineElement`, `defineTool`, dan
- * `definePlugin` dari `@kujam/core` — API publik yang sama dengan plugin kustom, tanpa jalur
- * pintas internal (BOARD-601, BOARD-602).
+ * All built-in elements and tools are defined with `defineElement`, `defineTool`, and
+ * `definePlugin` from `@kujam/core` — the same public API as custom plugins, with no internal
+ * shortcuts (BOARD-601, BOARD-602).
  *
  * @packageDocumentation
  */
@@ -30,9 +30,9 @@ export {
 } from './richtext.js';
 
 /**
- * Plugin elemen bawaan rilis 0.1 (`sticky`, `draw`, `text`, `geo`), siap dipasang lewat
- * `createBoard({ plugins: [defaultElements, defaultTools] })` atau `createElementRegistry(defaultElements)`.
- * Konektor, frame, gambar, dan grup menyusul di 0.2 (BOARD-1101, BOARD-1105, BOARD-1103, BOARD-1104).
+ * Built-in elements plugin for release 0.1 (`sticky`, `draw`, `text`, `geo`), ready to install via
+ * `createBoard({ plugins: [defaultElements, defaultTools] })` or `createElementRegistry(defaultElements)`.
+ * Connectors, frames, images, and groups follow in 0.2 (BOARD-1101, BOARD-1105, BOARD-1103, BOARD-1104).
  *
  * @public
  */
@@ -42,8 +42,8 @@ export const defaultElements = definePlugin({
 });
 
 /**
- * Plugin tool bawaan, siap dipasang lewat `createBoard({ plugins: [defaultElements, defaultTools] })`.
- * Implementasi state machine tool bawaan diisi oleh BOARD-502 (`select`, `hand`) dan BOARD-E10.
+ * Built-in tools plugin, ready to install via `createBoard({ plugins: [defaultElements, defaultTools] })`.
+ * The built-in tool state machines are implemented by BOARD-502 (`select`, `hand`) and BOARD-E10.
  *
  * @public
  */
@@ -53,7 +53,7 @@ export const defaultTools = definePlugin({
 });
 
 /**
- * Daftar jenis elemen bawaan yang disediakan oleh `@kujam/shapes`, sama urutannya dengan
+ * Built-in element types provided by `@kujam/shapes`, in the same order as
  * `defaultElements.elements`.
  *
  * @public
@@ -61,14 +61,14 @@ export const defaultTools = definePlugin({
 export const DEFAULT_ELEMENT_TYPES = ['sticky', 'draw', 'text', 'geo'] as const;
 
 /**
- * Tipe string untuk elemen bawaan.
+ * String type for built-in elements.
  *
  * @public
  */
 export type DefaultElementType = (typeof DEFAULT_ELEMENT_TYPES)[number];
 
 /**
- * Daftar ID tool bawaan.
+ * Built-in tool IDs.
  *
  * @public
  */
@@ -84,7 +84,7 @@ export const DEFAULT_TOOL_IDS = [
 ] as const;
 
 /**
- * Tipe string untuk ID tool bawaan.
+ * String type for built-in tool IDs.
  *
  * @public
  */

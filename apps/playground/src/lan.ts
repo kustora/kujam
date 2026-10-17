@@ -1,13 +1,13 @@
 import qrcode from 'qrcode-generator';
 import { h } from './dom.js';
 
-/** Alamat LAN dari server Vite (plugin `lan-info` di vite.config.ts). */
+/** LAN addresses of the Vite server (the `lan-info` plugin in vite.config.ts). */
 async function fetchNetworkUrls(): Promise<string[]> {
   try {
     const res = await fetch('/__playground/lan');
     if (!res.ok) return [];
     const data = (await res.json()) as { network?: string[] };
-    // Loopback tidak berguna untuk perangkat lain; alamat LAN rumah/kantor didahulukan.
+    // Loopback is useless for other devices; home/office LAN addresses come first.
     const rank = (url: string) => {
       const host = new URL(url).hostname;
       return host.startsWith('192.168.') ? 0 : host.startsWith('10.') ? 1 : 2;
@@ -32,7 +32,7 @@ function qrImage(url: string): HTMLImageElement {
   });
 }
 
-/** Popover berisi QR code untuk membuka skenario yang sama di iPad atau HP di jaringan lokal. */
+/** Popover with a QR code to open the same scenario on an iPad or phone on the local network. */
 export async function buildLanPopover(): Promise<HTMLElement> {
   const pathAndQuery = `${location.pathname}${location.search}`;
   const bases = await fetchNetworkUrls();
@@ -48,7 +48,7 @@ export async function buildLanPopover(): Promise<HTMLElement> {
           ),
         ]
       : bases.map((base) => {
-          // URL panjang (misalnya JSON di query) membuat QR terlalu padat; cukup buka skenarionya.
+          // Long URLs (for example JSON in the query) make the QR too dense; opening the scenario is enough.
           const full = new URL(pathAndQuery, base).toString();
           const url = full.length > 600 ? new URL(location.pathname, base).toString() : full;
           return h(

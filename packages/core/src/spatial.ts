@@ -1,5 +1,5 @@
 /**
- * Modul indeks spasial R-tree (rbush) untuk pencarian area elemen (BOARD-404, BOARD-206).
+ * R-tree (rbush) spatial index module for element area queries (BOARD-404, BOARD-206).
  *
  * @packageDocumentation
  */
@@ -9,7 +9,7 @@ import type { Geometry } from './geometry.js';
 import type { ElementRecord } from './types.js';
 
 /**
- * Batas kotak sejajar sumbu dalam format koordinat min/max.
+ * Axis-aligned box bounds in min/max coordinate format.
  *
  * @public
  */
@@ -21,7 +21,7 @@ export interface BoxBounds {
 }
 
 /**
- * Batas kotak sejajar sumbu dalam format posisi dan ukuran (x, y, w, h).
+ * Axis-aligned box bounds in position-and-size format (x, y, w, h).
  *
  * @public
  */
@@ -33,14 +33,14 @@ export interface RectBounds {
 }
 
 /**
- * Representasi batas kotak pencarian spasial; mendukung format BoxBounds atau RectBounds.
+ * Spatial query box bounds; supports either the BoxBounds or RectBounds format.
  *
  * @public
  */
 export type Bounds = BoxBounds | RectBounds;
 
 /**
- * Entri internal dalam indeks R-tree.
+ * Internal entry in the R-tree index.
  *
  * @internal
  */
@@ -53,7 +53,7 @@ function isFiniteNumber(value: unknown): value is number {
 }
 
 /**
- * Memeriksa apakah suatu objek berformat {@link BoxBounds}.
+ * Checks whether an object is in {@link BoxBounds} format.
  *
  * @public
  */
@@ -69,7 +69,7 @@ export function isBoxBounds(bounds: unknown): bounds is BoxBounds {
 }
 
 /**
- * Memeriksa apakah suatu objek berformat {@link RectBounds}.
+ * Checks whether an object is in {@link RectBounds} format.
  *
  * @public
  */
@@ -80,9 +80,9 @@ export function isRectBounds(bounds: unknown): bounds is RectBounds {
 }
 
 /**
- * Menormalkan {@link Bounds} masukan menjadi {@link BoxBounds} yang valid (`minX <= maxX` dan `minY <= maxY`).
+ * Normalizes input {@link Bounds} into valid {@link BoxBounds} (`minX <= maxX` and `minY <= maxY`).
  *
- * @throws `TypeError` bila argumen tidak berformat `BoxBounds` atau `RectBounds`.
+ * @throws `TypeError` when the argument is in neither `BoxBounds` nor `RectBounds` format.
  * @public
  */
 export function normalizeBounds(bounds: Bounds): BoxBounds {
@@ -108,8 +108,8 @@ export function normalizeBounds(bounds: Bounds): BoxBounds {
 }
 
 /**
- * Menghitung AABB (Axis-Aligned Bounding Box) suatu elemen di koordinat global papan,
- * memperhitungkan ukuran dasar, geometri lokal (bila ada), dan rotasi elemen (BOARD-404).
+ * Computes an element's AABB (axis-aligned bounding box) in global board coordinates,
+ * accounting for its base size, local geometry (when present), and rotation (BOARD-404).
  *
  * @public
  */
@@ -159,11 +159,11 @@ export function computeElementAABB(
         }
       }
     } catch {
-      // Abaikan error fungsi geometri dan gunakan ukuran bawaan elemen
+      // Ignore errors from the geometry function and fall back to the element's base size
     }
   }
 
-  // Jika tanpa rotasi
+  // Without rotation
   if (!element.rotation || element.rotation % 360 === 0) {
     return {
       minX: element.x + lx1,
@@ -173,7 +173,7 @@ export function computeElementAABB(
     };
   }
 
-  // Jika ada rotasi: pusat rotasi berada di tengah elemen (element.x + element.w / 2, element.y + element.h / 2)
+  // With rotation: the rotation center is the element's center (element.x + element.w / 2, element.y + element.h / 2)
   const cx = element.x + element.w / 2;
   const cy = element.y + element.h / 2;
   const rad = (element.rotation * Math.PI) / 180;
@@ -217,33 +217,33 @@ export function computeElementAABB(
 }
 
 /**
- * Antarmuka indeks spasial papan tulis untuk pencarian cepat elemen (BOARD-404, BOARD-206).
+ * Whiteboard spatial index interface for fast element lookups (BOARD-404, BOARD-206).
  *
  * @public
  */
 export interface SpatialIndex {
-  /** Memasukkan elemen ke dalam indeks spasial. */
+  /** Inserts an element into the spatial index. */
   insert(element: ElementRecord): void;
-  /** Memperbarui elemen di dalam indeks spasial bila posisinya/bounds berubah. */
+  /** Updates an element in the spatial index when its position/bounds change. */
   update(element: ElementRecord): void;
-  /** Menghapus elemen dari indeks spasial berdasarkan ID. */
+  /** Removes an element from the spatial index by ID. */
   remove(id: string): void;
-  /** Mencari seluruh ID elemen yang bersinggungan dengan batas koordinat `bounds`. */
+  /** Finds the IDs of all elements intersecting the `bounds` coordinates. */
   search(bounds: Bounds): readonly string[];
-  /** Mengosongkan seluruh indeks spasial. */
+  /** Clears the entire spatial index. */
   clear(): void;
-  /** Memuat sekumpulan elemen ke dalam indeks sekaligus (bulk load). */
+  /** Loads a set of elements into the index at once (bulk load). */
   load(elements: Iterable<ElementRecord>): void;
-  /** Jumlah elemen yang terdaftar di dalam indeks. */
+  /** Number of elements registered in the index. */
   size(): number;
-  /** Mengambil batas koordinat AABB elemen berdasarkan ID, atau `undefined` bila tidak ada. */
+  /** Gets an element's AABB bounds by ID, or `undefined` when absent. */
   getBounds(id: string): BoxBounds | undefined;
 }
 
 /**
- * Membuat instance {@link SpatialIndex} baru menggunakan R-tree (`rbush`).
+ * Creates a new {@link SpatialIndex} backed by an R-tree (`rbush`).
  *
- * @param getGeometry - Callback opsional untuk mengekstrak geometri kustom per elemen.
+ * @param getGeometry - Optional callback that extracts custom geometry per element.
  * @public
  */
 export function createSpatialIndex(

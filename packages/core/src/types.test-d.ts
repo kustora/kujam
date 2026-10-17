@@ -72,7 +72,7 @@ export type Tests = [
       }
     >
   >,
-  // Props generik ikut terbawa.
+  // Generic props carry through.
   Expect<Equal<ElementRecord<{ text: string }>['props'], { text: string }>>,
   Expect<
     Equal<
@@ -87,20 +87,20 @@ export type Tests = [
     >
   >,
   Expect<Equal<ChangeEvent['origin'], 'local' | 'remote' | 'undo' | 'redo' | 'load' | 'migration'>>,
-  // BOARD-211: Uji tipe properti Board
+  // BOARD-211: Board property type tests
   Expect<Equal<Board['resolvers'], BoardResolvers>>,
   Expect<Equal<Board['assets'], Readonly<AssetAdapter> | null>>,
   Expect<Equal<Board['user'], Readonly<BoardUser> | null>>,
   Expect<Equal<Board['limits'], Readonly<BoardLimits>>>,
   Expect<Equal<Board['permissions'], PermissionHook | null>>,
   Expect<Equal<Board['disposed'], boolean>>,
-  // BOARD-211: Uji tipe CreateBoardOptions
+  // BOARD-211: CreateBoardOptions type tests
   Expect<Equal<CreateBoardOptions['resolvers'], BoardResolvers | undefined>>,
   Expect<Equal<CreateBoardOptions['assets'], AssetAdapter | undefined>>,
   Expect<Equal<CreateBoardOptions['user'], BoardUser | null | undefined>>,
   Expect<Equal<CreateBoardOptions['limits'], Partial<BoardLimits> | undefined>>,
   Expect<Equal<CreateBoardOptions['permissions'], PermissionHook | undefined>>,
-  // BOARD-205: Uji tipe mutasi (create, update, delete)
+  // BOARD-205: mutation type tests (create, update, delete)
   Expect<
     Equal<
       Parameters<Board['create']>,
@@ -123,7 +123,7 @@ export type Tests = [
   Expect<Equal<DeleteOptions['force'], boolean | undefined>>,
   Expect<Equal<PartialElement<{ text: string }>['props'], Partial<{ text: string }> | undefined>>,
   Expect<Equal<ElementPatch<{ text: string }>['props'], Partial<{ text: string }> | undefined>>,
-  // BOARD-206 & BOARD-607: Uji tipe baca (query, spatial, typed props via declaration merging)
+  // BOARD-206 & BOARD-607: read type tests (query, spatial, typed props via declaration merging)
   Expect<Equal<Parameters<Board['query']>, [filter?: QueryFilter]>>,
   Expect<Equal<ReturnType<Board['query']>, readonly Readonly<ElementRecord<unknown>>[]>>,
   Expect<Equal<Board['spatial'], SpatialIndex>>,
@@ -137,7 +137,7 @@ export type Tests = [
       readonly Readonly<ElementRecord<{ note: string; priority: number }>>[]
     >
   >,
-  // BOARD-212: Uji tipe izin (can, runAction)
+  // BOARD-212: permission type tests (can, runAction)
   Expect<
     Equal<
       Parameters<Board['can']>,

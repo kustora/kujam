@@ -1,5 +1,5 @@
 /**
- * `@kujam/core` — Inti papan tulis agnostik tanpa DOM dan tanpa dependensi runtime.
+ * `@kujam/core` — Framework-agnostic whiteboard core with no DOM and no runtime dependencies.
  *
  * @packageDocumentation
  */
@@ -165,7 +165,7 @@ export {
 export { queryElements, type QueryFilter } from './query.js';
 
 /**
- * Peta global tipe elemen ke tipe props untuk declaration merging (BOARD-607).
+ * Global map from element type to props type, for declaration merging (BOARD-607).
  *
  * @example
  * ```ts
@@ -181,7 +181,7 @@ export { queryElements, type QueryFilter } from './query.js';
 export interface BoardElementTypes {}
 
 /**
- * Tipe pembantu untuk merefleksikan props dari nama tipe elemen terdaftar atau fallback generik (BOARD-607).
+ * Helper type that resolves props from a registered element type name, or falls back to a generic (BOARD-607).
  *
  * @public
  */
@@ -194,14 +194,14 @@ export type ResolveElementProps<T> = T extends keyof BoardElementTypes
       : Record<string, unknown>;
 
 /**
- * Bahasa UI yang didukung package.
+ * UI locales supported by the package.
  *
  * @public
  */
 export type BoardLocale = 'id' | 'en';
 
 /**
- * Batas zoom kamera.
+ * Camera zoom bounds.
  *
  * @public
  */
@@ -211,54 +211,54 @@ export interface ZoomRange {
 }
 
 /**
- * Batas zoom bawaan: 10% sampai 400%.
+ * Default zoom bounds: 10% to 400%.
  *
  * @public
  */
 export const DEFAULT_ZOOM_RANGE: Readonly<ZoomRange> = Object.freeze({ min: 0.1, max: 4 });
 
 /**
- * Fungsi pengambil data luar per ID (BOARD-604).
+ * Function that fetches external data by ID (BOARD-604).
  *
  * @beta
  */
 export type BoardResolver<D = unknown> = (id: string) => ResolveResult<D>;
 
 /**
- * Peta nama resolver ke fungsi pengambil data luar (BOARD-211, BOARD-604).
+ * Map from resolver name to external data fetcher (BOARD-211, BOARD-604).
  *
  * @beta
  */
 export type BoardResolvers = Readonly<Record<string, BoardResolver>>;
 
 /**
- * Adapter resolusi dan unggah aset media untuk elemen gambar (BOARD-211, BOARD-1103).
+ * Adapter for resolving and uploading media assets for image elements (BOARD-211, BOARD-1103).
  *
  * @beta
  */
 export interface AssetAdapter {
-  /** Mengembalikan URL aset (sinkron atau async), atau `null`/`undefined` bila tidak tersedia. */
+  /** Returns the asset URL (sync or async), or `null`/`undefined` when unavailable. */
   resolve(assetId: string): string | null | undefined | PromiseLike<string | null | undefined>;
-  /** Mengunggah berkas/blob aset dan mengembalikan `assetId` baru. */
+  /** Uploads an asset file/blob and returns the new `assetId`. */
   upload?(file: unknown): string | PromiseLike<string>;
 }
 
 /**
- * Batas ukuran dan jumlah entitas di papan (BOARD-005, BOARD-210, BOARD-211).
+ * Limits on board size and entity counts (BOARD-005, BOARD-210, BOARD-211).
  *
  * @public
  */
 export interface BoardLimits {
-  /** Ukuran maksimum dokumen ter-serialisasi dalam byte. Bawaan 10 MB (`10_485_760`). */
+  /** Maximum serialized document size in bytes. Defaults to 10 MB (`10_485_760`). */
   readonly maxDocumentBytes: number;
-  /** Jumlah maksimum elemen per papan. Bawaan `5_000`. */
+  /** Maximum number of elements per board. Defaults to `5_000`. */
   readonly maxElements: number;
-  /** Jumlah maksimum titik per elemen coretan (`draw`). Bawaan `5_000`. */
+  /** Maximum number of points per freehand (`draw`) element. Defaults to `5_000`. */
   readonly maxDrawPoints: number;
 }
 
 /**
- * Nilai batas bawaan papan: 10 MB dokumen, 5.000 elemen, 5.000 titik per coretan.
+ * Default board limits: 10 MB document, 5,000 elements, 5,000 points per stroke.
  *
  * @public
  */
@@ -269,86 +269,86 @@ export const DEFAULT_BOARD_LIMITS: Readonly<BoardLimits> = Object.freeze({
 });
 
 /**
- * Opsi pembuatan instance `Board` (BOARD-211).
+ * Options for creating a `Board` instance (BOARD-211).
  *
  * @public
  */
 export interface CreateBoardOptions {
-  /** Dokumen awal papan; bila kosong dibuat dokumen baru dengan satu halaman (`page:main`). */
+  /** Initial board document; when omitted, a new document with one page (`page:main`) is created. */
   document?: BoardDocument;
   /**
-   * Daftar plugin yang dipasang secara deterministik berdasarkan urutan dan `dependsOn`
-   * (BOARD-602). Misalnya `[defaultElements, defaultTools]`.
+   * Plugins, installed deterministically by order and `dependsOn`
+   * (BOARD-602). For example `[defaultElements, defaultTools]`.
    */
   plugins?: Iterable<AnyPluginDefinition>;
   /**
-   * Peta nama resolver ke fungsi pengambil data luar untuk elemen kustom (BOARD-604).
+   * Map from resolver name to external data fetcher for custom elements (BOARD-604).
    *
    * @beta
    */
   resolvers?: BoardResolvers;
   /**
-   * Adapter resolusi URL dan unggah berkas aset gambar (BOARD-1103).
+   * Adapter for resolving URLs and uploading image asset files (BOARD-1103).
    *
    * @beta
    */
   assets?: AssetAdapter;
   /**
-   * Identitas pengguna lokal untuk kolaborasi dan pemeriksaan izin (BOARD-212).
+   * Local user identity for collaboration and permission checks (BOARD-212).
    *
    * @beta
    */
   user?: BoardUser | null;
   /**
-   * Mode baca saja. Perubahan dokumen lokal ditolak; kamera dan seleksi tetap bisa diubah,
-   * dan `loadDocument` tetap diizinkan untuk menerima dokumen dari server.
+   * Read-only mode. Local document changes are rejected; camera and selection can still change,
+   * and `loadDocument` is still allowed so documents from the server can be received.
    */
   readOnly?: boolean;
-  /** Bahasa UI. Bawaan `'id'`. */
+  /** UI locale. Defaults to `'id'`. */
   locale?: BoardLocale;
   /**
-   * Batas ukuran dokumen, jumlah elemen, dan titik coretan (BOARD-210). Nilai yang tidak diisi
-   * memakai {@link DEFAULT_BOARD_LIMITS}.
+   * Limits on document size, element count, and stroke points (BOARD-210). Omitted values
+   * fall back to {@link DEFAULT_BOARD_LIMITS}.
    */
   limits?: Partial<BoardLimits>;
   /**
-   * Hook izin tingkat aplikasi; digabung secara logika AND dengan hook izin dari plugin
+   * Application-level permission hook; combined with plugin permission hooks using AND logic
    * (BOARD-212).
    *
    * @remarks
-   * **PENTING — Keamanan & Penegakan Izin:**
-   * Hook ini berjalan sepenuhnya di sisi klien (in-memory) dan dirancang semata-mata untuk kenyamanan UI
-   * (seperti menonaktifkan tombol aksi, menyembunyikan menu kontekstual, atau membatalkan operasi lokal sebelum
-   * dikirim ke jaringan). Hook ini **TIDAK** memberikan jaminan keamanan. Penegakan otorisasi dan kontrol akses
-   * yang sesungguhnya **WAJIB** ditegakkan di sisi server (misalnya saat memvalidasi pembaruan Yjs atau endpoint
-   * API penyimpanan). Klien tidak boleh dipercaya.
+   * **IMPORTANT — Security & permission enforcement:**
+   * This hook runs entirely on the client (in memory) and is meant purely for UI convenience
+   * (such as disabling action buttons, hiding context menus, or cancelling local operations before
+   * they reach the network). It provides **NO** security guarantee. Real authorization and access control
+   * **MUST** be enforced on the server (for example when validating Yjs updates or storage API
+   * endpoints). The client must never be trusted.
    *
    * @beta
    */
   permissions?: PermissionHook;
-  /** Batas zoom kamera. Bawaan {@link DEFAULT_ZOOM_RANGE}. */
+  /** Camera zoom bounds. Defaults to {@link DEFAULT_ZOOM_RANGE}. */
   zoomRange?: ZoomRange;
   /**
-   * Membekukan snapshot (`Object.freeze` dalam) sehingga mutasi tidak sengaja langsung
-   * melempar `TypeError`. Bawaan `true` (mode development, aman).
+   * Deep-freezes snapshots (`Object.freeze`) so accidental mutation throws a `TypeError`
+   * immediately. Defaults to `true` (development mode, safe).
    *
-   * Dengan `false` (mode produksi), snapshot tetap memakai structural sharing tetapi tidak
-   * dibekukan, sehingga transaksi sedikit lebih murah pada dokumen besar. Kontraknya tetap
-   * sama: snapshot tidak boleh diubah; mengubahnya merusak state papan tanpa peringatan.
-   * Core tidak membaca `process.env`, jadi pemakai menentukan sendiri, misalnya
+   * With `false` (production mode), snapshots still use structural sharing but are not
+   * frozen, making transactions slightly cheaper on large documents. The contract is the
+   * same: snapshots must not be mutated; mutating them silently corrupts board state.
+   * Core does not read `process.env`, so callers decide, for example
    * `freezeSnapshots: import.meta.env.DEV`.
    */
   freezeSnapshots?: boolean;
   /**
-   * Pembuat ID record. Bawaan {@link createId} (nanoid). Ganti dengan pembuat berurutan
-   * untuk tes deterministik.
+   * Record ID generator. Defaults to {@link createId} (nanoid). Replace with a sequential
+   * generator for deterministic tests.
    */
   createId?: IdGenerator;
-  /** Opsi riwayat undo lokal, misalnya `{ limit: 50 }`. Bawaan 200 langkah. */
+  /** Local undo history options, for example `{ limit: 50 }`. Defaults to 200 steps. */
   history?: HistoryOptions;
   /**
-   * Tool tujuan saat Esc ditekan di state awal dan setelah tool `oneShot` selesai. Bawaan
-   * {@link DEFAULT_TOOL_ID} (`'select'`). Board mulai tanpa tool aktif; panggil `setTool`.
+   * Tool to return to when Esc is pressed in the initial state and after a `oneShot` tool finishes.
+   * Defaults to {@link DEFAULT_TOOL_ID} (`'select'`). The board starts with no active tool; call `setTool`.
    *
    * @beta
    */
@@ -356,27 +356,27 @@ export interface CreateBoardOptions {
 }
 
 /**
- * Antarmuka publik instance `Board`.
+ * Public interface of a `Board` instance.
  *
  * @public
  */
 export interface Board {
   /**
-   * Snapshot dokumen saat ini. Objek snapshot baru dibuat per transaksi; record yang tidak
-   * berubah tetap objek yang sama (structural sharing). Dibekukan bila `freezeSnapshots` aktif.
+   * Current document snapshot. A new snapshot object is created per transaction; unchanged
+   * records keep the same object (structural sharing). Frozen when `freezeSnapshots` is enabled.
    */
   getDocument(): Readonly<BoardDocument>;
   /**
-   * Mengganti seluruh dokumen sebagai satu transaksi berasal `'load'` dan memancarkan satu event
-   * `change` berisi diff terhadap dokumen lama. Diizinkan juga saat `readOnly`.
-   * Melempar {@link InvalidDocumentError} bila tidak valid (state tidak berubah).
+   * Replaces the whole document as a single transaction with origin `'load'` and emits one
+   * `change` event with the diff against the old document. Also allowed when `readOnly`.
+   * Throws {@link InvalidDocumentError} when invalid (state is left unchanged).
    */
   loadDocument(doc: BoardDocument): void;
   /**
-   * Membuat elemen baru dengan nilai bawaan dan menyimpannya ke dokumen (BOARD-205).
+   * Creates a new element with default values and stores it in the document (BOARD-205).
    *
-   * @returns Record elemen baru, atau `undefined` bila ditolak (misalnya props tidak lolos
-   *   skema tipe atau batas maksimum elemen tercapai).
+   * @returns The new element record, or `undefined` when rejected (for example props fail the
+   *   type schema or the maximum element count is reached).
    * @beta
    */
   create<T = Record<string, unknown>>(
@@ -384,10 +384,10 @@ export interface Board {
     options?: MutateOptions,
   ): Readonly<ElementRecord<ResolveElementProps<T>>> | undefined;
   /**
-   * Memperbarui elemen yang sudah ada dengan patch sebagian (BOARD-205). Props digabung per kunci.
+   * Updates an existing element with a partial patch (BOARD-205). Props are merged per key.
    *
-   * @returns Record elemen yang diperbarui, atau `undefined` bila elemen tidak ditemukan, sedang
-   *   terkunci (tanpa `force`), atau props baru tidak lolos skema tipe.
+   * @returns The updated element record, or `undefined` when the element is not found, is
+   *   locked (without `force`), or the new props fail the type schema.
    * @beta
    */
   update<T = Record<string, unknown>>(
@@ -396,225 +396,225 @@ export interface Board {
     options?: UpdateOptions,
   ): Readonly<ElementRecord<ResolveElementProps<T>>> | undefined;
   /**
-   * Menghapus elemen beserta anak-anak (frame/grup) dan binding yang menempel (BOARD-205).
+   * Deletes elements together with their children (frames/groups) and attached bindings (BOARD-205).
    *
-   * @returns Daftar ID record yang berhasil dihapus.
+   * @returns IDs of the records that were deleted.
    * @beta
    */
   delete(ids: string | Iterable<string>, options?: DeleteOptions): readonly string[];
-  /** Record elemen dengan ID tersebut, atau `undefined` bila tidak ada atau bukan elemen. */
+  /** Element record with the given ID, or `undefined` when missing or not an element. */
   getElement<T = Record<string, unknown>>(
     id: string,
   ): Readonly<ElementRecord<ResolveElementProps<T>>> | undefined;
   /**
-   * Mencari elemen dalam dokumen berdasarkan filter tipe, page, parent, dan batas spasial (BOARD-206).
+   * Finds elements in the document by type, page, parent, and spatial bounds filters (BOARD-206).
    *
-   * @typeParam T - Nama tipe elemen terdaftar di {@link BoardElementTypes} atau tipe props kustom.
-   * @returns Daftar record elemen yang cocok, terurut deterministik dari lapisan terbawah ke teratas.
+   * @typeParam T - Element type name registered in {@link BoardElementTypes}, or a custom props type.
+   * @returns Matching element records, deterministically ordered from bottom layer to top.
    * @public
    */
   query<T = Record<string, unknown>>(
     filter?: QueryFilter,
   ): readonly Readonly<ElementRecord<ResolveElementProps<T>>>[];
   /**
-   * Menjalankan `fn` sebagai satu transaksi dan mengembalikan hasilnya.
+   * Runs `fn` as a single transaction and returns its result.
    *
-   * - Transaksi bersarang digabung ke transaksi terluar (opsinya diabaikan). Bila `fn` dalam
-   *   melempar, hanya perubahannya yang dibatalkan, lalu error diteruskan ke transaksi luar.
-   * - Bila `fn` melempar, semua perubahan dibatalkan dan error dilempar ulang.
-   * - Saat selesai, satu event `change` dipancarkan bila ada perubahan bersih.
-   * - `fn` wajib sinkron.
+   * - Nested transactions are merged into the outermost one (their options are ignored). When an inner
+   *   `fn` throws, only its changes are rolled back, then the error propagates to the outer transaction.
+   * - When `fn` throws, all changes are rolled back and the error is rethrown.
+   * - On completion, one `change` event is emitted if there is a net change.
+   * - `fn` must be synchronous.
    *
-   * @throws {@link ReadOnlyBoardError} bila papan `readOnly` dan origin `'local'`.
+   * @throws {@link ReadOnlyBoardError} when the board is `readOnly` and the origin is `'local'`.
    */
   transact<T>(fn: (tx: Transaction) => T, options?: TransactOptions): T;
   /**
-   * Mendengarkan event papan (lihat {@link BoardEventMap}). Mengembalikan fungsi untuk berhenti
-   * mendengarkan. Listener yang melempar tidak menghentikan listener lain dan tidak membuat
-   * pemanggil (misalnya `transact`) melempar; error-nya dipancarkan sebagai event `error`
-   * berkode `listener-error`.
+   * Listens to board events (see {@link BoardEventMap}). Returns a function that stops
+   * listening. A throwing listener does not stop other listeners and does not make the
+   * caller (for example `transact`) throw; its error is emitted as an `error` event
+   * with code `listener-error`.
    */
   on<K extends keyof BoardEventMap>(type: K, listener: Listener<BoardEventMap[K]>): Unsubscribe;
-  /** Membuat ID record baru memakai opsi `createId` (bawaan nanoid). */
+  /** Creates a new record ID using the `createId` option (nanoid by default). */
   createId(): string;
-  /** Snapshot kamera yang dibekukan. */
+  /** Frozen camera snapshot. */
   getCamera(): Readonly<CameraState>;
   /**
-   * Mengubah kamera. Nilai yang tidak berhingga diabaikan, dan zoom dijepit ke `zoomRange`.
-   * Memancarkan event `camera` bila kamera benar-benar berubah.
+   * Changes the camera. Non-finite values are ignored, and zoom is clamped to `zoomRange`.
+   * Emits a `camera` event when the camera actually changes.
    */
   setCamera(patch: Partial<CameraState>): void;
   /**
-   * Membatalkan langkah lokal terakhir: kebalikan diff-nya diterapkan sebagai transaksi berasal
-   * `'undo'` dengan label transaksi aslinya. Record yang sudah diubah pihak lain (misalnya
-   * `remote`) sejak langkah itu dilewati; langkah yang tidak bisa dibalik sama sekali dibuang dan
-   * undo lanjut ke langkah sebelumnya.
+   * Undoes the last local step: its inverse diff is applied as a transaction with origin
+   * `'undo'` and the original transaction's label. Records changed by another party (for example
+   * `remote`) since that step are skipped; a step that cannot be reversed at all is dropped and
+   * undo continues with the previous step.
    *
-   * @returns `true` bila ada perubahan yang diterapkan, `false` bila tidak ada yang bisa di-undo
-   *   (termasuk selalu pada papan `readOnly`, karena riwayatnya selalu kosong). Bila tool sedang
-   *   di tengah interaksi, undo hanya membatalkan interaksi itu dan mengembalikan `true`.
-   * @throws `Error` bila dipanggil di dalam `transact` atau setelah `dispose`.
+   * @returns `true` when changes were applied, `false` when there is nothing to undo
+   *   (always the case on a `readOnly` board, since its history is always empty). When a tool is
+   *   mid-interaction, undo only cancels that interaction and returns `true`.
+   * @throws `Error` when called inside `transact` or after `dispose`.
    */
   undo(): boolean;
   /**
-   * Menerapkan ulang langkah yang terakhir di-undo, sebagai transaksi berasal `'redo'`. Aturan
-   * konflik, nilai kembali, dan error sama dengan {@link Board.undo}. Interaksi tool yang sedang
-   * berlangsung dibatalkan dulu.
+   * Reapplies the most recently undone step as a transaction with origin `'redo'`. Conflict
+   * rules, return value, and errors are the same as {@link Board.undo}. An in-progress tool
+   * interaction is cancelled first.
    */
   redo(): boolean;
   /**
-   * Status riwayat undo. Hanya transaksi berasal `'local'` yang dicatat; perubahan lokal baru
-   * membuang tumpukan redo; `loadDocument` dan migrasi mengosongkan riwayat. Perubahan
-   * `canUndo`/`canRedo` dipancarkan lewat event `history`.
+   * Undo history state. Only transactions with origin `'local'` are recorded; a new local change
+   * clears the redo stack; `loadDocument` and migrations clear the history. Changes to
+   * `canUndo`/`canRedo` are emitted through the `history` event.
    */
   readonly history: BoardHistory;
   /**
-   * Menjalankan perintah terdaftar (BOARD-503).
+   * Runs a registered command (BOARD-503).
    *
-   * @returns `true` bila perintah dijalankan, `false` bila `isEnabled` menolak.
-   * @throws {@link CommandError} berkode `unknown-command` bila ID tidak terdaftar, atau `Error`
-   *   setelah `dispose`. Error dari `isEnabled` atau `run` diteruskan apa adanya.
+   * @returns `true` when the command ran, `false` when `isEnabled` rejected it.
+   * @throws {@link CommandError} with code `unknown-command` when the ID is not registered, or `Error`
+   *   after `dispose`. Errors from `isEnabled` or `run` are propagated as-is.
    */
   run(id: string, args?: unknown): boolean;
-  /** Registri perintah papan ini: sumber command palette dan shortcut. */
+  /** This board's command registry: the source for the command palette and shortcuts. */
   readonly commands: BoardCommands;
-  /** Registri tipe elemen papan ini (BOARD-601, BOARD-602). */
+  /** This board's element type registry (BOARD-601, BOARD-602). */
   readonly elements: ElementRegistry;
-  /** Registri plugin yang terpasang di papan ini sesuai urutan pemasangan (BOARD-602). */
+  /** Plugins installed on this board, in installation order (BOARD-602). */
   readonly plugins: BoardPlugins;
   /**
-   * Registri tool papan ini (BOARD-501).
+   * This board's tool registry (BOARD-501).
    *
    * @beta
    */
   readonly tools: BoardTools;
   /**
-   * Mengaktifkan tool. Interaksi tool sebelumnya dibatalkan (rollback). Memancarkan event `tool`
-   * bila tool berganti.
+   * Activates a tool. The previous tool's interaction is cancelled (rolled back). Emits a `tool`
+   * event when the tool changes.
    *
-   * @throws `ToolError` berkode `unknown-tool` bila ID tidak terdaftar.
+   * @throws `ToolError` with code `unknown-tool` when the ID is not registered.
    * @beta
    */
   setTool(id: string): void;
   /**
-   * ID tool aktif, atau `null` bila belum ada.
+   * Active tool ID, or `null` when none is set.
    *
    * @beta
    */
   readonly tool: string | null;
   /**
-   * State tool aktif (misalnya `'idle'`), atau `null` bila belum ada tool aktif.
+   * Active tool state (for example `'idle'`), or `null` when no tool is active.
    *
    * @beta
    */
   readonly toolState: string | null;
   /**
-   * Kursor CSS untuk state tool saat ini. Renderer membacanya setelah `dispatch`.
+   * CSS cursor for the current tool state. The renderer reads it after `dispatch`.
    *
    * @beta
    */
   readonly cursor: string;
   /**
-   * Mengirim event input ternormalisasi dari renderer ke tool aktif.
+   * Sends a normalized input event from the renderer to the active tool.
    *
-   * @returns `true` bila event ditangani (renderer sebaiknya memanggil `preventDefault`).
-   * @throws `Error` setelah `dispose`. Error dari handler tool diteruskan setelah interaksinya
-   *   di-rollback.
+   * @returns `true` when the event was handled (the renderer should call `preventDefault`).
+   * @throws `Error` after `dispose`. Errors from tool handlers are propagated after the interaction
+   *   is rolled back.
    * @beta
    */
   dispatch(event: BoardInputEvent): boolean;
-  /** Mode baca saja (lihat {@link CreateBoardOptions.readOnly}). */
+  /** Read-only mode (see {@link CreateBoardOptions.readOnly}). */
   readonly readOnly: boolean;
   readonly locale: BoardLocale;
   /**
-   * Peta resolver data eksternal untuk elemen kustom (BOARD-211, BOARD-604).
+   * External data resolver map for custom elements (BOARD-211, BOARD-604).
    *
    * @beta
    */
   readonly resolvers: BoardResolvers;
   /**
-   * Adapter resolusi URL dan unggah aset media (BOARD-211, BOARD-1103).
+   * Adapter for resolving URLs and uploading media assets (BOARD-211, BOARD-1103).
    *
    * @beta
    */
   readonly assets: Readonly<AssetAdapter> | null;
   /**
-   * Identitas pengguna lokal (BOARD-211, BOARD-212).
+   * Local user identity (BOARD-211, BOARD-212).
    *
    * @beta
    */
   readonly user: Readonly<BoardUser> | null;
   /**
-   * Batas ukuran dokumen, jumlah elemen, dan titik coretan (BOARD-210, BOARD-211).
+   * Limits on document size, element count, and stroke points (BOARD-210, BOARD-211).
    *
    * @public
    */
   readonly limits: Readonly<BoardLimits>;
   /**
-   * Hook izin gabungan dari aplikasi dan seluruh plugin terpasang (BOARD-211, BOARD-212).
-   * Bernilai `null` bila tidak ada hook izin yang didaftarkan.
+   * Combined permission hook from the application and all installed plugins (BOARD-211, BOARD-212).
+   * `null` when no permission hook is registered.
    *
    * @beta
    */
   readonly permissions: PermissionHook | null;
   /**
-   * Memeriksa apakah suatu operasi diizinkan oleh hook izin aplikasi dan plugin (BOARD-212).
-   * Seluruh hook digabungkan dengan logika AND: operasi diizinkan hanya jika tidak ada satu pun
-   * hook yang mengembalikan `false`.
+   * Checks whether an operation is allowed by the application and plugin permission hooks (BOARD-212).
+   * All hooks are combined with AND logic: the operation is allowed only if no hook
+   * returns `false`.
    *
-   * @param action - Jenis operasi: `'create'`, `'update'`, `'delete'`, `'action'`, atau string aksi kustom.
-   * @param element - Elemen target, atau `null` bila aksi bersifat umum/global.
-   * @returns `true` bila diizinkan, `false` bila ditolak oleh salah satu hook.
+   * @param action - Operation kind: `'create'`, `'update'`, `'delete'`, `'action'`, or a custom action string.
+   * @param element - Target element, or `null` for a general/global action.
+   * @returns `true` when allowed, `false` when rejected by any hook.
    *
    * @remarks
-   * **PENTING — Keamanan & Penegakan Izin:**
-   * Hook ini berjalan sepenuhnya di sisi klien (in-memory) dan dirancang semata-mata untuk kenyamanan UI
-   * (seperti menonaktifkan tombol aksi, menyembunyikan menu kontekstual, atau membatalkan operasi lokal sebelum
-   * dikirim ke jaringan). Hook ini **TIDAK** memberikan jaminan keamanan. Penegakan otorisasi dan kontrol akses
-   * yang sesungguhnya **WAJIB** ditegakkan di sisi server (misalnya saat memvalidasi pembaruan Yjs atau endpoint
-   * API penyimpanan). Klien tidak boleh dipercaya.
+   * **IMPORTANT — Security & permission enforcement:**
+   * This hook runs entirely on the client (in memory) and is meant purely for UI convenience
+   * (such as disabling action buttons, hiding context menus, or cancelling local operations before
+   * they reach the network). It provides **NO** security guarantee. Real authorization and access control
+   * **MUST** be enforced on the server (for example when validating Yjs updates or storage API
+   * endpoints). The client must never be trusted.
    *
    * @beta
    */
   can(action: PermissionAction, element?: Readonly<ElementRecord> | null): boolean;
   /**
-   * Menjalankan aksi kontekstual elemen dengan verifikasi izin (BOARD-212, BOARD-605).
+   * Runs an element's contextual action with a permission check (BOARD-212, BOARD-605).
    *
-   * Sebelum memanggil `action.run()`, memeriksa izin dengan `board.can('action', element)`.
-   * Bila ditolak, memancarkan event `error` berkode `'forbidden'` dan mengembalikan `false` tanpa
-   * memanggil `action.run()`.
+   * Before calling `action.run()`, checks permission with `board.can('action', element)`.
+   * When rejected, emits an `error` event with code `'forbidden'` and returns `false` without
+   * calling `action.run()`.
    *
-   * @param action - Aksi elemen yang akan dijalankan.
-   * @param element - Elemen yang memiliki aksi tersebut.
-   * @returns `true` bila aksi dijalankan, `false` bila ditolak oleh hook izin atau `action.isEnabled()`.
+   * @param action - The element action to run.
+   * @param element - The element that owns the action.
+   * @returns `true` when the action ran, `false` when rejected by a permission hook or `action.isEnabled()`.
    *
    * @beta
    */
   runAction(action: ElementAction, element: Readonly<ElementRecord>): boolean;
   /**
-   * Menandakan apakah papan sudah dibuang dengan {@link Board.dispose}.
+   * Whether the board has been disposed with {@link Board.dispose}.
    *
    * @public
    */
   readonly disposed: boolean;
   /**
-   * Indeks spasial R-tree (rbush) untuk pencarian area dan culling viewport (BOARD-404, BOARD-206).
+   * R-tree spatial index (rbush) for area queries and viewport culling (BOARD-404, BOARD-206).
    *
    * @public
    */
   readonly spatial: SpatialIndex;
   /**
-   * Menjalankan teardown plugin dalam urutan terbalik lalu melepas semua listener, perintah, tool,
-   * dan riwayat. Aman dipanggil lebih dari sekali. Setelahnya `transact`, `loadDocument`, `undo`,
-   * `redo`, `run`, `setTool`, dan `dispatch` melempar error.
+   * Runs plugin teardowns in reverse order, then releases all listeners, commands, tools,
+   * and history. Safe to call more than once. Afterwards `transact`, `loadDocument`, `undo`,
+   * `redo`, `run`, `setTool`, and `dispatch` throw.
    */
   dispose(): void;
 }
 
 /**
- * Membuat dokumen papan kosong dengan satu halaman bawaan (`page:main`).
+ * Creates an empty board document with one default page (`page:main`).
  *
- * @param meta - Metadata bebas milik pemakai; disalin dangkal dan tidak pernah diubah package.
+ * @param meta - Free-form caller metadata; shallow-copied and never modified by the package.
  *
  * @public
  */
@@ -634,7 +634,7 @@ export function createEmptyDocument(meta: Record<string, unknown> = {}): BoardDo
   };
 }
 
-/** Memvalidasi lalu menyalin dokumen masukan agar tidak terhubung dengan state papan. */
+/** Validates and then copies the input document so it is not linked to board state. */
 function toOwnedDocument(doc: BoardDocument): BoardDocument {
   const result = validateDocument(doc);
   if (!result.valid) {
@@ -775,7 +775,7 @@ function resolvePermissions(permissions: unknown): PermissionHook | null {
 }
 
 /**
- * Membuat instance `Board` baru tanpa ketergantungan DOM.
+ * Creates a new `Board` instance with no DOM dependency.
  *
  * @public
  */
@@ -799,8 +799,8 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
 
   const events = createEmitter<BoardEventMap>((type, error) => {
     const message = `Listener event "${String(type)}" melempar error.`;
-    // Error dari listener `error` sendiri, atau tanpa listener `error`, tidak dipancarkan ulang
-    // (mencegah rekursi tak terbatas) tetapi juga tidak ditelan diam-diam.
+    // Errors from an `error` listener itself, or with no `error` listener, are not re-emitted
+    // (preventing infinite recursion) but are not silently swallowed either.
     if (type === 'error' || !events.has('error')) {
       reportUnhandled(`[kujam] ${message}`, error);
       return;
@@ -829,7 +829,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       freeze,
       readOnly,
       onChange: (event) => {
-        // Perbarui indeks spasial secara inkremental (BOARD-404, BOARD-206)
+        // Update the spatial index incrementally (BOARD-404, BOARD-206)
         if (event.origin === 'load') {
           spatial.clear();
           spatial.load(
@@ -850,9 +850,9 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
           }
         }
 
-        // Transaksi interaksi tool dicatat sebagai satu langkah saat interaksi selesai.
+        // Tool interaction transactions are recorded as a single step when the interaction ends.
         if (interaction.capturing) interaction.observe(event);
-        // Riwayat diperbarui dulu agar listener `change` membaca canUndo/canRedo yang baru.
+        // History is updated first so `change` listeners read the new canUndo/canRedo.
         else history.observe(event);
         events.emit('change', event);
         history.flush();
@@ -860,7 +860,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     },
   );
 
-  // Inisialisasi indeks spasial dari dokumen awal
+  // Initialize the spatial index from the initial document
   spatial.load(
     Object.values(store.getDocument().records).filter(
       (r): r is ElementRecord => r.kind === 'element',
@@ -1012,7 +1012,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
         }
       }
       const owned = toOwnedDocument(currentDoc);
-      // Diff interaksi yang berlangsung tidak berlaku untuk dokumen baru.
+      // The diff of an in-progress interaction does not apply to the new document.
       tools.reset();
       history.api.clear();
       store.replaceDocument(owned, 'load');

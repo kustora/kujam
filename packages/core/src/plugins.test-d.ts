@@ -1,6 +1,6 @@
-// Uji tipe untuk BOARD-602: diperiksa oleh `tsc --noEmit` (pnpm typecheck), tanpa kode runtime.
-// Membuktikan tipe `definePlugin`, inferensi tuple `elements`/`tools`, dan bahwa plugin tidak
-// punya akses ke internal store di luar API publik `Board`.
+// Type tests for BOARD-602: checked by `tsc --noEmit` (pnpm typecheck), with no runtime code.
+// Proves the `definePlugin` types, `elements`/`tools` tuple inference, and that plugins have
+// no access to store internals beyond the public `Board` API.
 import type {
   AnyPluginDefinition,
   Board,
@@ -66,29 +66,29 @@ const samplePlugin = defPlugin({
     void _v;
   },
   setup(board) {
-    // Kriteria penerimaan BOARD-602: `board` di dalam `setup` murni bertipe publik `Board`,
-    // tanpa akses ke `RecordStore` internal (`store`, `replaceDocument`, `inTransaction`, `getRecord`).
+    // BOARD-602 acceptance criterion: `board` inside `setup` is purely the public `Board` type,
+    // with no access to the internal `RecordStore` (`store`, `replaceDocument`, `inTransaction`, `getRecord`).
     const _isPublicBoard: Expect<Equal<typeof board, Board>> = true;
     void _isPublicBoard;
 
-    // @ts-expect-error -- plugin tidak punya akses ke `store` internal
+    // @ts-expect-error -- plugins have no access to the internal `store`
     void board.store;
-    // @ts-expect-error -- `replaceDocument` adalah metode internal RecordStore, bukan Board publik
+    // @ts-expect-error -- `replaceDocument` is an internal RecordStore method, not public Board
     void board.replaceDocument;
-    // @ts-expect-error -- `inTransaction` adalah metode internal RecordStore, bukan Board publik
+    // @ts-expect-error -- `inTransaction` is an internal RecordStore method, not public Board
     void board.inTransaction;
-    // @ts-expect-error -- `getRecord` adalah metode internal RecordStore, bukan Board publik
+    // @ts-expect-error -- `getRecord` is an internal RecordStore method, not public Board
     void board.getRecord;
 
     return () => {};
   },
 });
 
-// Plugin spesifik bisa ditampung sebagai AnyPluginDefinition.
+// Specific plugins fit into AnyPluginDefinition.
 const _collection: readonly AnyPluginDefinition[] = [samplePlugin];
 void _collection;
 
-// Pastikan tidak ada properti RecordStore bocor di tipe Board.
+// Make sure no RecordStore property leaks into the Board type.
 type InternalOnlyKeys = Exclude<keyof RecordStore, keyof Board>;
 
 export type Checks = [

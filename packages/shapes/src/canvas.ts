@@ -1,11 +1,11 @@
 /**
- * Helper gambar Canvas bersama untuk elemen bawaan.
+ * Shared Canvas drawing helpers for built-in elements.
  *
  * @internal
  */
 import type { ElementCanvasContext, Geometry } from '@kujam/core';
 
-/** Menelusuri path geometri pada konteks (tanpa fill/stroke). */
+/** Traces a geometry path on the context (without fill/stroke). */
 export function traceGeometry(g: ElementCanvasContext, geometry: Geometry): void {
   g.beginPath();
   switch (geometry.kind) {
@@ -31,7 +31,7 @@ export function traceGeometry(g: ElementCanvasContext, geometry: Geometry): void
   }
 }
 
-/** Menelusuri kotak bersudut bulat. */
+/** Traces a rounded rectangle. */
 export function traceRoundedRect(
   g: ElementCanvasContext,
   w: number,
@@ -52,7 +52,7 @@ export function traceRoundedRect(
   g.closePath();
 }
 
-/** Opsi {@link drawPlainText}. */
+/** Options for {@link drawPlainText}. */
 export interface PlainTextOptions {
   readonly x: number;
   readonly y: number;
@@ -62,8 +62,8 @@ export interface PlainTextOptions {
   readonly align: 'start' | 'center' | 'end';
 }
 
-// TODO(BOARD-1003a): ganti dengan renderer rich text (wrap, ukur, daftar, tebal/miring).
-/** Menggambar teks polos per baris `\n`, tanpa wrap. */
+// TODO(BOARD-1003a): replace with the rich text renderer (wrap, measure, lists, bold/italic).
+/** Draws plain text per `\n`-separated line, without wrapping. */
 export function drawPlainText(g: ElementCanvasContext, text: string, o: PlainTextOptions): void {
   if (!text) return;
   g.fillStyle = o.color;

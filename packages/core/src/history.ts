@@ -1,64 +1,64 @@
 /**
- * Riwayat undo/redo lokal berbasis diff (BOARD-301).
+ * Diff-based local undo/redo history (BOARD-301).
  *
- * Setiap langkah adalah {@link RecordsDiff} satu transaksi. Undo menerapkan kebalikan diff
- * langkah teratas sebagai transaksi berasal `undo`; diff hasil transaksi itu menjadi langkah
- * redo, dan redo menerapkan kebalikannya lagi (berasal `redo`). Dengan begitu undo dan redo
- * simetris, dan langkah yang hanya sebagian bisa diterapkan tetap konsisten.
+ * Each step is one transaction's {@link RecordsDiff}. Undo applies the inverse of the top
+ * step's diff as a transaction with origin `undo`; the diff produced by that transaction becomes the
+ * redo step, and redo applies its inverse again (origin `redo`). This keeps undo and redo
+ * symmetric, and steps that can only be partially applied stay consistent.
  *
- * Strategi konflik 0.1 (perubahan pihak lain, misalnya `remote`, di antara langkah lokal dan
- * undo): kebalikan diff diterapkan per record, dan record yang diubah pihak lain (dibuat, diubah,
- * atau dihapus) setelah langkah itu tercatat dilewati, sehingga perubahan pihak lain selalu
- * menang dan record yang dihapus pihak lain tidak dihidupkan kembali. Bila tidak ada satu pun
- * record yang bisa dibalik, langkah dibuang dan undo lanjut ke langkah berikutnya. Karena
- * langkah lokal dibalik berurutan dari yang terbaru (LIFO), langkah lokal tidak pernah saling
- * berkonflik. Undo per orang yang sesungguhnya datang di 0.2 lewat `UndoManager` Yjs (BOARD-1507).
+ * Conflict strategy in 0.1 (changes by another party, for example `remote`, between a local step and
+ * its undo): the inverse diff is applied per record, and records changed by another party (created, updated,
+ * or deleted) after the step was recorded are skipped, so the other party's changes always
+ * win and records deleted by the other party are not resurrected. When no record at all
+ * can be reversed, the step is dropped and undo continues with the next step. Because
+ * local steps are reversed in order from newest (LIFO), local steps never conflict with
+ * each other. True per-user undo comes in 0.2 via Yjs's `UndoManager` (BOARD-1507).
  *
- * Pelacakan konflik memakai nomor urut: setiap langkah menyimpan nomor saat dicatat, dan setiap
- * perubahan pihak lain menandai ID record yang disentuhnya dengan nomor baru. Biayanya sebanding
- * jumlah record yang berubah, bukan jumlah langkah di riwayat.
+ * Conflict tracking uses sequence numbers: each step stores its number when recorded, and every
+ * change by another party tags the record IDs it touches with a new number. The cost is proportional to
+ * the number of changed records, not the number of steps in the history.
  */
 
 import type { ChangeEvent, RecordsDiff, RecordStore, Transaction } from './store.js';
 
 /**
- * Batas bawaan jumlah langkah undo yang disimpan.
+ * Default maximum number of stored undo steps.
  *
  * @public
  */
 export const DEFAULT_HISTORY_LIMIT = 200;
 
 /**
- * Opsi riwayat undo untuk `createBoard({ history })`.
+ * Undo history options for `createBoard({ history })`.
  *
  * @public
  */
 export interface HistoryOptions {
   /**
-   * Jumlah langkah undo maksimum; langkah tertua dibuang saat batas terlewati. Bilangan bulat
-   * `>= 0` atau `Infinity`. `0` mematikan riwayat. Bawaan {@link DEFAULT_HISTORY_LIMIT}.
+   * Maximum number of undo steps; the oldest step is dropped when the limit is exceeded. An integer
+   * `>= 0` or `Infinity`. `0` disables history. Defaults to {@link DEFAULT_HISTORY_LIMIT}.
    */
   limit?: number;
 }
 
 /**
- * Status riwayat undo papan (`board.history`).
+ * Board undo history state (`board.history`).
  *
  * @public
  */
 export interface BoardHistory {
-  /** Ada langkah yang bisa di-undo. */
+  /** There is a step that can be undone. */
   readonly canUndo: boolean;
-  /** Ada langkah yang bisa di-redo. */
+  /** There is a step that can be redone. */
   readonly canRedo: boolean;
-  /** Batas langkah yang dipakai (lihat {@link HistoryOptions.limit}). */
+  /** Step limit in use (see {@link HistoryOptions.limit}). */
   readonly limit: number;
-  /** Mengosongkan tumpukan undo dan redo. Dokumen tidak berubah. */
+  /** Clears the undo and redo stacks. The document is unchanged. */
   clear(): void;
 }
 
 /**
- * Isi event `history`: dipancarkan hanya saat `canUndo` atau `canRedo` berubah nilai.
+ * Payload of the `history` event: emitted only when `canUndo` or `canRedo` changes value.
  *
  * @public
  */
@@ -72,18 +72,18 @@ export interface LocalHistory {
   readonly api: BoardHistory;
   undo(): boolean;
   redo(): boolean;
-  /** Dipanggil untuk setiap event `change` papan, sebelum listener pemakai. */
+  /** Called for every board `change` event, before consumer listeners. */
   observe(event: ChangeEvent): void;
-  /** Memanggil `onStateChange` bila `canUndo`/`canRedo` berubah sejak laporan terakhir. */
+  /** Calls `onStateChange` when `canUndo`/`canRedo` changed since the last report. */
   flush(): void;
   /**
-   * Memesan nomor urut untuk langkah yang baru dicatat nanti (interaksi tool, BOARD-501).
-   * Perubahan pihak lain sesudah nomor ini dianggap konflik saat langkahnya di-undo.
+   * Reserves a sequence number for a step that will be recorded later (tool interactions, BOARD-501).
+   * Changes by another party after this number count as conflicts when the step is undone.
    */
   reserveSeq(): number;
   /**
-   * Mencatat diff gabungan sebagai satu langkah lokal dengan nomor urut yang sudah dipesan,
-   * lalu membuang tumpukan redo (seperti transaksi lokal biasa).
+   * Records the combined diff as a single local step with the reserved sequence number,
+   * then clears the redo stack (like a regular local transaction).
    */
   record(diff: ChangeEvent, seq: number): void;
   dispose(): void;
@@ -95,7 +95,7 @@ export interface LocalHistoryOptions {
   onStateChange: (event: HistoryEvent) => void;
 }
 
-/** Satu langkah riwayat: diff transaksi dan nomor urut saat dicatat. */
+/** A single history step: the transaction diff and its sequence number when recorded. */
 interface Entry {
   readonly diff: ChangeEvent;
   readonly seq: number;
@@ -108,7 +108,7 @@ interface Capture {
 }
 
 /**
- * Memvalidasi `history.limit`.
+ * Validates `history.limit`.
  *
  * @internal
  */
@@ -119,7 +119,7 @@ export function resolveHistoryLimit(options: HistoryOptions | undefined): number
   throw new RangeError('history.limit wajib bilangan bulat >= 0 atau Infinity.');
 }
 
-/** Menerapkan kebalikan `diff` pada record yang lolos `keep`. */
+/** Applies the inverse of `diff` to records that pass `keep`. */
 function applyInverse(tx: Transaction, diff: RecordsDiff, keep: (id: string) => boolean): void {
   for (const id of Object.keys(diff.added)) {
     if (keep(id)) tx.remove(id);
@@ -137,7 +137,7 @@ function touchedIds(diff: RecordsDiff): string[] {
 }
 
 /**
- * Membuat riwayat undo lokal yang terhubung ke store.
+ * Creates a local undo history connected to the store.
  *
  * @internal
  */
@@ -145,7 +145,7 @@ export function createLocalHistory(store: RecordStore, options: LocalHistoryOpti
   const { limit, onStateChange } = options;
   const undoStack: Entry[] = [];
   const redoStack: Entry[] = [];
-  /** ID record -> nomor urut perubahan pihak lain terakhir yang menyentuhnya. */
+  /** Record ID -> sequence number of the last change by another party that touched it. */
   const foreign = new Map<string, number>();
   let seq = 0;
   let capture: Capture | null = null;
@@ -180,7 +180,7 @@ export function createLocalHistory(store: RecordStore, options: LocalHistoryOpti
     while (!applied && from.length > 0) {
       const entry = from.pop() as Entry;
       const token: Capture = { origin, target: to, applied: false };
-      // Record yang disentuh pihak lain setelah langkah ini tercatat tidak dibalik.
+      // Records touched by another party after this step was recorded are not reversed.
       const keep = (id: string): boolean => (foreign.get(id) ?? 0) < entry.seq;
       capture = token;
       try {
@@ -191,7 +191,7 @@ export function createLocalHistory(store: RecordStore, options: LocalHistoryOpti
       } finally {
         if (capture === token) capture = null;
       }
-      // Bila semua record sudah diubah pihak lain, langkah ini dibuang (tidak masuk `to`).
+      // When every record has been changed by another party, this step is dropped (not added to `to`).
       applied = token.applied;
     }
     if (undoStack.length === 0 && redoStack.length === 0) foreign.clear();
@@ -218,8 +218,8 @@ export function createLocalHistory(store: RecordStore, options: LocalHistoryOpti
     undo: () => step(undoStack, redoStack, 'undo'),
     redo: () => step(redoStack, undoStack, 'redo'),
     observe(event) {
-      // Hanya transaksi undo/redo milik riwayat ini yang ditangkap; transaksi lain yang memakai
-      // origin `undo`/`redo` secara manual diperlakukan seperti perubahan non-lokal.
+      // Only this history's own undo/redo transactions are captured; other transactions that
+      // use the `undo`/`redo` origin manually are treated like non-local changes.
       if (capture && event.origin === capture.origin) {
         capture.applied = true;
         push(capture.target, event);
@@ -230,10 +230,10 @@ export function createLocalHistory(store: RecordStore, options: LocalHistoryOpti
         push(undoStack, event);
         redoStack.length = 0;
       } else if (event.origin === 'load' || event.origin === 'migration') {
-        // Diff lama tidak berlaku lagi untuk dokumen yang diganti atau dimigrasi.
+        // Old diffs no longer apply to a replaced or migrated document.
         clear();
       } else if (undoStack.length > 0 || redoStack.length > 0) {
-        // Perubahan pihak lain (remote, atau undo/redo manual): tandai record yang disentuhnya.
+        // Changes by another party (remote, or manual undo/redo): tag the records they touched.
         const mark = ++seq;
         for (const id of touchedIds(event)) foreign.set(id, mark);
       }

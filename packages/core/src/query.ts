@@ -1,5 +1,5 @@
 /**
- * Modul pencarian dan filter elemen papan tulis (`board.query`, BOARD-206).
+ * Whiteboard element search and filter module (`board.query`, BOARD-206).
  *
  * @packageDocumentation
  */
@@ -9,23 +9,23 @@ import type { Bounds, SpatialIndex } from './spatial.js';
 import type { BoardDocument, ElementRecord } from './types.js';
 
 /**
- * Filter pencarian elemen untuk `board.query` (BOARD-206).
+ * Element search filter for `board.query` (BOARD-206).
  *
  * @public
  */
 export interface QueryFilter {
-  /** Filter berdasarkan tipe elemen tertentu (misalnya `'sticky'`, `'draw'`). */
+  /** Filter by a specific element type (for example `'sticky'`, `'draw'`). */
   readonly type?: string;
-  /** Filter berdasarkan ID halaman target. */
+  /** Filter by target page ID. */
   readonly pageId?: string;
-  /** Filter berdasarkan ID kontainer induk (frame atau grup); gunakan `null` untuk elemen di root kanvas. */
+  /** Filter by parent container ID (frame or group); use `null` for elements at the canvas root. */
   readonly parentId?: string | null;
-  /** Filter batas kotak koordinat spasial (hanya elemen yang bersinggungan yang dikembalikan). */
+  /** Spatial bounds filter (only intersecting elements are returned). */
   readonly inBounds?: Bounds;
 }
 
 /**
- * Menjalankan kueri elemen pada dokumen dengan filter opsional dan memanfaatkan indeks spasial.
+ * Runs an element query on the document with optional filters, using the spatial index.
  *
  * @internal
  */
@@ -66,7 +66,7 @@ export function queryElements<P = Record<string, unknown>>(
     }
   }
 
-  // Urutkan selalu deterministik dari lapisan terbawah ke teratas (z-order)
+  // Always sort deterministically from the bottom layer to the top (z-order)
   candidates.sort((a, b) => compareIndex(a.index, b.index));
 
   return Object.freeze(candidates as unknown as Readonly<ElementRecord<P>>[]);

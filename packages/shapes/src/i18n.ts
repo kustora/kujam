@@ -1,21 +1,21 @@
 /**
- * Teks bawaan elemen dalam bahasa Indonesia dan Inggris (label a11y).
+ * Built-in element text in Indonesian and English (a11y labels).
  *
  * @internal
  */
 
-/** Teks dwibahasa. */
+/** Bilingual text. */
 export interface Bilingual {
   readonly id: string;
   readonly en: string;
 }
 
-/** Memilih teks sesuai locale board; selain `en*` memakai bahasa Indonesia. */
+/** Picks text for the board locale; anything other than `en*` uses Indonesian. */
 export function localize(text: Bilingual, locale: string): string {
   return locale.toLowerCase().startsWith('en') ? text.en : text.id;
 }
 
-/** Label a11y `"<jenis>: <isi>"`, atau hanya jenis bila isi kosong. Isi dipotong 200 karakter. */
+/** a11y label `"<kind>: <content>"`, or just the kind when content is empty. Content is truncated to 200 characters. */
 export function a11yLabel(kind: string, content: string): string {
   const trimmed = content.replace(/\s+/g, ' ').trim();
   if (!trimmed) return kind;

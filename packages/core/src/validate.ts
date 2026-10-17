@@ -1,12 +1,12 @@
 /**
- * Validasi struktural dokumen papan, dipakai bersama klien dan server (BOARD-210).
+ * Structural validation of board documents, shared by client and server (BOARD-210).
  */
 
 import type { BoardDocument } from './types.js';
 import { CURRENT_SCHEMA_VERSION } from './types.js';
 
 /**
- * Hasil validasi dokumen papan.
+ * Board document validation result.
  *
  * @public
  */
@@ -135,11 +135,11 @@ function validateRecord(id: string, rec: unknown, errors: string[]): void {
 }
 
 /**
- * Memvalidasi struktur dokumen papan: bentuk dokumen, versi skema, dan field
- * wajib setiap record. Validasi props per tipe elemen menyusul bersama registri elemen.
+ * Validates board document structure: document shape, schema version, and the required fields
+ * of every record. Per-element-type props validation comes with the element registry.
  *
- * Dokumen dengan `schemaVersion` lebih baru dari {@link CURRENT_SCHEMA_VERSION}
- * dianggap tidak valid untuk versi package ini.
+ * Documents with a `schemaVersion` newer than {@link CURRENT_SCHEMA_VERSION}
+ * are considered invalid for this package version.
  *
  * @public
  */
@@ -176,7 +176,7 @@ export function validateDocument(doc: unknown): ValidationResult {
 }
 
 /**
- * Error yang dilempar saat dokumen tidak lolos {@link validateDocument}.
+ * Error thrown when a document fails {@link validateDocument}.
  *
  * @public
  */
@@ -191,8 +191,8 @@ export class InvalidDocumentError extends Error {
 }
 
 /**
- * Memvalidasi struktur satu record (dipakai store saat record ditulis dalam transaksi).
- * Mengembalikan daftar pesan error; kosong berarti valid.
+ * Validates the structure of a single record (used by the store when a record is written in a transaction).
+ * Returns a list of error messages; empty means valid.
  *
  * @internal
  */

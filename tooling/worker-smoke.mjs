@@ -1,9 +1,9 @@
 /* global process, console, URL, Worker, setTimeout, clearTimeout */
-// BOARD-103: smoke test @kujam/core di Web Worker sungguhan (Chromium headless lewat Playwright).
-// Yang dimuat adalah artefak rilis `packages/core/dist/index.js` apa adanya, tanpa bundler:
-// bila dist masih mengimpor package lain (BOARD-102) atau menyentuh DOM saat dimuat, tes gagal.
+// BOARD-103: smoke test of @kujam/core in a real Web Worker (headless Chromium via Playwright).
+// It loads the release artifact `packages/core/dist/index.js` as-is, without a bundler:
+// if dist still imports other packages (BOARD-102) or touches the DOM on load, the test fails.
 //
-// Pemakaian: pnpm test:worker (build core dulu, lalu menjalankan skrip ini).
+// Usage: pnpm test:worker (builds core first, then runs this script).
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,7 +15,7 @@ const CORE_DIST = join(ROOT, 'packages/core/dist/index.js');
 const ORIGIN = 'http://kujam.test';
 const TIMEOUT_MS = 15_000;
 
-// Dijalankan di dalam Worker. Melaporkan hasil lewat postMessage ke halaman.
+// Runs inside the Worker. Reports results to the page via postMessage.
 const WORKER_SOURCE = `
 const env = {
   hasWindow: typeof window !== 'undefined',
@@ -54,7 +54,7 @@ if (!existsSync(CORE_DIST)) {
 }
 
 const coreSource = readFileSync(CORE_DIST, 'utf8');
-// BOARD-102: dist core harus mandiri. Worker modul tidak bisa me-resolve specifier bare.
+// BOARD-102: core dist must be self-contained. Module workers cannot resolve bare specifiers.
 const leftoverImports = coreSource.match(/^\s*import\s.*$|\bfrom\s*["'][^"']+["']/gm) ?? [];
 if (leftoverImports.length > 0) {
   fail(`dist core masih punya impor: ${leftoverImports.join(' | ')}`);

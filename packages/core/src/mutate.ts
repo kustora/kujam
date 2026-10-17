@@ -1,8 +1,8 @@
 /**
- * Implementasi API perubahan tingkat tinggi: create, update, delete (BOARD-205).
+ * High-level mutation API implementation: create, update, delete (BOARD-205).
  *
- * Mengisi nilai bawaan, mengkalkulasi fractional index di atas elemen teratas page,
- * menggabungkan props per kunci, cascade delete anak dan binding, serta memvalidasi props.
+ * Fills in default values, computes a fractional index above the page's top element,
+ * merges props per key, cascades deletes to children and bindings, and validates props.
  */
 
 import { compareIndex, indexAbove } from './indexing.js';
@@ -13,58 +13,58 @@ import type { ChangeOrigin, TransactOptions, Transaction } from './store.js';
 import type { BoardDocument, ElementRecord } from './types.js';
 
 /**
- * Opsi mutasi tingkat tinggi (`board.create`, `board.update`, `board.delete`).
+ * High-level mutation options (`board.create`, `board.update`, `board.delete`).
  *
  * @public
  */
 export interface MutateOptions {
-  /** Label transaksi untuk undo dan log; bawaan sesuai nama operasi. */
+  /** Transaction label for undo and logs; defaults to the operation name. */
   readonly label?: string;
-  /** Asal perubahan; bawaan `'local'`. */
+  /** Change origin; defaults to `'local'`. */
   readonly origin?: ChangeOrigin;
 }
 
 /**
- * Opsi `board.update`.
+ * Options for `board.update`.
  *
  * @public
  */
 export interface UpdateOptions extends MutateOptions {
   /**
-   * Bila `true`, mengizinkan perubahan elemen yang sedang `locked` (misalnya perintah buka kunci).
-   * Bawaan `false`.
+   * When `true`, allows changing an element that is `locked` (for example an unlock command).
+   * Defaults to `false`.
    */
   readonly force?: boolean;
 }
 
 /**
- * Opsi `board.delete`.
+ * Options for `board.delete`.
  *
  * @public
  */
 export interface DeleteOptions extends MutateOptions {
   /**
-   * Bila `true`, mengizinkan penghapusan elemen yang sedang `locked`.
-   * Bawaan `false`.
+   * When `true`, allows deleting an element that is `locked`.
+   * Defaults to `false`.
    */
   readonly force?: boolean;
 }
 
 /**
- * Data elemen masukan untuk `board.create`. Field yang tidak diisi akan dilengkapi nilai bawaan.
+ * Input element data for `board.create`. Omitted fields are filled with default values.
  *
  * @public
  */
 export interface PartialElement<P = Record<string, unknown>> {
-  /** Tipe elemen yang terdaftar di `board.elements`. Wajib diisi. */
+  /** Element type registered in `board.elements`. Required. */
   readonly type: string;
-  /** ID record; bila kosong dibuat dengan generator ID papan. */
+  /** Record ID; when omitted, generated with the board's ID generator. */
   readonly id?: string;
-  /** ID halaman target; bila kosong memakai halaman pertama di dokumen. */
+  /** Target page ID; when omitted, the first page in the document is used. */
   readonly pageId?: string;
-  /** ID kontainer (frame atau grup); bawaan `null`. */
+  /** Container ID (frame or group); defaults to `null`. */
   readonly parentId?: string | null;
-  /** Index urutan lapisan; bila kosong dihitung di atas elemen teratas di halaman. */
+  /** Layer order index; when omitted, computed above the top element on the page. */
   readonly index?: string;
   readonly x?: number;
   readonly y?: number;
@@ -73,14 +73,14 @@ export interface PartialElement<P = Record<string, unknown>> {
   readonly h?: number;
   readonly locked?: boolean;
   readonly opacity?: number;
-  /** Props khusus tipe; digabung dangkal di atas `defaults` definisi tipe. */
+  /** Type-specific props; shallow-merged on top of the type definition's `defaults`. */
   readonly props?: Partial<P>;
-  /** Metadata bebas milik pemakai; bawaan `{}`. */
+  /** Free-form consumer metadata; defaults to `{}`. */
   readonly meta?: Record<string, unknown>;
 }
 
 /**
- * Perubahan sebagian elemen untuk `board.update`. Field yang tidak diisi tidak diubah.
+ * Partial element change for `board.update`. Omitted fields are left unchanged.
  *
  * @public
  */
@@ -95,9 +95,9 @@ export interface ElementPatch<P = Record<string, unknown>> {
   readonly h?: number;
   readonly locked?: boolean;
   readonly opacity?: number;
-  /** Props yang diubah; digabung per kunci dengan props yang sudah ada. */
+  /** Changed props; merged per key with the existing props. */
   readonly props?: Partial<P>;
-  /** Metadata bebas; digabung dangkal dengan meta yang sudah ada. */
+  /** Free-form metadata; shallow-merged with the existing meta. */
   readonly meta?: Record<string, unknown>;
 }
 
@@ -144,7 +144,7 @@ function findTopIndexOnPage(doc: Readonly<BoardDocument>, pageId: string): strin
 }
 
 /**
- * Membuat elemen baru dan menyimpannya ke papan (BOARD-205).
+ * Creates a new element and stores it on the board (BOARD-205).
  *
  * @internal
  */
@@ -244,7 +244,7 @@ export function createElementRecord<P = Record<string, unknown>>(
 }
 
 /**
- * Memperbarui elemen yang sudah ada di papan (BOARD-205).
+ * Updates an existing element on the board (BOARD-205).
  *
  * @internal
  */
@@ -325,7 +325,7 @@ export function updateElementRecord<P = Record<string, unknown>>(
 }
 
 /**
- * Menghapus elemen beserta anak dan binding yang menempel (BOARD-205).
+ * Deletes elements together with their children and attached bindings (BOARD-205).
  *
  * @internal
  */
@@ -361,7 +361,7 @@ export function deleteElementRecords(
 
   if (toDelete.size === 0) return Object.freeze([]);
 
-  // Cascade anak-anak (frame / grup) secara rekursif
+  // Recursively cascade to children (frames / groups)
   let foundMore = true;
   while (foundMore) {
     foundMore = false;
@@ -381,7 +381,7 @@ export function deleteElementRecords(
     }
   }
 
-  // Cascade binding yang menempel ke elemen yang dihapus
+  // Cascade to bindings attached to deleted elements
   for (const [id, rec] of Object.entries(doc.records)) {
     if (rec.kind === 'binding') {
       if (toDelete.has(rec.fromId) || toDelete.has(rec.toId)) {
@@ -390,7 +390,7 @@ export function deleteElementRecords(
     }
   }
 
-  // Periksa izin delete untuk setiap elemen yang akan dihapus
+  // Check delete permission for every element about to be deleted
   for (const id of toDelete) {
     const rec = doc.records[id];
     if (rec && rec.kind === 'element') {

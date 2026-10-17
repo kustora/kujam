@@ -1,21 +1,21 @@
 /**
- * Tool sebagai state machine (BOARD-501, ADR-004).
+ * Tools as state machines (BOARD-501, ADR-004).
  *
- * Renderer menerjemahkan event DOM menjadi {@link BoardInputEvent} ternormalisasi lalu memanggil
- * `board.dispatch`. Tool tidak pernah menyentuh DOM, sehingga perilakunya sama di semua framework
- * dan bisa dites di Node dengan rangkaian event sintetis.
+ * The renderer translates DOM events into normalized {@link BoardInputEvent}s and then calls
+ * `board.dispatch`. Tools never touch the DOM, so their behavior is the same in every framework
+ * and can be tested in Node with sequences of synthetic events.
  *
- * Aturan runtime:
- * - Satu tool aktif memegang satu pointer utama. Pointer yang membuat tool meninggalkan state
- *   awal menjadi pointer utama sampai tool kembali ke state awal; event pointer lain diabaikan
- *   (dirutekan renderer ke pengenal gestur).
- * - Perubahan dokumen lewat `ctx.change` membentuk satu interaksi: kembali ke state awal
- *   meng-commit-nya sebagai satu langkah undo, sedangkan `cancel` me-rollback-nya.
- * - Transisi `cancel` ada di setiap state tanpa perlu ditulis: dipicu `pointer-cancel` pointer
- *   utama, Esc, `ctx.cancel()`, ganti tool, undo, atau handler yang melempar.
- * - Esc saat tool di state awal kembali ke tool bawaan. Tool `oneShot` kembali ke tool bawaan
- *   setelah satu interaksi selesai.
- * - Spasi ditahan mengaktifkan tool `hand` sementara (bila terdaftar), lalu kembali saat dilepas.
+ * Runtime rules:
+ * - One active tool holds one primary pointer. The pointer that makes the tool leave its initial
+ *   state becomes the primary pointer until the tool returns to the initial state; other pointer events are ignored
+ *   (the renderer routes them to the gesture recognizer).
+ * - Document changes via `ctx.change` form one interaction: returning to the initial state
+ *   commits it as a single undo step, while `cancel` rolls it back.
+ * - A `cancel` transition exists in every state without being written: triggered by the primary pointer's
+ *   `pointer-cancel`, Esc, `ctx.cancel()`, switching tools, undo, or a throwing handler.
+ * - Esc while the tool is in its initial state returns to the default tool. A `oneShot` tool returns to the default tool
+ *   after one interaction finishes.
+ * - Holding Space temporarily activates the `hand` tool (when registered), then switches back on release.
  */
 
 import type { Point } from './geometry.js';
@@ -23,17 +23,17 @@ import type { Board } from './index.js';
 import type { Interaction } from './interaction.js';
 import type { Transaction } from './store.js';
 
-// ---------- Event input ternormalisasi ----------
+// ---------- Normalized input events ----------
 
 /**
- * Jenis pointer, sama dengan `PointerEvent.pointerType`.
+ * Pointer kind, same as `PointerEvent.pointerType`.
  *
  * @beta
  */
 export type PointerKind = 'mouse' | 'pen' | 'touch';
 
 /**
- * Status tombol pengubah saat event terjadi.
+ * Modifier key state when the event occurred.
  *
  * @beta
  */
@@ -45,7 +45,7 @@ export interface InputModifiers {
 }
 
 /**
- * Event pointer dari renderer (Pointer Events untuk mouse, sentuh, dan pena).
+ * Pointer event from the renderer (Pointer Events for mouse, touch, and pen).
  *
  * @beta
  */
@@ -53,39 +53,39 @@ export interface ToolPointerEvent {
   readonly type: 'pointer-down' | 'pointer-move' | 'pointer-up' | 'pointer-cancel';
   readonly pointerId: number;
   readonly pointerType: PointerKind;
-  /** Posisi dalam koordinat papan. */
+  /** Position in board coordinates. */
   readonly point: Point;
-  /** Posisi dalam piksel CSS relatif terhadap kontainer papan. */
+  /** Position in CSS pixels relative to the board container. */
   readonly screen: Point;
-  /** Tekanan 0–1. Mouse mengirim 0.5 saat tombol ditekan dan 0 saat tidak. */
+  /** Pressure 0–1. Mouse sends 0.5 while a button is pressed and 0 otherwise. */
   readonly pressure: number;
-  /** Kemiringan pena dalam derajat (−90 sampai 90); 0 untuk mouse dan sentuh. */
+  /** Pen tilt in degrees (−90 to 90); 0 for mouse and touch. */
   readonly tiltX: number;
   readonly tiltY: number;
-  /** Tombol yang berubah (`PointerEvent.button`): 0 utama, 1 tengah, 2 kedua, 5 penghapus. */
+  /** Button that changed (`PointerEvent.button`): 0 primary, 1 middle, 2 secondary, 5 eraser. */
   readonly button: number;
-  /** Bitmask tombol yang sedang ditekan (`PointerEvent.buttons`); 32 = penghapus stylus. */
+  /** Bitmask of pressed buttons (`PointerEvent.buttons`); 32 = stylus eraser. */
   readonly buttons: number;
   readonly modifiers: InputModifiers;
 }
 
 /**
- * Event keyboard dari renderer. Renderer tidak mengirimnya saat fokus ada di input teks.
+ * Keyboard event from the renderer. The renderer does not send it while focus is in a text input.
  *
  * @beta
  */
 export interface ToolKeyEvent {
   readonly type: 'key-down' | 'key-up';
-  /** `KeyboardEvent.key`, misalnya `'Escape'` atau `'a'`. */
+  /** `KeyboardEvent.key`, for example `'Escape'` or `'a'`. */
   readonly key: string;
-  /** `KeyboardEvent.code`, misalnya `'Space'` atau `'KeyA'`. */
+  /** `KeyboardEvent.code`, for example `'Space'` or `'KeyA'`. */
   readonly code: string;
   readonly repeat: boolean;
   readonly modifiers: InputModifiers;
 }
 
 /**
- * Event roda mouse atau scroll trackpad, dengan delta dalam piksel CSS.
+ * Mouse wheel or trackpad scroll event, with deltas in CSS pixels.
  *
  * @beta
  */
@@ -99,72 +99,72 @@ export interface ToolWheelEvent {
 }
 
 /**
- * Gestur pinch dua jari atau trackpad yang sudah dikenali renderer.
+ * Two-finger or trackpad pinch gesture already recognized by the renderer.
  *
  * @beta
  */
 export interface ToolPinchEvent {
   readonly type: 'pinch';
   readonly phase: 'start' | 'update' | 'end';
-  /** Titik tengah gestur dalam koordinat papan. */
+  /** Gesture center point in board coordinates. */
   readonly point: Point;
-  /** Titik tengah gestur dalam piksel CSS. */
+  /** Gesture center point in CSS pixels. */
   readonly screen: Point;
-  /** Faktor skala relatif terhadap event sebelumnya (1 = tetap). */
+  /** Scale factor relative to the previous event (1 = unchanged). */
   readonly scale: number;
-  /** Pergeseran titik tengah sejak event sebelumnya, dalam piksel CSS. */
+  /** Center point shift since the previous event, in CSS pixels. */
   readonly deltaX: number;
   readonly deltaY: number;
 }
 
 /**
- * Semua event input yang diterima `board.dispatch`.
+ * All input events accepted by `board.dispatch`.
  *
  * @beta
  */
 export type BoardInputEvent = ToolPointerEvent | ToolKeyEvent | ToolWheelEvent | ToolPinchEvent;
 
-// ---------- Definisi tool ----------
+// ---------- Tool definition ----------
 
 /**
- * Konteks yang diterima setiap handler state tool.
+ * Context received by every tool state handler.
  *
  * @beta
  */
 export interface ToolContext<S extends string = string, D = Record<string, unknown>> {
   readonly board: Board;
-  /** State saat ini. */
+  /** Current state. */
   readonly state: S;
-  /** Data milik tool di board ini; dibuat ulang setiap kali tool masuk ke state awal. */
+  /** Tool-owned data on this board; recreated every time the tool enters its initial state. */
   data: D;
   /**
-   * Menerapkan perubahan dokumen sebagai bagian interaksi yang sedang berjalan. Perubahan
-   * langsung terlihat, lalu di-commit sebagai satu langkah undo saat tool kembali ke state awal
-   * (atau saat `commit`), atau di-rollback saat `cancel`. Label terakhir dipakai untuk langkah
-   * undo; bawaannya ID tool.
+   * Applies a document change as part of the ongoing interaction. The change is
+   * visible immediately, then committed as a single undo step when the tool returns to its initial state
+   * (or on `commit`), or rolled back on `cancel`. The last label is used for the undo
+   * step; defaults to the tool ID.
    */
   change(fn: (tx: Transaction) => void, options?: { label?: string }): void;
-  /** Meng-commit interaksi sekarang tanpa berpindah state. */
+  /** Commits the interaction now without changing state. */
   commit(): void;
   /**
-   * Me-rollback interaksi lalu kembali ke state awal. Nilai kembali handler yang memanggilnya
-   * diabaikan.
+   * Rolls back the interaction and returns to the initial state. The return value of the calling handler
+   * is ignored.
    */
   cancel(): void;
 }
 
 /**
- * Handler satu state. Handler event boleh mengembalikan nama state berikutnya; tanpa nilai
- * kembali, tool tetap di state yang sama.
+ * Handlers for one state. Event handlers may return the next state name; with no return
+ * value, the tool stays in the same state.
  *
  * @beta
  */
 export interface ToolStateDefinition<S extends string = string, D = Record<string, unknown>> {
-  /** Kursor CSS selama state ini aktif; menimpa `cursor` tool. */
+  /** CSS cursor while this state is active; overrides the tool's `cursor`. */
   readonly cursor?: string;
   readonly onEnter?: (ctx: ToolContext<S, D>) => S | void;
   readonly onExit?: (ctx: ToolContext<S, D>) => void;
-  /** Dipanggil setelah interaksi di-rollback, sebelum `onExit` dan kembali ke state awal. */
+  /** Called after the interaction is rolled back, before `onExit` and returning to the initial state. */
   readonly onCancel?: (ctx: ToolContext<S, D>) => void;
   readonly onPointerDown?: (ctx: ToolContext<S, D>, event: ToolPointerEvent) => S | void;
   readonly onPointerMove?: (ctx: ToolContext<S, D>, event: ToolPointerEvent) => S | void;
@@ -176,30 +176,30 @@ export interface ToolStateDefinition<S extends string = string, D = Record<strin
 }
 
 /**
- * Definisi tool.
+ * Tool definition.
  *
- * @typeParam S - Nama state, diinferensi dari kunci `states`.
- * @typeParam D - Tipe `ctx.data`, diinferensi dari `data`.
+ * @typeParam S - State names, inferred from the `states` keys.
+ * @typeParam D - Type of `ctx.data`, inferred from `data`.
  *
  * @beta
  */
 export interface ToolDefinition<S extends string = string, D = Record<string, unknown>> {
-  /** ID tool: huruf kecil, angka, titik, atau tanda hubung, misalnya `'pen'` atau `'contoh.cap'`. */
+  /** Tool ID: lowercase letters, digits, dots, or hyphens, for example `'pen'` or `'example.stamp'`. */
   readonly id: string;
-  /** Kursor CSS bawaan tool. Bawaan `'default'`. */
+  /** Default CSS cursor of the tool. Defaults to `'default'`. */
   readonly cursor?: string;
-  /** Kembali ke tool bawaan setelah satu interaksi selesai. */
+  /** Return to the default tool after one interaction finishes. */
   readonly oneShot?: boolean;
-  /** State awal (diam). Kembali ke state ini meng-commit interaksi. */
+  /** Initial (idle) state. Returning to this state commits the interaction. */
   readonly initial: NoInfer<S>;
-  /** Nama state hanya diinferensi dari kunci objek ini, bukan dari nilai kembali handler. */
+  /** State names are inferred only from this object's keys, not from handler return values. */
   readonly states: { readonly [K in S]: ToolStateDefinition<NoInfer<S>, D> };
-  /** Pembuat `ctx.data`. Bawaan `() => ({})`. */
+  /** Factory for `ctx.data`. Defaults to `() => ({})`. */
   readonly data?: () => D;
 }
 
 /**
- * Definisi tool dengan state dan data apa pun, untuk koleksi campuran.
+ * Tool definition with any states and data, for mixed collections.
  *
  * @beta
  */
@@ -207,27 +207,27 @@ export interface ToolDefinition<S extends string = string, D = Record<string, un
 export type AnyToolDefinition = ToolDefinition<any, any>;
 
 /**
- * Kode {@link ToolError}.
+ * Codes for {@link ToolError}.
  *
- * - `invalid-tool`: definisi tool tidak valid.
- * - `duplicate-tool`: ID tool sudah terdaftar.
- * - `unknown-tool`: `setTool` dipanggil dengan ID yang tidak terdaftar.
- * - `unknown-state`: handler mengembalikan nama state yang tidak ada.
+ * - `invalid-tool`: the tool definition is invalid.
+ * - `duplicate-tool`: the tool ID is already registered.
+ * - `unknown-tool`: `setTool` was called with an unregistered ID.
+ * - `unknown-state`: a handler returned a state name that does not exist.
  *
  * @beta
  */
 export type ToolErrorCode = 'invalid-tool' | 'duplicate-tool' | 'unknown-tool' | 'unknown-state';
 
 /**
- * Error registri dan runtime tool.
+ * Tool registry and runtime error.
  *
  * @beta
  */
 export class ToolError extends Error {
   readonly code: ToolErrorCode;
-  /** ID tool yang bermasalah, atau `undefined` bila `id` sendiri tidak valid. */
+  /** The offending tool ID, or `undefined` when `id` itself is invalid. */
   readonly toolId: string | undefined;
-  /** Daftar masalah definisi; kosong selain untuk `invalid-tool`. */
+  /** Definition problems; empty except for `invalid-tool`. */
   readonly errors: readonly string[];
 
   constructor(
@@ -316,14 +316,14 @@ function assertValidTool(definition: unknown): void {
 }
 
 /**
- * Mendefinisikan tool sebagai state machine. Nama state diinferensi dari `states`, sehingga
- * handler hanya boleh mengembalikan state yang ada. Definisi divalidasi segera (lihat
- * {@link ToolError}) dan objeknya dibekukan dangkal.
+ * Defines a tool as a state machine. State names are inferred from `states`, so
+ * handlers may only return existing states. The definition is validated immediately (see
+ * {@link ToolError}) and the object is shallow-frozen.
  *
  * @example
  * ```ts
  * const stamp = defineTool({
- *   id: 'contoh.cap',
+ *   id: 'example.stamp',
  *   cursor: 'crosshair',
  *   initial: 'idle',
  *   data: () => ({ id: '' }),
@@ -337,7 +337,7 @@ function assertValidTool(definition: unknown): void {
  *     },
  *     dragging: {
  *       onPointerMove: (ctx, e) => ctx.change((tx) => moveStamp(tx, ctx.data.id, e.point)),
- *       onPointerUp: () => 'idle', // commit sebagai satu langkah undo
+ *       onPointerUp: () => 'idle', // commit as a single undo step
  *     },
  *   },
  * });
@@ -352,39 +352,39 @@ export function defineTool<S extends string, D = Record<string, unknown>>(
   return Object.freeze({ ...definition });
 }
 
-// ---------- Registri dan runtime ----------
+// ---------- Registry and runtime ----------
 
 /**
- * Nama tool yang diaktifkan sementara saat spasi ditahan.
+ * Name of the tool activated temporarily while Space is held.
  *
  * @beta
  */
 export const HAND_TOOL_ID = 'hand';
 
 /**
- * Tool bawaan bila `createBoard({ defaultTool })` tidak diisi.
+ * Default tool when `createBoard({ defaultTool })` is not set.
  *
  * @beta
  */
 export const DEFAULT_TOOL_ID = 'select';
 
 /**
- * Registri tool milik satu board (`board.tools`).
+ * Tool registry owned by one board (`board.tools`).
  *
  * @beta
  */
 export interface BoardTools {
   /**
-   * Mendaftarkan tool dan mengembalikan fungsi untuk melepasnya. Melepas tool yang sedang aktif
-   * membatalkan interaksinya lalu pindah ke tool bawaan (atau tanpa tool). Melempar
-   * {@link ToolError} berkode `duplicate-tool` atau `invalid-tool`.
+   * Registers a tool and returns a function that unregisters it. Unregistering the active tool
+   * cancels its interaction and switches to the default tool (or no tool). Throws
+   * {@link ToolError} with code `duplicate-tool` or `invalid-tool`.
    *
-   * @beta Plugin akan mendaftarkan tool lewat `definePlugin` (BOARD-602).
+   * @beta Plugins will register tools via `definePlugin` (BOARD-602).
    */
   register(definition: AnyToolDefinition): () => void;
   get(id: string): AnyToolDefinition | undefined;
   has(id: string): boolean;
-  /** Semua tool sesuai urutan pendaftaran. */
+  /** All tools in registration order. */
   list(): readonly AnyToolDefinition[];
 }
 
@@ -402,13 +402,13 @@ export interface ToolRuntime {
   readonly tool: string | null;
   readonly state: string | null;
   readonly cursor: string;
-  /** Apakah tool sedang di luar state awal (interaksi berlangsung). */
+  /** Whether the tool is outside its initial state (an interaction is in progress). */
   readonly busy: boolean;
   setTool(id: string): void;
   dispatch(event: BoardInputEvent): boolean;
-  /** Membatalkan interaksi yang berlangsung. Mengembalikan `true` bila tool sedang sibuk. */
+  /** Cancels the ongoing interaction. Returns `true` when the tool was busy. */
   cancel(): boolean;
-  /** Kembali ke state awal tanpa rollback, setelah dokumen diganti. */
+  /** Returns to the initial state without rollback, after the document is replaced. */
   reset(): void;
   clear(): void;
 }
@@ -426,7 +426,7 @@ const HANDLER_FOR: Record<BoardInputEvent['type'], keyof ToolStateDefinition | n
   pinch: 'onPinch',
 };
 
-/** Batas rantai `onEnter` yang mengembalikan state lain, untuk mencegah putaran tak terbatas. */
+/** Limit on chained `onEnter` calls returning another state, to prevent infinite loops. */
 const MAX_CHAINED_TRANSITIONS = 32;
 
 /** @internal */
@@ -439,13 +439,13 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
     state: string;
     data: unknown;
     pointerId: number | null;
-    /** Naik setiap kali state berganti, untuk mengabaikan nilai kembali handler yang usang. */
+    /** Incremented on every state change, to ignore stale handler return values. */
     generation: number;
     readonly ctx: ToolContext;
   }
 
   let active: Active | null = null;
-  /** Tool yang dipulihkan saat spasi dilepas, atau `null` bila tool tangan tidak sementara. */
+  /** Tool restored when Space is released, or `null` when the hand tool is not temporary. */
   let springFrom: string | null = null;
 
   function makeData(definition: AnyToolDefinition): unknown {
@@ -500,7 +500,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
     return a;
   }
 
-  /** Masuk ke state awal: commit interaksi, lepas pointer, buat ulang data. */
+  /** Enters the initial state: commit the interaction, release the pointer, recreate data. */
   function settle(a: Active): void {
     interaction.commit(a.definition.id);
     a.pointerId = null;
@@ -532,7 +532,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
     }
   }
 
-  /** Rollback interaksi tool aktif, lalu kembali ke state awal. */
+  /** Rolls back the active tool's interaction, then returns to the initial state. */
   function cancelActive(): boolean {
     const a = active;
     if (!a) return false;
@@ -550,7 +550,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
         call(a, 'onEnter');
       }
     } finally {
-      // Apa pun yang terjadi di handler, interaksi tidak boleh tertinggal terbuka.
+      // Whatever happens in the handler, the interaction must not be left open.
       if (interaction.active) interaction.discard();
       if (active === a) {
         a.state = a.definition.initial;
@@ -560,7 +560,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
     return true;
   }
 
-  /** Menjalankan handler; bila melempar, interaksi di-rollback lalu error diteruskan. */
+  /** Runs a handler; if it throws, the interaction is rolled back and the error is rethrown. */
   function guarded(a: Active, run: () => void): void {
     try {
       run();
@@ -568,7 +568,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
       try {
         if (active === a) cancelActive();
       } catch {
-        // Error asli lebih penting daripada error saat membatalkan.
+        // The original error matters more than errors while cancelling.
       }
       throw error;
     }
@@ -646,7 +646,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
       const gen = a.generation;
       const next = call(a, key, event);
       if (active === a && gen === a.generation) transition(a, next);
-      // Perubahan di state awal (misalnya klik sekali untuk menaruh elemen) langsung di-commit.
+      // Changes in the initial state (for example a single click to place an element) are committed immediately.
       if (active === a && a.state === a.definition.initial) interaction.commit(a.definition.id);
     });
     if (

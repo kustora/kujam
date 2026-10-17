@@ -101,24 +101,24 @@ describe('BOARD-206: board.query', () => {
   it('memfilter berdasarkan inBounds memakai indeks spasial (BoxBounds dan RectBounds)', () => {
     const board = createBoard({ plugins: [testPlugin] });
 
-    // el-1 di (0, 0) ukuran 100x100
+    // el-1 at (0, 0), size 100x100
     board.create({ id: 'el-1', type: 'note', x: 0, y: 0, w: 100, h: 100 });
-    // el-2 di (500, 500) ukuran 100x100
+    // el-2 at (500, 500), size 100x100
     board.create({ id: 'el-2', type: 'shape', x: 500, y: 500, w: 100, h: 100 });
 
-    // Cari area di dekat (0, 0) format BoxBounds
+    // Search the area near (0, 0) in BoxBounds format
     const inTopLeft = board.query({
       inBounds: { minX: -50, minY: -50, maxX: 150, maxY: 150 },
     });
     expect(inTopLeft.map((e) => e.id)).toEqual(['el-1']);
 
-    // Cari area di dekat (500, 500) format RectBounds
+    // Search the area near (500, 500) in RectBounds format
     const inBottomRight = board.query({
       inBounds: { x: 450, y: 450, w: 200, h: 200 },
     });
     expect(inBottomRight.map((e) => e.id)).toEqual(['el-2']);
 
-    // Area di tengah yang kosong
+    // Empty area in the middle
     const inMiddle = board.query({
       inBounds: { x: 200, y: 200, w: 100, h: 100 },
     });
@@ -134,7 +134,7 @@ describe('BOARD-206: board.query', () => {
     board.create({ id: 's1', type: 'shape', x: 20, y: 20, w: 50, h: 50, parentId: null });
     board.create({ id: 'n2', type: 'note', x: 30, y: 30, w: 50, h: 50, parentId: 'frame-x' });
 
-    // Cari di area (0..100) hanya type note dan parent null
+    // Search area (0..100) for type note with parent null only
     const result = board.query({
       type: 'note',
       parentId: null,
@@ -154,7 +154,7 @@ describe('BOARD-206: board.query', () => {
       'dynamic-el',
     ]);
 
-    // 2. Update (pindah ke luar)
+    // 2. Update (move outside)
     board.update(el.id, { x: 1000, y: 1000 });
     expect(board.query({ inBounds: { x: 0, y: 0, w: 50, h: 50 } })).toEqual([]);
     expect(board.query({ inBounds: { x: 900, y: 900, w: 200, h: 200 } }).map((e) => e.id)).toEqual([

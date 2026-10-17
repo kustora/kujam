@@ -1,15 +1,15 @@
 /**
- * Primitif geometri minimal untuk kontrak `defineElement` (BOARD-601).
+ * Minimal geometry primitives for the `defineElement` contract (BOARD-601).
  *
- * Hanya bentuk data dan konstruktornya. Operasi (bounds, hit-test, jarak, irisan, titik snap) dan
- * transformasi rotasi milik pustaka geometri BOARD-403, yang akan memperluas modul ini.
+ * Only data shapes and their constructors. Operations (bounds, hit-testing, distance, intersection, snap points) and
+ * rotation transforms belong to the BOARD-403 geometry library, which will extend this module.
  *
- * Semua koordinat bersifat lokal terhadap elemen: titik `(0, 0)` adalah sudut kiri atas elemen
- * sebelum rotasi, satuan papan.
+ * All coordinates are local to the element: point `(0, 0)` is the element's top-left corner
+ * before rotation, in board units.
  */
 
 /**
- * Titik dua dimensi dalam satuan papan.
+ * Two-dimensional point in board units.
  *
  * @beta
  */
@@ -19,7 +19,7 @@ export interface Point {
 }
 
 /**
- * Kotak sejajar sumbu, koordinat lokal elemen.
+ * Axis-aligned box, in element-local coordinates.
  *
  * @beta
  */
@@ -32,7 +32,7 @@ export interface RectGeometry {
 }
 
 /**
- * Elips yang mengisi kotak `x, y, w, h`, koordinat lokal elemen.
+ * Ellipse filling the `x, y, w, h` box, in element-local coordinates.
  *
  * @beta
  */
@@ -45,7 +45,7 @@ export interface EllipseGeometry {
 }
 
 /**
- * Poligon tertutup (titik terakhir tersambung ke titik pertama), koordinat lokal elemen.
+ * Closed polygon (the last point connects to the first), in element-local coordinates.
  *
  * @beta
  */
@@ -55,7 +55,7 @@ export interface PolygonGeometry {
 }
 
 /**
- * Garis berantai terbuka, misalnya coretan atau garis. `width` adalah tebal garis untuk hit-test.
+ * Open polyline, for example a stroke or a line. `width` is the line thickness for hit-testing.
  *
  * @beta
  */
@@ -66,15 +66,15 @@ export interface PolylineGeometry {
 }
 
 /**
- * Geometri elemen untuk hit-test, snap, dan seleksi. Dikembalikan oleh `geometry` di
- * `defineElement`. Daftar bentuk akan diperluas BOARD-403 (misalnya `path`).
+ * Element geometry for hit-testing, snapping, and selection. Returned by `geometry` in
+ * `defineElement`. The list of shapes will be extended by BOARD-403 (for example `path`).
  *
  * @beta
  */
 export type Geometry = RectGeometry | EllipseGeometry | PolygonGeometry | PolylineGeometry;
 
 /**
- * Kotak dari sudut kiri atas elemen, atau dari titik `(x, y)` bila diberikan.
+ * A box from the element's top-left corner, or from point `(x, y)` when given.
  *
  * @example
  * ```ts
@@ -88,7 +88,7 @@ export function rect(w: number, h: number, x = 0, y = 0): RectGeometry {
 }
 
 /**
- * Elips yang mengisi kotak `w × h` dari sudut kiri atas elemen, atau dari titik `(x, y)`.
+ * Ellipse filling a `w × h` box from the element's top-left corner, or from point `(x, y)`.
  *
  * @beta
  */
@@ -97,7 +97,7 @@ export function ellipse(w: number, h: number, x = 0, y = 0): EllipseGeometry {
 }
 
 /**
- * Poligon tertutup dari daftar titik.
+ * Closed polygon from a list of points.
  *
  * @beta
  */
@@ -106,7 +106,7 @@ export function polygon(points: readonly Point[]): PolygonGeometry {
 }
 
 /**
- * Garis berantai terbuka dari daftar titik, dengan tebal garis untuk hit-test (bawaan 0).
+ * Open polyline from a list of points, with a line thickness for hit-testing (defaults to 0).
  *
  * @beta
  */

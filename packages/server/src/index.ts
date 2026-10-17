@@ -1,12 +1,12 @@
 /**
- * `@kujam/server` — Utilitas sisi server Node.js untuk validasi, migrasi, dan ekstraksi referensi dokumen papan.
+ * `@kujam/server` — Node.js server-side utilities for validating, migrating, and extracting references from board documents.
  *
  * @packageDocumentation
  */
 
 /**
- * Validasi dokumen memakai implementasi yang sama dengan klien (`@kujam/core`),
- * sehingga aturan di server dan di browser tidak pernah berbeda.
+ * Document validation uses the same implementation as the client (`@kujam/core`),
+ * so the rules on the server and in the browser never differ.
  *
  * @public
  */

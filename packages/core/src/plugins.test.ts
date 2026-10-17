@@ -447,7 +447,7 @@ describe('resolvePluginOrder (urutan deterministik & dependsOn)', () => {
     const kanan = definePlugin({ id: 'kanan', dependsOn: ['dasar'] });
     const puncak = definePlugin({ id: 'puncak', dependsOn: ['kiri', 'kanan'] });
 
-    // Walau puncak diberikan paling awal, prasyaratnya dipasang lebih dulu sesuai urutan dependsOn.
+    // Even though the top plugin is given first, its prerequisites are installed first per dependsOn order.
     const ordered = resolvePluginOrder([puncak, kanan, kiri, dasar]);
     expect(ordered.map((p) => p.id)).toEqual(['dasar', 'kiri', 'kanan', 'puncak']);
   });
@@ -550,7 +550,7 @@ describe('pemasangan plugin di createBoard', () => {
         },
       },
       setup(board) {
-        // Saat setup `lanjut` berjalan, `dasar` sudah terpasang penuh.
+        // When `lanjut`'s setup runs, `dasar` is already fully installed.
         urutan.push(`setup:lanjut:hasDasar=${board.plugins.has('dasar')}`);
         board.run('lanjut.aktif-tool');
         return () => {
@@ -567,7 +567,7 @@ describe('pemasangan plugin di createBoard', () => {
       },
     });
 
-    // Diberikan terbalik untuk membuktikan urutan pemasangan mengikuti dependsOn.
+    // Given in reverse to prove installation order follows dependsOn.
     const board = createBoard({
       plugins: new Set([pluginTanpaTeardown, pluginLanjut, pluginDasar]),
     });
@@ -595,7 +595,7 @@ describe('pemasangan plugin di createBoard', () => {
       'cmd:lanjut',
     ]);
 
-    // Dispose menjalankan teardown dalam urutan terbalik (lanjut -> dasar), dan aman dipanggil dua kali.
+    // Dispose runs teardowns in reverse order (lanjut -> dasar), and is safe to call twice.
     board.dispose();
     board.dispose();
     expect(urutan).toEqual([
@@ -620,7 +620,7 @@ describe('pemasangan plugin di createBoard', () => {
         jejak.push('setup:p1');
         return () => {
           jejak.push('rollback:p1');
-          // Error di dalam teardown saat rollback diabaikan agar error asli tidak tertelan.
+          // Errors inside teardown during rollback are ignored so the original error is not swallowed.
           throw new Error('error rollback diabaikan');
         };
       },
@@ -701,9 +701,9 @@ describe('pemasangan plugin di createBoard', () => {
 
     const board = createBoard({ plugins: [p1, p2, p3] });
     expect(() => board.dispose()).toThrowError('gagal di p3');
-    // p2 dan p1 tetap dijalankan walau p3 melempar lebih dulu.
+    // p2 and p1 still run even though p3 throws first.
     expect(jejak).toEqual(['teardown:p3', 'teardown:p2', 'teardown:p1']);
-    // Board tetap masuk status disposed.
+    // The board still enters the disposed state.
     expect(() => board.undo()).toThrowError('Papan sudah di-dispose.');
   });
 

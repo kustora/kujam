@@ -66,7 +66,7 @@ describe('event error (BOARD-207)', () => {
 
     expect(() => board.transact((tx) => tx.put(makeElement()))).not.toThrow();
     expect(errorListener).toHaveBeenCalledTimes(1);
-    // Listener error lain tetap dipanggil.
+    // The other error listener is still called.
     expect(secondErrorListener).toHaveBeenCalledTimes(1);
     expect(spy).toHaveBeenCalledTimes(1);
     expect(spy.mock.calls[0]![0]).toContain('"error"');
@@ -92,7 +92,7 @@ describe('event error (BOARD-207)', () => {
       throw new Error('rusak');
     });
     try {
-      // Simulasi lingkungan tanpa console (misalnya sandbox tertentu).
+      // Simulate an environment without console (for example certain sandboxes).
       Object.defineProperty(globalThis, 'console', { value: undefined, configurable: true });
       expect(() => board.transact((tx) => tx.put(makeElement()))).not.toThrow();
       Object.defineProperty(globalThis, 'console', {
@@ -125,8 +125,8 @@ describe('event camera (BOARD-207)', () => {
     board.setCamera({});
     board.setCamera({ x: 10 });
     board.setCamera({ x: Number.NaN });
-    board.setCamera({ zoom: 100 }); // dijepit ke 4
-    board.setCamera({ zoom: 50 }); // tetap 4: tidak berubah
+    board.setCamera({ zoom: 100 }); // clamped to 4
+    board.setCamera({ zoom: 50 }); // still 4: unchanged
     expect(events).toHaveLength(2);
     expect(events[1]!.camera.zoom).toBe(4);
   });

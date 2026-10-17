@@ -1,10 +1,10 @@
 /**
- * Sistem plugin (`definePlugin`) dan pemasangan plugin deterministik (BOARD-602).
+ * Plugin system (`definePlugin`) and deterministic plugin installation (BOARD-602).
  *
- * Plugin adalah satu-satunya cara mendaftarkan bundel elemen, tool, kuas, perintah, shortcut,
- * item toolbar, eksportir, migrasi dokumen, hook izin, hook simpan dokumen, dan efek siklus hidup
- * (`setup(board) => teardown`). Elemen dan tool bawaan dari `@kujam/shapes` (`defaultElements`,
- * `defaultTools`) menggunakan API yang sama tanpa jalur pintas internal.
+ * Plugins are the only way to register bundles of elements, tools, brushes, commands, shortcuts,
+ * toolbar items, exporters, document migrations, permission hooks, document-save hooks, and lifecycle
+ * effects (`setup(board) => teardown`). Built-in elements and tools from `@kujam/shapes` (`defaultElements`,
+ * `defaultTools`) use the same API with no internal shortcuts.
  */
 
 import {
@@ -23,85 +23,85 @@ import type { Board } from './index.js';
 import { defineTool, type AnyToolDefinition, type BoardTools, type ToolError } from './tools.js';
 import type { BoardDocument, ElementRecord } from './types.js';
 
-// ---------- Titik ekstensi plugin ----------
+// ---------- Plugin extension points ----------
 
 /**
- * Definisi kuas coretan yang dibawa plugin (BOARD-603).
+ * Freehand brush definition provided by a plugin (BOARD-603).
  *
  * @beta
  */
 export interface PluginBrushDefinition {
-  /** ID unik kuas, misalnya `'pen'` atau `'highlighter'`. */
+  /** Unique brush ID, for example `'pen'` or `'highlighter'`. */
   readonly id: string;
-  /** Kunci i18n atau label tampilan kuas. */
+  /** i18n key or display label of the brush. */
   readonly label?: string;
-  /** Opsi pembentukan garis (size, thinning, smoothing, streamline, taper). */
+  /** Stroke shaping options (size, thinning, smoothing, streamline, taper). */
   readonly strokeOptions?: Readonly<Record<string, unknown>>;
-  /** Mode komposit Canvas, misalnya `'multiply'` untuk stabilo. */
+  /** Canvas composite mode, for example `'multiply'` for a highlighter. */
   readonly blend?: string;
 }
 
 /**
- * Satu item tambahan di toolbar utama dari plugin (BOARD-1402).
+ * An extra main-toolbar item provided by a plugin (BOARD-1402).
  *
  * @beta
  */
 export interface PluginToolbarItem {
-  /** ID unik item toolbar. */
+  /** Unique toolbar item ID. */
   readonly id: string;
-  /** Kunci i18n atau label untuk tooltip dan pembaca layar. */
+  /** i18n key or label for the tooltip and screen readers. */
   readonly label: string;
-  /** Nama atau markup ikon opsional. */
+  /** Optional icon name or markup. */
   readonly icon?: string;
-  /** ID tool yang diaktifkan saat item dipilih. */
+  /** Tool ID activated when the item is selected. */
   readonly toolId?: string;
-  /** ID perintah yang dijalankan saat item diklik. */
+  /** Command ID run when the item is clicked. */
   readonly commandId?: string;
-  /** Kelompok penempatan di toolbar. */
+  /** Placement group in the toolbar. */
   readonly group?: string;
-  /** Urutan relatif di dalam kelompok. */
+  /** Relative order within the group. */
   readonly order?: number;
 }
 
 /**
- * Pengekspor format tambahan dari plugin (BOARD-1707).
+ * Additional export format provided by a plugin (BOARD-1707).
  *
  * @beta
  */
 export interface PluginExporter {
-  /** Nama format ekspor, misalnya `'pdf'` atau `'markdown'`. */
+  /** Export format name, for example `'pdf'` or `'markdown'`. */
   readonly format: string;
-  /** Kunci i18n atau label format. */
+  /** i18n key or label of the format. */
   readonly label?: string;
-  /** Fungsi pengekspor yang menerima instance `Board` publik. */
+  /** Exporter function that receives the public `Board` instance. */
   export(board: Board, options?: unknown): unknown;
 }
 
 /**
- * Satu langkah migrasi dokumen milik plugin dari versi `n` ke `n + 1` (BOARD-702).
- * Wajib murni: tidak memutasi input.
+ * A single plugin document migration step from version `n` to `n + 1` (BOARD-702).
+ * Must be pure: does not mutate its input.
  *
  * @beta
  */
 export type PluginDocumentMigration = (doc: BoardDocument) => BoardDocument;
 
 /**
- * Peta langkah migrasi dokumen milik plugin per versi asal (`0`, `1`, ...).
- * Dijalankan setelah migrasi skema inti (BOARD-702).
+ * Map of plugin document migration steps keyed by source version (`0`, `1`, ...).
+ * Run after the core schema migrations (BOARD-702).
  *
  * @beta
  */
 export type PluginMigrations = Readonly<Record<number, PluginDocumentMigration>>;
 
 /**
- * Jenis operasi yang diperiksa hook izin (BOARD-212).
+ * Operation kinds checked by permission hooks (BOARD-212).
  *
  * @beta
  */
 export type PermissionAction = 'create' | 'update' | 'delete' | 'action' | (string & {});
 
 /**
- * Identitas pengguna papan untuk kolaborasi dan pemeriksaan izin (BOARD-211, BOARD-212).
+ * Board user identity for collaboration and permission checks (BOARD-211, BOARD-212).
  *
  * @beta
  */
@@ -114,16 +114,16 @@ export interface BoardUser {
 }
 
 /**
- * Hook izin untuk memeriksa apakah aksi terhadap elemen diizinkan (BOARD-212).
- * Mengembalikan `false` untuk membatalkan operasi dan memancarkan event `error` berkode `'forbidden'`.
+ * Permission hook that checks whether an action on an element is allowed (BOARD-212).
+ * Return `false` to cancel the operation and emit an `error` event with code `'forbidden'`.
  *
  * @remarks
- * **PENTING — Keamanan & Penegakan Izin:**
- * Hook ini berjalan sepenuhnya di sisi klien (in-memory) dan dirancang semata-mata untuk kenyamanan UI
- * (seperti menonaktifkan tombol aksi, menyembunyikan menu kontekstual, atau membatalkan operasi lokal sebelum
- * dikirim ke jaringan). Hook ini **TIDAK** memberikan jaminan keamanan. Penegakan otorisasi dan kontrol akses
- * yang sesungguhnya **WAJIB** ditegakkan di sisi server (misalnya saat memvalidasi pembaruan Yjs atau endpoint
- * API penyimpanan). Klien tidak boleh dipercaya.
+ * **IMPORTANT — Security & permission enforcement:**
+ * This hook runs entirely on the client (in memory) and is meant purely for UI convenience
+ * (such as disabling action buttons, hiding context menus, or cancelling local operations before
+ * they reach the network). It provides **NO** security guarantee. Real authorization and access control
+ * **MUST** be enforced on the server (for example when validating Yjs updates or storage API
+ * endpoints). The client must never be trusted.
  *
  * @beta
  */
@@ -134,30 +134,30 @@ export type PermissionHook = (
 ) => boolean;
 
 /**
- * Hook yang dipanggil setelah dokumen berhasil disimpan oleh adapter storage (BOARD-1210).
+ * Hook called after a document is successfully saved by a storage adapter (BOARD-1210).
  *
  * @beta
  */
 export type DocumentSavedHook = (doc: Readonly<BoardDocument>) => void | PromiseLike<void>;
 
 /**
- * Fungsi pembersih yang dikembalikan `setup(board)` dan dijalankan saat `board.dispose()`.
+ * Cleanup function returned by `setup(board)` and run on `board.dispose()`.
  *
  * @public
  */
 export type PluginTeardown = () => void;
 
 /**
- * Hook inisialisasi plugin saat dipasang ke `board`. Hanya menerima antarmuka publik {@link Board}.
+ * Plugin initialization hook run when installed on `board`. Receives only the public {@link Board} interface.
  *
  * @public
  */
 export type PluginSetup = (board: Board) => PluginTeardown | void;
 
 /**
- * Entri perintah saat `commands` ditulis sebagai objek peta `{ [id]: entri }`:
- * boleh berupa {@link AnyCommandDefinition}, objek `{ label?, isEnabled?, run }`, atau langsung
- * fungsi `(board, args) => void` (dengan `label` bawaan sama dengan kunci `id`).
+ * Command entry when `commands` is written as a map object `{ [id]: entry }`:
+ * may be an {@link AnyCommandDefinition}, an object `{ label?, isEnabled?, run }`, or directly a
+ * function `(board, args) => void` (with the default `label` equal to the `id` key).
  *
  * @public
  */
@@ -172,22 +172,22 @@ export type PluginCommandMapEntry =
   | ((board: Board, args?: unknown) => void);
 
 /**
- * Bentuk deklarasi `commands` di dalam plugin: daftar {@link AnyCommandDefinition} atau peta
- * `{ [id]: entri }`.
+ * Shape of a plugin's `commands` declaration: a list of {@link AnyCommandDefinition} or a map
+ * `{ [id]: entry }`.
  *
  * @public
  */
 export type PluginCommandsInput =
   readonly AnyCommandDefinition[] | Readonly<Record<string, PluginCommandMapEntry>>;
 
-// ---------- Definisi plugin ----------
+// ---------- Plugin definition ----------
 
 /**
- * Definisi plugin papan. Dibuat dengan {@link definePlugin}.
+ * Board plugin definition. Created with {@link definePlugin}.
  *
- * @typeParam Id - Tipe literal ID plugin.
- * @typeParam Elements - Koleksi definisi elemen yang dibawa plugin.
- * @typeParam Tools - Koleksi definisi tool yang dibawa plugin.
+ * @typeParam Id - Literal type of the plugin ID.
+ * @typeParam Elements - Collection of element definitions provided by the plugin.
+ * @typeParam Tools - Collection of tool definitions provided by the plugin.
  *
  * @public
  */
@@ -196,67 +196,67 @@ export interface PluginDefinition<
   Elements extends readonly AnyElementDefinition[] = readonly AnyElementDefinition[],
   Tools extends readonly AnyToolDefinition[] = readonly AnyToolDefinition[],
 > {
-  /** ID unik plugin: huruf kecil, angka, titik, atau tanda hubung (misalnya `'default-elements'`). */
+  /** Unique plugin ID: lowercase letters, digits, dots, or hyphens (for example `'default-elements'`). */
   readonly id: Id;
-  /** Daftar ID plugin lain yang wajib dipasang sebelum plugin ini. */
+  /** IDs of other plugins that must be installed before this one. */
   readonly dependsOn?: readonly string[];
-  /** Definisi tipe elemen yang didaftarkan ke `board.elements`. */
+  /** Element type definitions registered into `board.elements`. */
   readonly elements?: Elements;
-  /** Definisi tool yang didaftarkan ke `board.tools`. */
+  /** Tool definitions registered into `board.tools`. */
   readonly tools?: Tools;
   /**
-   * Definisi kuas coretan tambahan (BOARD-603).
+   * Additional freehand brush definitions (BOARD-603).
    *
    * @beta
    */
   readonly brushes?: readonly PluginBrushDefinition[];
-  /** Perintah yang didaftarkan ke `board.commands`. */
+  /** Commands registered into `board.commands`. */
   readonly commands?: PluginCommandsInput;
   /**
-   * Peta shortcut keyboard ke ID perintah atau `'tool:<id>'` (BOARD-504).
+   * Map from keyboard shortcut to command ID or `'tool:<id>'` (BOARD-504).
    *
    * @beta
    */
   readonly keybindings?: Readonly<Record<string, string>>;
   /**
-   * Item tambahan untuk toolbar utama (BOARD-1402).
+   * Extra items for the main toolbar (BOARD-1402).
    *
    * @beta
    */
   readonly toolbarItems?: readonly PluginToolbarItem[];
   /**
-   * Eksportir format tambahan (BOARD-1707).
+   * Additional format exporters (BOARD-1707).
    *
    * @beta
    */
   readonly exporters?: readonly PluginExporter[];
   /**
-   * Migrasi dokumen tingkat plugin (BOARD-702).
+   * Plugin-level document migrations (BOARD-702).
    *
    * @beta
    */
   readonly migrations?: PluginMigrations;
   /**
-   * Hook pemeriksaan izin operasi (BOARD-212).
+   * Operation permission check hook (BOARD-212).
    *
    * @beta
    */
   readonly permissions?: PermissionHook;
   /**
-   * Hook setelah dokumen disimpan adapter storage (BOARD-1210).
+   * Hook run after a storage adapter saves the document (BOARD-1210).
    *
    * @beta
    */
   readonly onDocumentSaved?: DocumentSavedHook;
   /**
-   * Inisialisasi saat plugin dipasang ke `board`. Boleh mengembalikan fungsi `teardown` yang akan
-   * dipanggil saat `board.dispose()` dalam urutan terbalik dari pemasangan.
+   * Initialization when the plugin is installed on `board`. May return a `teardown` function that is
+   * called on `board.dispose()` in reverse installation order.
    */
   readonly setup?: PluginSetup;
 }
 
 /**
- * Definisi plugin apa pun, untuk menampung berbagai plugin di koleksi atau opsi `createBoard`.
+ * Any plugin definition, for holding various plugins in a collection or the `createBoard` options.
  *
  * @public
  */
@@ -269,12 +269,12 @@ export type AnyPluginDefinition = PluginDefinition<
 // ---------- Error ----------
 
 /**
- * Kode {@link PluginError}.
+ * Codes for {@link PluginError}.
  *
- * - `invalid-plugin`: definisi plugin tidak valid atau `setup` mengembalikan nilai bukan fungsi.
- * - `duplicate-plugin`: dua plugin dengan `id` yang sama dipasang di satu board.
- * - `missing-dependency`: plugin di `dependsOn` tidak ikut dipasang.
- * - `circular-dependency`: ada siklus di grafik `dependsOn`.
+ * - `invalid-plugin`: the plugin definition is invalid or `setup` returned a non-function value.
+ * - `duplicate-plugin`: two plugins with the same `id` are installed on one board.
+ * - `missing-dependency`: a plugin in `dependsOn` is not being installed.
+ * - `circular-dependency`: there is a cycle in the `dependsOn` graph.
  *
  * @public
  */
@@ -282,15 +282,15 @@ export type PluginErrorCode =
   'invalid-plugin' | 'duplicate-plugin' | 'missing-dependency' | 'circular-dependency';
 
 /**
- * Error saat mendefinisikan atau memasang plugin.
+ * Error thrown when defining or installing a plugin.
  *
  * @public
  */
 export class PluginError extends Error {
   readonly code: PluginErrorCode;
-  /** ID plugin yang bermasalah, atau `undefined` bila `id` sendiri tidak valid. */
+  /** The offending plugin ID, or `undefined` when `id` itself is invalid. */
   readonly pluginId: string | undefined;
-  /** Daftar masalah validasi; kosong selain untuk `invalid-plugin`. */
+  /** Validation problems; empty except for `invalid-plugin`. */
   readonly errors: readonly string[];
 
   constructor(
@@ -307,7 +307,7 @@ export class PluginError extends Error {
   }
 }
 
-// ---------- Validasi dan normalisasi ----------
+// ---------- Validation and normalization ----------
 
 const PLUGIN_ID = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
 const MIGRATION_KEY = /^(0|[1-9]\d*)$/;
@@ -382,8 +382,8 @@ function checkTools(tools: unknown, errors: string[]): void {
 }
 
 /**
- * Mengubah deklarasi `commands` (array atau peta objek) menjadi daftar {@link AnyCommandDefinition}
- * tervalidasi, sambil mengumpulkan pesan error bila ada yang tidak valid.
+ * Converts a `commands` declaration (array or map object) into a validated list of
+ * {@link AnyCommandDefinition}, collecting error messages for anything invalid.
  */
 function normalizeCommands(commands: unknown, errors: string[]): AnyCommandDefinition[] {
   const result: AnyCommandDefinition[] = [];
@@ -613,19 +613,19 @@ function assertValidPlugin(definition: unknown): void {
 // ---------- definePlugin ----------
 
 /**
- * Mendefinisikan plugin papan tulis.
+ * Defines a whiteboard plugin.
  *
- * Definisi divalidasi segera (lihat {@link PluginError}) dan objeknya dibekukan dangkal. Tipe
- * literal `id`, tuple `elements`, dan tuple `tools` dipertahankan apa adanya.
+ * The definition is validated immediately (see {@link PluginError}) and the object is shallow-frozen. The
+ * literal `id` type, the `elements` tuple, and the `tools` tuple are preserved as-is.
  *
  * @example
  * ```ts
- * const kartuPlugin = definePlugin({
- *   id: 'contoh.kartu',
+ * const cardPlugin = definePlugin({
+ *   id: 'example.card',
  *   dependsOn: ['default-elements'],
  *   elements: [contactCardElement],
  *   commands: {
- *     'contoh.tambah-kartu': (board) => { ... },
+ *     'example.add-card': (board) => { ... },
  *   },
  *   setup(board) {
  *     const off = board.on('change', () => {});
@@ -634,7 +634,7 @@ function assertValidPlugin(definition: unknown): void {
  * });
  * ```
  *
- * @throws {@link PluginError} berkode `invalid-plugin`.
+ * @throws {@link PluginError} with code `invalid-plugin`.
  * @public
  */
 export function definePlugin<
@@ -647,14 +647,14 @@ export function definePlugin<
   return Object.freeze({ ...definition });
 }
 
-// ---------- Resolusi urutan & pemasangan ----------
+// ---------- Order resolution & installation ----------
 
 /**
- * Mengurutkan daftar plugin secara deterministik berdasarkan `dependsOn` (topological sort stabil:
- * mempertahankan urutan input sepanjang prasyaratnya sudah terpenuhi).
+ * Sorts plugins deterministically by `dependsOn` (stable topological sort:
+ * keeps input order as long as prerequisites are already satisfied).
  *
- * @throws {@link PluginError} berkode `invalid-plugin`, `duplicate-plugin`, `missing-dependency`,
- *   atau `circular-dependency`.
+ * @throws {@link PluginError} with code `invalid-plugin`, `duplicate-plugin`, `missing-dependency`,
+ *   or `circular-dependency`.
  * @public
  */
 export function resolvePluginOrder(
@@ -686,7 +686,7 @@ export function resolvePluginOrder(
     list.push(frozen);
   }
 
-  // Periksa dependensi ke diri sendiri dan dependensi yang tidak ada sebelum traversal siklus.
+  // Check self-dependencies and missing dependencies before cycle traversal.
   for (const plugin of list) {
     for (const depId of plugin.dependsOn ?? []) {
       if (depId === plugin.id) {
@@ -740,16 +740,16 @@ export function resolvePluginOrder(
 }
 
 /**
- * Registri plugin yang terpasang di satu board (`board.plugins`).
+ * Registry of plugins installed on one board (`board.plugins`).
  *
  * @public
  */
 export interface BoardPlugins {
-  /** Definisi plugin untuk ID tersebut, atau `undefined` bila tidak terpasang. */
+  /** Plugin definition for the ID, or `undefined` when not installed. */
   get(id: string): AnyPluginDefinition | undefined;
-  /** Apakah plugin dengan ID tersebut terpasang di board ini. */
+  /** Whether a plugin with the ID is installed on this board. */
   has(id: string): boolean;
-  /** Semua plugin terpasang sesuai urutan pemasangan deterministik (setelah resolusi `dependsOn`). */
+  /** All installed plugins in deterministic installation order (after `dependsOn` resolution). */
   list(): readonly AnyPluginDefinition[];
 }
 
@@ -785,7 +785,7 @@ export function createPluginRuntime(options: PluginRuntimeOptions): PluginRuntim
       try {
         teardowns[i]!();
       } catch {
-        // Error asli pemasangan lebih penting daripada error saat rollback.
+        // The original installation error matters more than errors during rollback.
       }
     }
     teardowns.length = 0;
@@ -841,7 +841,7 @@ export function createPluginRuntime(options: PluginRuntimeOptions): PluginRuntim
       const pending = teardowns.splice(0, teardowns.length);
       let firstError: unknown;
       let hasError = false;
-      // Jalankan teardown dalam urutan terbalik dari pemasangan.
+      // Run teardowns in reverse installation order.
       for (let i = pending.length - 1; i >= 0; i--) {
         try {
           pending[i]!();

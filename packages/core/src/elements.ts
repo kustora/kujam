@@ -1,9 +1,9 @@
 /**
- * Kontrak elemen (`defineElement`) dan registri tipe elemen (BOARD-601).
+ * Element contract (`defineElement`) and element type registry (BOARD-601).
  *
- * Elemen bawaan (`@kujam/shapes`) dan elemen kustom memakai API yang sama. Dipasang ke
- * `createBoard({ plugins })` lewat `definePlugin` (BOARD-602); validasi `create`/`update` milik
- * BOARD-205, dan migrasi props saat memuat milik BOARD-702.
+ * Built-in elements (`@kujam/shapes`) and custom elements use the same API. Installed into
+ * `createBoard({ plugins })` via `definePlugin` (BOARD-602); `create`/`update` validation belongs to
+ * BOARD-205, and props migration on load belongs to BOARD-702.
  */
 
 import type { Geometry } from './geometry.js';
@@ -11,23 +11,23 @@ import type { InferShape, ObjectSchema, SchemaResult, SchemaShape } from './sche
 import { object, validate } from './schema.js';
 import type { ElementRecord } from './types.js';
 
-// ---------- Konteks render dan callback ----------
+// ---------- Render context and callbacks ----------
 
 /**
- * Konteks gambar 2D yang diterima `render.canvas`.
+ * 2D drawing context received by `render.canvas`.
  *
- * Subset struktural `CanvasRenderingContext2D` agar core tetap tanpa tipe DOM: konteks asli dari
- * `<canvas>` atau `OffscreenCanvas` bisa langsung diberikan tanpa adaptor. Renderer boleh memberi
- * objek dengan helper tambahan (BOARD-1204); anggota yang ada di sini tidak akan dihapus.
+ * Structural subset of `CanvasRenderingContext2D` so core stays free of DOM types: a real context from
+ * `<canvas>` or `OffscreenCanvas` can be passed directly without an adapter. Renderers may pass
+ * an object with extra helpers (BOARD-1204); members listed here will not be removed.
  *
  * @public
  */
 export interface ElementCanvasContext {
   globalAlpha: number;
   globalCompositeOperation: string;
-  /** String warna CSS, atau gradien/pola milik renderer. */
+  /** CSS color string, or a renderer-owned gradient/pattern. */
   fillStyle: string | object;
-  /** String warna CSS, atau gradien/pola milik renderer. */
+  /** CSS color string, or a renderer-owned gradient/pattern. */
   strokeStyle: string | object;
   lineWidth: number;
   lineCap: 'butt' | 'round' | 'square';
@@ -77,38 +77,38 @@ export interface ElementCanvasContext {
 }
 
 /**
- * Wadah DOM untuk `render.html`. Core tidak memakai tipe DOM, jadi antarmuka ini kosong dan
- * diperluas lewat declaration merging oleh package yang punya DOM (misalnya `@kujam/renderer`:
- * `interface ElementHtmlHost extends HTMLElement {}`). Saat runtime nilainya elemen DOM.
+ * DOM host for `render.html`. Core does not use DOM types, so this interface is empty and
+ * is extended through declaration merging by a package that has the DOM (for example `@kujam/renderer`:
+ * `interface ElementHtmlHost extends HTMLElement {}`). At runtime the value is a DOM element.
  *
  * @beta
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- titik perluasan untuk declaration merging
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type -- extension point for declaration merging
 export interface ElementHtmlHost {}
 
 /**
- * Keadaan tingkat detail saat `render.canvas` dipanggil.
+ * Level-of-detail state when `render.canvas` is called.
  *
  * @public
  */
 export interface ElementLodState {
-  /** Zoom kamera saat ini (1 = 100%). */
+  /** Current camera zoom (1 = 100%). */
   readonly zoom: number;
-  /** `true` bila elemen digambar dalam versi ringkas (di bawah `lod.compactBelowZoom`). */
+  /** `true` when the element is drawn in its compact version (below `lod.compactBelowZoom`). */
   readonly compact: boolean;
 }
 
 /**
- * Konteks yang diberikan board ke callback elemen (`onDoubleClick`, `a11y`, `actions`,
- * `render.html`). Anggota baru boleh ditambahkan tanpa dianggap perubahan yang merusak.
+ * Context the board passes to element callbacks (`onDoubleClick`, `a11y`, `actions`,
+ * `render.html`). New members may be added without being considered a breaking change.
  *
  * @public
  */
 export interface ElementContext {
-  /** Bahasa UI board (misalnya `'id'` atau `'en'`), untuk label a11y dan teks bawaan. */
+  /** Board UI locale (for example `'id'` or `'en'`), for a11y labels and default text. */
   readonly locale: string;
   /**
-   * Memancarkan event `action` yang bisa didengar aplikasi (BOARD-605).
+   * Emits an `action` event the application can listen to (BOARD-605).
    *
    * @beta
    */
@@ -116,14 +116,14 @@ export interface ElementContext {
 }
 
 /**
- * Status kegagalan resolver data dari luar (BOARD-604).
+ * Failure status of an external data resolver (BOARD-604).
  *
  * @beta
  */
 export type ResolveErrorStatus = 'forbidden' | 'not-found' | 'error';
 
 /**
- * Nilai yang dikembalikan resolver bila data tidak bisa diberikan (BOARD-604).
+ * Value returned by a resolver when data cannot be provided (BOARD-604).
  *
  * @beta
  */
@@ -133,15 +133,15 @@ export interface ResolveError {
 }
 
 /**
- * Hasil `resolve`: data sinkron dari cache, {@link ResolveError}, atau janji salah satunya.
+ * Result of `resolve`: synchronous data from a cache, a {@link ResolveError}, or a promise of either.
  *
  * @beta
  */
 export type ResolveResult<D> = D | ResolveError | PromiseLike<D | ResolveError>;
 
 /**
- * Konteks untuk `resolve`. Peta resolver diisi aplikasi lewat `createBoard({ resolvers })`
- * (BOARD-604); tipenya akan dipersempit oleh BOARD-607.
+ * Context for `resolve`. The resolver map is supplied by the application via `createBoard({ resolvers })`
+ * (BOARD-604); its type will be narrowed by BOARD-607.
  *
  * @beta
  */
@@ -149,17 +149,17 @@ export interface ElementResolveContext {
   readonly resolvers: Readonly<Record<string, (id: string) => unknown>>;
 }
 
-// ---------- Bagian kontrak ----------
+// ---------- Contract parts ----------
 
 /**
- * Mode resize bawaan yang dipahami transformasi elemen (BOARD-406).
+ * Built-in resize modes understood by element transforms (BOARD-406).
  *
  * @public
  */
 export type ElementResizeMode = 'free' | 'fixed-ratio' | 'none';
 
 /**
- * Ukuran elemen dalam satuan papan.
+ * Element size in board units.
  *
  * @public
  */
@@ -169,46 +169,46 @@ export interface ElementSize {
 }
 
 /**
- * Resize kustom: menerima ukuran usulan dari handle dan mengembalikan ukuran yang dipakai,
- * misalnya untuk ukuran minimum atau hanya mengubah lebar.
+ * Custom resize: receives the size proposed by the handle and returns the size to use,
+ * for example to enforce a minimum size or only change the width.
  *
  * @public
  */
-// Trik "bivariance" (method signature) agar definisi spesifik tetap bisa ditampung sebagai
-// AnyElementDefinition, misalnya di daftar `elements` milik plugin.
+// "Bivariance" trick (method signature) so specific definitions still fit into
+// AnyElementDefinition, for example in a plugin's `elements` list.
 export type ElementResizeHandler<P> = {
   bivarianceHack(el: ElementRecord<P>, proposed: ElementSize): ElementSize;
 }['bivarianceHack'];
 
 /**
- * Perilaku resize elemen: salah satu {@link ElementResizeMode} atau fungsi kustom.
+ * Element resize behavior: one of {@link ElementResizeMode} or a custom function.
  *
  * @public
  */
 export type ElementResize<P> = ElementResizeMode | ElementResizeHandler<P>;
 
 /**
- * Tampilan HTML yang dikembalikan `render.html`.
+ * HTML view returned by `render.html`.
  *
  * @beta
  */
 export interface ElementHtmlView<P, D> {
-  /** Dipanggil saat record atau data resolver berubah. */
+  /** Called when the record or resolver data changes. */
   update(el: ElementRecord<P>, data: D | undefined): void;
-  /** Dipanggil saat elemen keluar viewport, dihapus, atau renderer di-unmount. */
+  /** Called when the element leaves the viewport, is deleted, or the renderer unmounts. */
   destroy(): void;
 }
 
 /**
- * Cara elemen digambar. Elemen boleh memakai salah satu atau keduanya.
+ * How an element is drawn. An element may use either or both.
  *
  * @public
  */
 export interface ElementRenderers<P, D> {
   /**
-   * Menggambar elemen di Canvas 2D dalam koordinat lokal elemen: renderer sudah menerapkan
-   * translasi `x, y`, rotasi, dan opasitas sebelum memanggil. `data` selalu `undefined` bila
-   * elemen tidak punya `resolve`.
+   * Draws the element on Canvas 2D in the element's local coordinates: the renderer has already applied
+   * the `x, y` translation, rotation, and opacity before calling. `data` is always `undefined` when
+   * the element has no `resolve`.
    */
   canvas?(
     g: ElementCanvasContext,
@@ -217,7 +217,7 @@ export interface ElementRenderers<P, D> {
     lod: ElementLodState,
   ): void;
   /**
-   * Merender elemen sebagai DOM di lapisan HTML (BOARD-1201).
+   * Renders the element as DOM in the HTML layer (BOARD-1201).
    *
    * @beta
    */
@@ -230,38 +230,38 @@ export interface ElementRenderers<P, D> {
 }
 
 /**
- * Pengaturan tingkat detail (BOARD-1204).
+ * Level-of-detail settings (BOARD-1204).
  *
  * @beta
  */
 export interface ElementLod {
-  /** Di bawah zoom ini elemen digambar ringkas lewat `render.canvas` dan DOM-nya dilepas. */
+  /** Below this zoom the element is drawn compactly via `render.canvas` and its DOM is detached. */
   readonly compactBelowZoom: number;
 }
 
 /**
- * Peran dan label aksesibilitas elemen (pohon a11y BOARD-1901).
+ * Element accessibility role and label (a11y tree, BOARD-1901).
  *
  * @public
  */
 export interface ElementA11y {
-  /** Peran ARIA, misalnya `'note'`, `'img'`, atau `'article'`. */
+  /** ARIA role, for example `'note'`, `'img'`, or `'article'`. */
   readonly role: string;
-  /** Label yang dibacakan, misalnya `'Sticky kuning: Ide rapat'`. */
+  /** Spoken label, for example `'Yellow sticky: Meeting idea'`. */
   readonly label: string;
   readonly description?: string;
 }
 
 /**
- * Pengekspor per elemen.
+ * Per-element exporters.
  *
  * @public
  */
 export interface ElementExporters<P, D> {
-  /** Teks polos elemen untuk ekspor teks dan pencarian. */
+  /** Plain text of the element, for text export and search. */
   text?(el: ElementRecord<P>, data: D | undefined): string;
   /**
-   * Potongan SVG elemen dalam koordinat lokal (BOARD-1212).
+   * SVG fragment of the element in local coordinates (BOARD-1212).
    *
    * @beta
    */
@@ -269,7 +269,7 @@ export interface ElementExporters<P, D> {
 }
 
 /**
- * Satu aksi untuk toolbar kontekstual dan menu klik kanan (BOARD-605).
+ * A single action for the contextual toolbar and right-click menu (BOARD-605).
  *
  * @beta
  */
@@ -283,7 +283,7 @@ export interface ElementAction {
 }
 
 /**
- * Isi placeholder saat data tidak tersedia (BOARD-1202).
+ * Placeholder content when data is unavailable (BOARD-1202).
  *
  * @beta
  */
@@ -292,26 +292,26 @@ export interface ElementPlaceholder {
 }
 
 /**
- * Satu langkah migrasi props dari versi `n` ke `n + 1`. Wajib murni: tidak memutasi input.
+ * A single props migration step from version `n` to `n + 1`. Must be pure: does not mutate its input.
  *
  * @public
  */
 export type ElementPropsMigration = (props: Record<string, unknown>) => Record<string, unknown>;
 
 /**
- * Migrasi props per versi tipe. Kunci `n` memigrasi props versi `n` ke `n + 1`; kunci wajib
- * bilangan bulat `0` sampai `version - 1`. Versi tanpa langkah dianggap tidak mengubah props.
- * Dijalankan saat memuat dokumen oleh BOARD-702.
+ * Per-version props migrations for a type. Key `n` migrates props from version `n` to `n + 1`; keys must be
+ * integers from `0` to `version - 1`. Versions without a step are treated as leaving props unchanged.
+ * Run when loading a document, by BOARD-702.
  *
  * @public
  */
 export type ElementMigrations = Readonly<Record<number, ElementPropsMigration>>;
 
 /**
- * Definisi tipe elemen. Dibuat dengan {@link defineElement}.
+ * Element type definition. Created with {@link defineElement}.
  *
- * `T` adalah nama tipe, `S` bentuk skema props, dan `D` tipe data dari `resolve`
- * (`undefined` bila elemen tidak memakai data dari luar).
+ * `T` is the type name, `S` the props schema shape, and `D` the data type from `resolve`
+ * (`undefined` when the element does not use external data).
  *
  * @public
  */
@@ -320,42 +320,42 @@ export interface ElementDefinition<
   S extends SchemaShape = SchemaShape,
   D = unknown,
 > {
-  /** Nama tipe yang disimpan di `ElementRecord.type`. Unik per registri, tanpa spasi. */
+  /** Type name stored in `ElementRecord.type`. Unique per registry, no spaces. */
   readonly type: T;
-  /** Versi skema props, bilangan bulat mulai 1. Naikkan setiap props berubah tidak kompatibel. */
+  /** Props schema version, an integer starting at 1. Bump whenever props change incompatibly. */
   readonly version: number;
-  /** Skema props (ADR-007). Objek ketat: kunci yang tidak dikenal ditolak. */
+  /** Props schema (ADR-007). Strict object: unknown keys are rejected. */
   readonly props: ObjectSchema<S>;
-  /** Nilai props bawaan untuk elemen baru. Setiap nilai harus lolos skema kuncinya. */
+  /** Default props values for new elements. Each value must pass its key's schema. */
   readonly defaults?: Partial<InferShape<S>>;
-  /** Geometri lokal untuk hit-test, snap, dan seleksi. Bila tidak ada, dipakai kotak `w × h`. */
+  /** Local geometry for hit-testing, snapping, and selection. When absent, a `w × h` box is used. */
   geometry?(el: ElementRecord<InferShape<S>>): Geometry;
-  /** Perilaku resize; bawaan `'free'`. */
+  /** Resize behavior; defaults to `'free'`. */
   readonly resize?: ElementResize<InferShape<S>>;
-  /** Cara menggambar elemen. */
+  /** How the element is drawn. */
   readonly render?: ElementRenderers<InferShape<S>, D>;
-  /** Dipanggil saat elemen diklik dua kali, misalnya untuk masuk mode edit. */
+  /** Called when the element is double-clicked, for example to enter edit mode. */
   onDoubleClick?(el: ElementRecord<InferShape<S>>, ctx: ElementContext): void;
-  /** Migrasi props dari versi lama; lihat {@link ElementMigrations}. */
+  /** Props migrations from older versions; see {@link ElementMigrations}. */
   readonly migrate?: ElementMigrations;
-  /** Peran dan label aksesibilitas. */
+  /** Accessibility role and label. */
   a11y?(el: ElementRecord<InferShape<S>>, data: D | undefined, ctx: ElementContext): ElementA11y;
-  /** Pengekspor elemen. */
+  /** Element exporters. */
   readonly export?: ElementExporters<InferShape<S>, D>;
   /**
-   * Mengambil data dari luar; package tidak menyimpan data ini di dokumen (BOARD-604).
+   * Fetches external data; the package does not store this data in the document (BOARD-604).
    *
    * @beta
    */
   resolve?(el: ElementRecord<InferShape<S>>, ctx: ElementResolveContext): ResolveResult<D>;
   /**
-   * Pengaturan tingkat detail (BOARD-1204).
+   * Level-of-detail settings (BOARD-1204).
    *
    * @beta
    */
   readonly lod?: ElementLod;
   /**
-   * Aksi kontekstual elemen (BOARD-605).
+   * Element contextual actions (BOARD-605).
    *
    * @beta
    */
@@ -365,7 +365,7 @@ export interface ElementDefinition<
     ctx: ElementContext,
   ): readonly ElementAction[];
   /**
-   * Placeholder saat resolver gagal (BOARD-1202).
+   * Placeholder when the resolver fails (BOARD-1202).
    *
    * @beta
    */
@@ -373,14 +373,14 @@ export interface ElementDefinition<
 }
 
 /**
- * Definisi elemen apa pun, untuk menampung banyak tipe sekaligus (registri, daftar plugin).
+ * Any element definition, for holding many types at once (registries, plugin lists).
  *
  * @public
  */
 export type AnyElementDefinition = ElementDefinition<string, SchemaShape, unknown>;
 
 /**
- * Tipe props dari sebuah definisi elemen.
+ * Props type of an element definition.
  *
  * @example
  * ```ts
@@ -393,8 +393,8 @@ export type ElementPropsOf<E> =
   E extends ElementDefinition<string, infer S, infer _D> ? InferShape<S> : never;
 
 /**
- * Tipe data untuk callback dari tipe kembalian `resolve`: `Promise` dibuka dan
- * {@link ResolveError} dibuang. `undefined` bila elemen tidak punya `resolve`.
+ * Data type for callbacks, derived from `resolve`'s return type: `Promise` is unwrapped and
+ * {@link ResolveError} is removed. `undefined` when the element has no `resolve`.
  *
  * @beta
  */
@@ -403,22 +403,22 @@ export type ResolvedData<R> = Exclude<Awaited<R>, ResolveError>;
 // ---------- Error ----------
 
 /**
- * Kode {@link ElementDefinitionError}.
+ * Codes for {@link ElementDefinitionError}.
  *
  * @public
  */
 export type ElementDefinitionErrorCode = 'invalid-definition' | 'duplicate-type';
 
 /**
- * Error saat definisi elemen tidak valid atau tipenya sudah terdaftar.
+ * Error thrown when an element definition is invalid or its type is already registered.
  *
  * @public
  */
 export class ElementDefinitionError extends Error {
   readonly code: ElementDefinitionErrorCode;
-  /** Tipe elemen yang bermasalah, atau `undefined` bila `type` sendiri tidak valid. */
+  /** The offending element type, or `undefined` when `type` itself is invalid. */
   readonly type: string | undefined;
-  /** Daftar masalah definisi; kosong untuk `duplicate-type`. */
+  /** Definition problems; empty for `duplicate-type`. */
   readonly errors: readonly string[];
 
   constructor(
@@ -435,7 +435,7 @@ export class ElementDefinitionError extends Error {
   }
 }
 
-// ---------- Validasi definisi ----------
+// ---------- Definition validation ----------
 
 const RESIZE_MODES: readonly string[] = ['free', 'fixed-ratio', 'none'];
 const MIGRATION_KEY = /^(0|[1-9]\d*)$/;
@@ -467,13 +467,13 @@ function isObjectSchema(value: unknown): value is ObjectSchema<SchemaShape> {
 }
 
 /**
- * Memeriksa `defaults` terhadap skema props tanpa menuntut kunci wajib yang tidak diberi default.
+ * Checks `defaults` against the props schema without requiring keys that have no default.
  *
- * Skema objek ADR-007 memeriksa setiap kunci secara mandiri (tidak ada aturan lintas kunci),
- * sehingga memvalidasi sub-skema yang hanya memuat kunci-kunci di `defaults` setara dengan
- * memvalidasi `{ ...nilaiWajibApaPun, ...defaults }`: bila semua kunci wajib nanti diisi dengan
- * nilai valid, gabungannya pasti valid. Kunci yang tidak ada di skema tetap ditolak
- * (`unknown_key`) karena sub-skema juga objek ketat.
+ * ADR-007 object schemas check each key independently (there are no cross-key rules),
+ * so validating a sub-schema containing only the keys in `defaults` is equivalent to
+ * validating `{ ...anyRequiredValues, ...defaults }`: if every required key is later filled with
+ * a valid value, the merged result is guaranteed valid. Keys not in the schema are still rejected
+ * (`unknown_key`) because the sub-schema is also a strict object.
  */
 function checkDefaults(props: ObjectSchema<SchemaShape>, defaults: unknown, errors: string[]) {
   if (!isPlainObject(defaults)) {
@@ -510,7 +510,7 @@ function checkMigrations(migrate: unknown, version: unknown, errors: string[]): 
   }
 }
 
-/** Mengumpulkan semua masalah sebuah definisi elemen. Daftar kosong berarti valid. */
+/** Collects every problem in an element definition. An empty list means valid. */
 function collectElementDefinitionErrors(definition: unknown): string[] {
   if (!isPlainObject(definition)) return ['Definisi elemen wajib berupa objek.'];
   const def = definition;
@@ -579,11 +579,11 @@ function assertValidDefinition(definition: unknown): void {
 // ---------- defineElement ----------
 
 /**
- * Mendefinisikan tipe elemen. Dipakai elemen bawaan maupun elemen kustom.
+ * Defines an element type. Used by both built-in and custom elements.
  *
- * Tipe `props` diinferensi dari skema, sehingga `el.props` bertipe tepat di semua callback dan
- * `defaults` diperiksa sebagai `Partial<props>`. Definisi divalidasi segera (lihat
- * {@link ElementDefinitionError}) dan objeknya dibekukan dangkal.
+ * The `props` type is inferred from the schema, so `el.props` is precisely typed in every callback and
+ * `defaults` is checked as `Partial<props>`. The definition is validated immediately (see
+ * {@link ElementDefinitionError}) and the object is shallow-frozen.
  *
  * @example
  * ```ts
@@ -594,12 +594,12 @@ function assertValidDefinition(definition: unknown): void {
  *   defaults: { size: 'm' },
  *   geometry: (el) => rect(el.w, el.h),
  *   resize: 'fixed-ratio',
- *   a11y: (el) => ({ role: 'article', label: `Kontak ${el.props.refId}` }),
+ *   a11y: (el) => ({ role: 'article', label: `Contact ${el.props.refId}` }),
  *   export: { text: (el) => el.props.refId },
  * });
  * ```
  *
- * @throws {@link ElementDefinitionError} dengan kode `invalid-definition`.
+ * @throws {@link ElementDefinitionError} with code `invalid-definition`.
  * @public
  */
 export function defineElement<const T extends string, S extends SchemaShape, R = undefined>(
@@ -611,31 +611,31 @@ export function defineElement<const T extends string, S extends SchemaShape, R =
   return Object.freeze(definition);
 }
 
-// ---------- Registri ----------
+// ---------- Registry ----------
 
 /**
- * Registri tipe elemen milik satu board atau satu set plugin. Tidak ada state global.
+ * Element type registry owned by one board or one plugin set. There is no global state.
  *
- * Tipe yang tidak terdaftar tetap boleh ada di dokumen (ditampilkan sebagai placeholder dan
- * datanya tidak hilang); registri hanya melaporkan `get(type)` → `undefined`.
+ * Unregistered types may still exist in the document (shown as a placeholder, and their
+ * data is not lost); the registry just reports `get(type)` → `undefined`.
  *
  * @public
  */
 export interface ElementRegistry {
   /**
-   * Mendaftarkan definisi. Melempar {@link ElementDefinitionError} dengan kode
-   * `duplicate-type` bila tipenya sudah terdaftar, atau `invalid-definition` bila tidak valid.
+   * Registers a definition. Throws {@link ElementDefinitionError} with code
+   * `duplicate-type` when the type is already registered, or `invalid-definition` when invalid.
    */
   register(definition: AnyElementDefinition): void;
-  /** Definisi untuk tipe, atau `undefined` bila tidak terdaftar. */
+  /** Definition for the type, or `undefined` when not registered. */
   get(type: string): AnyElementDefinition | undefined;
   has(type: string): boolean;
-  /** Semua definisi sesuai urutan pendaftaran. */
+  /** All definitions in registration order. */
   list(): readonly AnyElementDefinition[];
   /**
-   * Memvalidasi props terhadap skema tipe tanpa mengubah nilai. Mengembalikan `undefined` bila
-   * tipe tidak terdaftar, sehingga pemanggil memutuskan sendiri: memuat dokumen membiarkan
-   * datanya, sedangkan membuat elemen baru sebaiknya menolak.
+   * Validates props against the type schema without changing values. Returns `undefined` when
+   * the type is not registered, so the caller decides: loading a document keeps the
+   * data, while creating a new element should reject it.
    */
   validateElementProps(
     type: string,
@@ -644,7 +644,7 @@ export interface ElementRegistry {
 }
 
 /**
- * Membuat registri tipe elemen, opsional dengan definisi awal (didaftarkan berurutan).
+ * Creates an element type registry, optionally with initial definitions (registered in order).
  *
  * @example
  * ```ts

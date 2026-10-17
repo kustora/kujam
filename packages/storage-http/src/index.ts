@@ -1,8 +1,8 @@
 /**
- * `@kujam/storage-http` — Adapter penyimpanan HTTP REST untuk `@kujam/core`.
+ * `@kujam/storage-http` — HTTP REST storage adapter for `@kujam/core`.
  *
- * Dokumen JSON dikirim sebagai `application/json`, update biner (misalnya state Yjs)
- * sebagai `application/octet-stream`. Saat memuat, jenis respons ditentukan dari `Content-Type`.
+ * JSON documents are sent as `application/json`, binary updates (for example Yjs state)
+ * as `application/octet-stream`. On load, the response kind is determined from `Content-Type`.
  *
  * @packageDocumentation
  */
@@ -10,7 +10,7 @@
 import type { BoardDocument, StorageAdapter, StorageChange } from '@kujam/core';
 
 /**
- * Opsi konfigurasi untuk adapter penyimpanan HTTP.
+ * Configuration options for the HTTP storage adapter.
  *
  * @public
  */
@@ -23,7 +23,7 @@ export interface HttpStorageOptions {
 const BINARY_TYPE = 'application/octet-stream';
 
 /**
- * Membuat adapter penyimpanan berbasis HTTP fetch.
+ * Creates an HTTP fetch-based storage adapter.
  *
  * @public
  */
@@ -64,7 +64,7 @@ export function createHttpStorage(options: HttpStorageOptions): StorageAdapter {
         body = JSON.stringify(change.document);
         contentType = 'application/json';
       } else if (change.update) {
-        // Salinan ber-ArrayBuffer (bukan SharedArrayBuffer) agar sah sebagai BodyInit.
+        // ArrayBuffer-backed copy (not SharedArrayBuffer) so it is valid as BodyInit.
         body = change.update.slice();
         contentType = BINARY_TYPE;
       } else {

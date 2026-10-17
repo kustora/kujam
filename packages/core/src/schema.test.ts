@@ -126,7 +126,7 @@ describe('schema objek (BOARD-203)', () => {
     const result = validate(props, { ...valid, size: secret, [secret]: secret });
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    // Kunci tak dikenal muncul di path (itu nama kunci, bukan nilai); nilai tidak boleh muncul di pesan.
+    // Unknown keys appear in the path (that is the key name, not the value); values must not appear in the message.
     for (const issue of result.issues) expect(issue.message).not.toContain(secret);
     expect(result.issues.map((i) => Object.keys(i).sort())).toEqual([
       ['code', 'message', 'path'],

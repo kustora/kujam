@@ -1,15 +1,15 @@
 /**
- * Store record bertransaksi (BOARD-204).
+ * Transactional record store (BOARD-204).
  *
- * - 204a: peta record dengan structural sharing. Commit hanya mengganti record yang berubah;
- *   record lain tetap objek yang sama (identitas terjaga), sehingga dokumen tidak pernah
- *   di-deep-clone utuh per transaksi. Objek snapshot dokumen dibuat malas saat `getDocument`
- *   dipanggil dan di-cache sampai commit berikutnya.
- * - 204b: perubahan dikumpulkan per ID selama transaksi, lalu dibandingkan dengan state awal
- *   saat commit. Hasilnya diff bersih: record yang dibuat lalu dihapus tidak muncul, update
- *   berulang menjadi satu `updated` dengan `before` awal dan `after` akhir.
- * - 204c: perubahan hanya ditulis ke state saat commit, jadi rollback cukup membuang
- *   perubahan yang tertunda. Transaksi bersarang memakai savepoint.
+ * - 204a: record map with structural sharing. A commit replaces only the changed records;
+ *   other records keep the same object (identity preserved), so the document is never
+ *   deep-cloned wholesale per transaction. The document snapshot object is created lazily when `getDocument`
+ *   is called and cached until the next commit.
+ * - 204b: changes are collected per ID during a transaction, then compared with the initial state
+ *   on commit. The result is a net diff: a record created and then deleted does not appear, and repeated
+ *   updates become one `updated` entry with the original `before` and the final `after`.
+ * - 204c: changes are only written to state on commit, so rollback just discards the
+ *   pending changes. Nested transactions use savepoints.
  */
 
 import { deepClone, deepEqual, deepFreeze, setOwn } from './clone.js';
@@ -17,20 +17,20 @@ import type { BoardDocument, BoardRecord } from './types.js';
 import { InvalidDocumentError, validateRecordShape } from './validate.js';
 
 /**
- * Asal perubahan yang dibawa setiap transaksi dan event `change`.
+ * Change origin carried by every transaction and `change` event.
  *
- * - `local`: aksi pengguna di papan ini (satu-satunya yang masuk riwayat undo).
- * - `remote`: perubahan dari peer lain atau server (sinkronisasi).
- * - `undo` / `redo`: diterapkan oleh riwayat undo.
- * - `load`: dokumen diganti lewat `loadDocument`.
- * - `migration`: perubahan oleh migrasi skema.
+ * - `local`: user actions on this board (the only origin recorded in undo history).
+ * - `remote`: changes from another peer or the server (sync).
+ * - `undo` / `redo`: applied by the undo history.
+ * - `load`: the document was replaced via `loadDocument`.
+ * - `migration`: changes made by a schema migration.
  *
  * @public
  */
 export type ChangeOrigin = 'local' | 'remote' | 'undo' | 'redo' | 'load' | 'migration';
 
 /**
- * Daftar semua {@link ChangeOrigin} yang valid.
+ * All valid {@link ChangeOrigin} values.
  *
  * @public
  */
@@ -44,7 +44,7 @@ export const CHANGE_ORIGINS: readonly ChangeOrigin[] = Object.freeze([
 ]);
 
 /**
- * Perubahan satu record: nilai sebelum transaksi dan nilai sesudahnya.
+ * Change to a single record: its value before and after the transaction.
  *
  * @public
  */
@@ -54,9 +54,9 @@ export interface RecordUpdate<R extends BoardRecord = BoardRecord> {
 }
 
 /**
- * Diff bersih per record, dikunci dengan ID record. Satu ID muncul paling banyak di salah
- * satu dari `added`, `updated`, atau `removed`. `removed` membawa record utuh sebelum dihapus,
- * sehingga diff bisa dibalik (dipakai undo).
+ * Net diff per record, keyed by record ID. An ID appears in at most one
+ * of `added`, `updated`, or `removed`. `removed` carries the full record before deletion,
+ * so the diff can be inverted (used by undo).
  *
  * @public
  */
@@ -67,59 +67,59 @@ export interface RecordsDiff {
 }
 
 /**
- * Isi event `change`: diff satu transaksi beserta asal dan labelnya.
+ * Payload of the `change` event: a transaction's diff with its origin and label.
  *
  * @public
  */
 export interface ChangeEvent extends RecordsDiff {
   readonly origin: ChangeOrigin;
-  /** Label transaksi untuk undo dan log; `undefined` bila tidak diberikan. */
+  /** Transaction label for undo and logs; `undefined` when not provided. */
   readonly label: string | undefined;
 }
 
 /**
- * Opsi `board.transact`.
+ * Options for `board.transact`.
  *
  * @public
  */
 export interface TransactOptions {
-  /** Label untuk riwayat undo dan log aktivitas. */
+  /** Label for undo history and the activity log. */
   label?: string;
-  /** Asal perubahan. Bawaan `'local'`. */
+  /** Change origin. Defaults to `'local'`. */
   origin?: ChangeOrigin;
 }
 
 /**
- * Handle tulis tingkat rendah yang hanya berlaku selama `fn` dari `board.transact` berjalan.
- * Pembacaan melihat perubahan yang sudah ditulis di transaksi yang sama.
+ * Low-level write handle valid only while the `fn` passed to `board.transact` runs.
+ * Reads see changes already written in the same transaction.
  *
- * `put` dan `remove` hanya memeriksa struktur record (field wajib), tanpa skema props, index
- * otomatis, atau aturan `locked`. API `create`/`update`/`delete` (BOARD-205) dibangun di atasnya.
+ * `put` and `remove` only check record structure (required fields), with no props schema, automatic
+ * indexing, or `locked` rules. The `create`/`update`/`delete` API (BOARD-205) is built on top of it.
  *
  * @beta
  */
 export interface Transaction {
-  /** Asal transaksi terluar. */
+  /** Origin of the outermost transaction. */
   readonly origin: ChangeOrigin;
-  /** Label transaksi terluar. */
+  /** Label of the outermost transaction. */
   readonly label: string | undefined;
-  /** Membaca record, termasuk perubahan yang belum di-commit. */
+  /** Reads a record, including uncommitted changes. */
   get(id: string): Readonly<BoardRecord> | undefined;
-  /** Memeriksa apakah record ada, termasuk perubahan yang belum di-commit. */
+  /** Checks whether a record exists, including uncommitted changes. */
   has(id: string): boolean;
   /**
-   * Menambah atau mengganti utuh record dengan ID yang sama. Record disalin, jadi objek masukan
-   * boleh diubah setelahnya tanpa memengaruhi papan.
+   * Adds a record, or fully replaces the record with the same ID. The record is copied, so the input object
+   * may be changed afterwards without affecting the board.
    *
-   * @throws {@link InvalidDocumentError} bila struktur record tidak valid.
+   * @throws {@link InvalidDocumentError} when the record structure is invalid.
    */
   put(record: BoardRecord): void;
-  /** Menghapus record. Mengembalikan `false` bila record tidak ada. */
+  /** Removes a record. Returns `false` when the record does not exist. */
   remove(id: string): boolean;
 }
 
 /**
- * Error yang dilempar saat transaksi berasal `local` dijalankan pada papan `readOnly`.
+ * Error thrown when a transaction with origin `local` runs on a `readOnly` board.
  *
  * @public
  */
@@ -142,9 +142,9 @@ export interface RecordStore {
   getDocument(): BoardDocument;
   getRecord(id: string): BoardRecord | undefined;
   transact<T>(fn: (tx: Transaction) => T, options?: TransactOptions): T;
-  /** Apakah sebuah transaksi sedang berjalan (`fn` belum selesai). */
+  /** Whether a transaction is running (`fn` has not finished). */
   inTransaction(): boolean;
-  /** Mengganti seluruh dokumen (sudah divalidasi) sebagai satu transaksi. */
+  /** Replaces the whole (already validated) document as a single transaction. */
   replaceDocument(doc: BoardDocument, origin: ChangeOrigin): void;
   dispose(): void;
 }
@@ -179,8 +179,8 @@ function resolveLabel(label: unknown): string | undefined {
 }
 
 /**
- * Membuat store record. `initial` harus sudah divalidasi dan tidak dibagi dengan pemanggil
- * (store akan membekukannya bila `freeze` aktif).
+ * Creates a record store. `initial` must already be validated and not shared with the caller
+ * (the store freezes it when `freeze` is enabled).
  *
  * @internal
  */
@@ -189,9 +189,9 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
   const seal = <T>(value: T): T => (freeze ? deepFreeze(value) : value);
   const sealShallow = <T extends object>(value: T): T => (freeze ? Object.freeze(value) : value);
 
-  // State internal: peta record (diubah hanya saat commit) dan snapshot dokumen yang dibuat
-  // malas saat dibaca lalu di-cache sampai commit berikutnya. Dengan begitu satu transaksi
-  // berbiaya sebanding jumlah record yang berubah, bukan ukuran dokumen.
+  // Internal state: the record map (changed only on commit) and a document snapshot created
+  // lazily on read and cached until the next commit. This way a transaction
+  // costs in proportion to the number of changed records, not the document size.
   let snapshot: BoardDocument | null = seal(initial);
   let records = new Map<string, BoardRecord>(Object.entries(snapshot.records));
   let schemaVersion = snapshot.schemaVersion;
@@ -266,7 +266,7 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
     });
   }
 
-  /** Commit perubahan tertunda. Mengembalikan event, atau `null` bila tidak ada perubahan bersih. */
+  /** Commits pending changes. Returns the event, or `null` when there is no net change. */
   function commit(state: ActiveTransaction): ChangeEvent | null {
     const added: Record<string, BoardRecord> = {};
     const updated: Record<string, RecordUpdate> = {};
@@ -281,7 +281,7 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
       } else if (after === undefined) {
         setOwn(removed, id, before);
       } else if (deepEqual(before, after)) {
-        // Tidak ada perubahan bersih: pertahankan objek lama demi structural sharing.
+        // No net change: keep the old object for structural sharing.
         continue;
       } else {
         setOwn(updated, id, sealShallow({ before, after }));
@@ -299,8 +299,8 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
   }
 
   function runNested<T>(state: ActiveTransaction, fn: (tx: Transaction) => T): T {
-    // Savepoint: bila fn dalam melempar, hanya perubahannya yang dibatalkan; transaksi luar
-    // memutuskan sendiri apakah ikut gagal.
+    // Savepoint: when the inner fn throws, only its changes are rolled back; the outer transaction
+    // decides on its own whether to fail too.
     const savepoint = new Map(state.pending);
     try {
       const result = fn(state.tx);
@@ -327,7 +327,7 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
     transact<T>(fn: (tx: Transaction) => T, txOptions: TransactOptions = {}): T {
       assertUsable();
       if (typeof fn !== 'function') throw new TypeError('transact wajib menerima fungsi.');
-      // Transaksi bersarang digabung ke transaksi terluar; opsi transaksi dalam diabaikan.
+      // Nested transactions are merged into the outermost one; inner transaction options are ignored.
       if (active) return runNested(active, fn);
 
       const origin = resolveOrigin(txOptions.origin);
@@ -341,7 +341,7 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
         result = fn(state.tx);
         if (isThenable(result)) throw asyncError();
       } finally {
-        // Rollback total bila fn melempar: perubahan tertunda dibuang tanpa menyentuh state.
+        // Full rollback when fn throws: pending changes are discarded without touching state.
         active = null;
         state.closed = true;
       }
@@ -376,8 +376,8 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
       schemaVersion = doc.schemaVersion;
       meta = seal(doc.meta);
       snapshot = null;
-      // Penggantian dokumen selalu memancarkan satu event, walau diff record kosong,
-      // karena meta dan versi skema bisa ikut berubah.
+      // Replacing the document always emits one event, even when the record diff is empty,
+      // because meta and the schema version may change too.
       onChange(buildEvent(origin, undefined, added, updated, removed));
     },
     dispose() {

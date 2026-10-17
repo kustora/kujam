@@ -68,7 +68,7 @@ describe('BOARD-205: board.create', () => {
     expect(el1?.props).toEqual({ text: 'Catatan 1', color: 'yellow' });
     expect(el1?.meta).toEqual({});
 
-    // Elemen kedua di page yang sama otomatis di atas el1
+    // The second element on the same page is automatically above el1
     const el2 = board.create({
       type: 'note',
       props: { text: 'Catatan 2' },
@@ -232,7 +232,7 @@ describe('BOARD-205: board.update', () => {
     expect(updated).toBeDefined();
     expect(updated?.x).toBe(100);
     expect(updated?.y).toBe(0);
-    // props text terupdate, color tetap dipertahankan
+    // props text is updated, color is preserved
     expect(updated?.props).toEqual({ text: 'Diperbarui', color: 'green' });
     expect(board.getElement(el.id)).toEqual(updated);
     board.dispose();
@@ -246,12 +246,12 @@ describe('BOARD-205: board.update', () => {
       props: { text: 'Terkunci' },
     })!;
 
-    // Tanpa force: ditolak
+    // Without force: rejected
     const failed = board.update(el.id, { x: 50 });
     expect(failed).toBeUndefined();
     expect(board.getElement(el.id)?.x).toBe(0);
 
-    // Dengan force: diizinkan (misalnya membuka kunci)
+    // With force: allowed (for example unlocking)
     const unlocked = board.update(el.id, { locked: false, x: 50 }, { force: true });
     expect(unlocked).toBeDefined();
     expect(unlocked?.locked).toBe(false);
@@ -361,11 +361,11 @@ describe('BOARD-205: board.delete', () => {
     const board = createBoard({ plugins: [testPlugin] });
     // Root container
     board.create({ id: 'frame-1', type: 'note' });
-    // Anak dari frame
+    // Child of the frame
     board.create({ id: 'group-1', type: 'note', parentId: 'frame-1' });
-    // Cucu dari frame (anak dari childGroup)
+    // Grandchild of the frame (child of childGroup)
     board.create({ id: 'sub-child-1', type: 'note', parentId: 'group-1' });
-    // Elemen luar yang tidak terhubung
+    // Unrelated outside element
     board.create({ id: 'outside-1', type: 'note' });
 
     const deleted = board.delete('frame-1');
@@ -388,7 +388,7 @@ describe('BOARD-205: board.delete', () => {
     const elA = board.create({ id: 'el-a', type: 'note' })!;
     const elB = board.create({ id: 'el-b', type: 'note' })!;
 
-    // Tambahkan binding antara el-a dan el-b
+    // Add a binding between el-a and el-b
     const binding: BindingRecord = {
       id: 'bind-1',
       kind: 'binding',
@@ -402,7 +402,7 @@ describe('BOARD-205: board.delete', () => {
 
     expect(board.getDocument().records['bind-1']).toBeDefined();
 
-    // Hapus elA, binding bind-1 harus otomatis terhapus
+    // Delete elA; binding bind-1 must be deleted automatically
     const deleted = board.delete(elA.id);
     expect(deleted).toContain('el-a');
     expect(deleted).toContain('bind-1');
@@ -418,13 +418,13 @@ describe('BOARD-205: board.delete', () => {
     const locked = board.create({ id: 'locked-el', type: 'note', locked: true })!;
     const unlocked = board.create({ id: 'unlocked-el', type: 'note', locked: false })!;
 
-    // Hapus tanpa force: hanya yang tidak terkunci yang dihapus
+    // Delete without force: only unlocked elements are deleted
     const deleted = board.delete([locked.id, unlocked.id]);
     expect(deleted).toEqual(['unlocked-el']);
     expect(board.getElement('locked-el')).toBeDefined();
     expect(board.getElement('unlocked-el')).toBeUndefined();
 
-    // Hapus dengan force: yang terkunci ikut terhapus
+    // Delete with force: locked elements are deleted too
     const deletedForced = board.delete(locked.id, { force: true });
     expect(deletedForced).toEqual(['locked-el']);
     expect(board.getElement('locked-el')).toBeUndefined();
@@ -454,7 +454,7 @@ describe('BOARD-205: board.delete', () => {
     expect(deleted).not.toContain('child-locked');
     expect(board.getElement('child-locked')).toBeDefined();
 
-    // Hapus dengan force: true
+    // Delete with force: true
     const deletedForced = board.delete(lockedChild.id, { force: true });
     expect(deletedForced).toEqual(['child-locked']);
     expect(board.getElement('child-locked')).toBeUndefined();

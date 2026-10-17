@@ -35,7 +35,7 @@ export default defineConfig({
         },
       },
       {
-        // BOARD-102/106/107: bukti aturan build dan lint bekerja terhadap fixture pelanggaran.
+        // BOARD-102/106/107: proof that build and lint rules work against violation fixtures.
         test: {
           name: 'tooling',
           include: ['tooling/**/*.test.ts'],

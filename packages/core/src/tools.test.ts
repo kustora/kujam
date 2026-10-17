@@ -14,7 +14,7 @@ import {
   type ToolPointerEvent,
 } from './index.js';
 
-// ---------- Event sintetis ----------
+// ---------- Synthetic events ----------
 
 const NO_MODS: InputModifiers = { shift: false, alt: false, ctrl: false, meta: false };
 
@@ -52,7 +52,7 @@ const escape = (): BoardInputEvent => key('key-down', 'Escape', 'Escape');
 const spaceDown = (repeat = false): BoardInputEvent => key('key-down', ' ', 'Space', repeat);
 const spaceUp = (): BoardInputEvent => key('key-up', ' ', 'Space');
 
-/** Mengirim seret lengkap: down di titik pertama, move ke titik tengah, up di titik terakhir. */
+/** Sends a full drag: down at the first point, move to the middle points, up at the last point. */
 function drag(board: Board, points: [number, number][], pointerId = 1): void {
   const [first, ...rest] = points as [[number, number], ...[number, number][]];
   board.dispatch(pointer('pointer-down', first[0], first[1], { pointerId }));
@@ -61,7 +61,7 @@ function drag(board: Board, points: [number, number][], pointerId = 1): void {
   board.dispatch(pointer('pointer-up', last[0], last[1], { pointerId }));
 }
 
-// ---------- Tool contoh ----------
+// ---------- Example tools ----------
 
 function box(id: string, x: number, y: number, w = 0, h = 0): ElementRecord {
   return {
@@ -83,7 +83,7 @@ function box(id: string, x: number, y: number, w = 0, h = 0): ElementRecord {
   };
 }
 
-/** Tool kotak: tekan membuat elemen, seret mengubah ukurannya, lepas meng-commit. */
+/** Box tool: press creates an element, drag resizes it, release commits. */
 function boxTool(overrides: Partial<ToolDefinition<'idle' | 'drawing', { id: string }>> = {}) {
   return defineTool({
     id: 'box',
@@ -118,7 +118,7 @@ function boxTool(overrides: Partial<ToolDefinition<'idle' | 'drawing', { id: str
 const noopTool = (id: string, oneShot = false) =>
   defineTool({ id, oneShot, initial: 'idle', states: { idle: {} } });
 
-/** Tool tangan minimal: seret menggeser kamera. */
+/** Minimal hand tool: drag pans the camera. */
 const handTool = defineTool({
   id: 'hand',
   cursor: 'grab',
@@ -164,7 +164,7 @@ const elementIds = (board: Board) =>
     .filter((r) => r.kind === 'element')
     .map((r) => r.id);
 
-// ---------- Tes ----------
+// ---------- Tests ----------
 
 describe('defineTool dan registri (BOARD-501)', () => {
   it('mendaftarkan dan mencari tool sesuai urutan pendaftaran', () => {
@@ -290,7 +290,7 @@ describe('interaksi: commit dan rollback', () => {
     expect(board.toolState).toBe('drawing');
     expect(board.cursor).toBe('nwse-resize');
     expect(board.getElement('el:1')).toMatchObject({ x: 10, y: 20, w: 0, h: 0 });
-    // Selama interaksi, perubahan sudah terlihat tetapi belum masuk riwayat.
+    // During the interaction, changes are visible but not yet in history.
     expect(board.history.canUndo).toBe(false);
 
     board.dispatch(pointer('pointer-move', 50, 60));
@@ -406,7 +406,7 @@ describe('interaksi: commit dan rollback', () => {
         busy: {
           onPointerUp(ctx) {
             ctx.cancel();
-            return 'busy'; // diabaikan karena cancel sudah memindahkan state
+            return 'busy'; // ignored because cancel already moved the state
           },
         },
       },
@@ -710,7 +710,7 @@ describe('siklus hidup', () => {
 });
 
 describe('interaksi pada elemen yang sudah ada', () => {
-  /** Tool seret: memindah elemen `el:target`; Alt+lepas menghapusnya. */
+  /** Drag tool: moves element `el:target`; Alt+release deletes it. */
   const mover = defineTool({
     id: 'mover',
     initial: 'idle',

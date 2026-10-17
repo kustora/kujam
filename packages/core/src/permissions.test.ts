@@ -60,7 +60,7 @@ describe('BOARD-212: Hook izin permissions(action, element, user)', () => {
     expect(errorEvents[0]!.code).toBe('forbidden');
     expect(errorEvents[0]!.message).toContain('Operasi "create"');
 
-    // Dokumen tetap bersih tanpa elemen
+    // The document stays clean with no elements
     expect(board.query()).toHaveLength(0);
     board.dispose();
   });
@@ -105,7 +105,7 @@ describe('BOARD-212: Hook izin permissions(action, element, user)', () => {
     const el = board.create({ type: 'note', props: { text: 'Awal' } })!;
     expect(el).toBeDefined();
 
-    // Sekarang larang update
+    // Now forbid update
     allowUpdate = false;
     const updated = board.update(el.id, { props: { text: 'Berubah' } });
 
@@ -114,7 +114,7 @@ describe('BOARD-212: Hook izin permissions(action, element, user)', () => {
     expect(errorEvents[0]!.code).toBe('forbidden');
     expect(errorEvents[0]!.message).toContain('Operasi "update"');
 
-    // Nilai elemen tidak berubah di store
+    // The element value is unchanged in the store
     expect(board.getElement(el.id)?.props.text).toBe('Awal');
     board.dispose();
   });
@@ -136,7 +136,7 @@ describe('BOARD-212: Hook izin permissions(action, element, user)', () => {
     const el = board.create({ id: 'note-1', type: 'note' })!;
     expect(el).toBeDefined();
 
-    // Larang delete
+    // Forbid delete
     allowDelete = false;
     const deleted = board.delete(el.id);
 
@@ -145,7 +145,7 @@ describe('BOARD-212: Hook izin permissions(action, element, user)', () => {
     expect(errorEvents[0]!.code).toBe('forbidden');
     expect(errorEvents[0]!.message).toContain('Operasi "delete"');
 
-    // Elemen tetap ada di papan
+    // The element is still on the board
     expect(board.getElement(el.id)).toBeDefined();
     board.dispose();
   });
@@ -168,14 +168,14 @@ describe('BOARD-212: Hook izin permissions(action, element, user)', () => {
     const el2 = board.create({ id: 'protected-note', type: 'note' })!;
     const el3 = board.create({ id: 'free-note-2', type: 'note' })!;
 
-    // Hapus batch berisi protected-note
+    // Delete a batch containing protected-note
     const deleted = board.delete([el1.id, el2.id, el3.id]);
 
     expect(deleted).toEqual([]);
     expect(errorEvents).toHaveLength(1);
     expect(errorEvents[0]!.code).toBe('forbidden');
 
-    // Tidak ada elemen yang terhapus
+    // No element was deleted
     expect(board.getElement(el1.id)).toBeDefined();
     expect(board.getElement(el2.id)).toBeDefined();
     expect(board.getElement(el3.id)).toBeDefined();
@@ -200,14 +200,14 @@ describe('BOARD-212: Hook izin permissions(action, element, user)', () => {
     board.create({ id: 'child-free', type: 'note', parentId: parent.id });
     board.create({ id: 'child-protected', type: 'note', parentId: parent.id });
 
-    // Hapus parent: cascade ke anak-anaknya, tapi child-protected ditolak
+    // Delete the parent: cascades to its children, but child-protected is rejected
     const deleted = board.delete(parent.id);
 
     expect(deleted).toEqual([]);
     expect(errorEvents).toHaveLength(1);
     expect(errorEvents[0]!.code).toBe('forbidden');
 
-    // Seluruh hierarki tetap utuh
+    // The whole hierarchy stays intact
     expect(board.getElement('parent-frame')).toBeDefined();
     expect(board.getElement('child-free')).toBeDefined();
     expect(board.getElement('child-protected')).toBeDefined();
@@ -235,7 +235,7 @@ describe('BOARD-212: Hook izin permissions(action, element, user)', () => {
       run: runMock,
     };
 
-    // Aksi ditolak oleh izin
+    // Action rejected by permissions
     const success1 = board.runAction(action, el);
     expect(success1).toBe(false);
     expect(runMock).not.toHaveBeenCalled();
@@ -243,13 +243,13 @@ describe('BOARD-212: Hook izin permissions(action, element, user)', () => {
     expect(errorEvents[0]!.code).toBe('forbidden');
     expect(errorEvents[0]!.message).toContain('Menjalankan aksi "custom.color-picker"');
 
-    // Izinkan aksi
+    // Allow the action
     allowAction = true;
     const success2 = board.runAction(action, el);
     expect(success2).toBe(true);
     expect(runMock).toHaveBeenCalledTimes(1);
 
-    // Bila isEnabled() false, aksi tidak dijalankan dan tidak memancarkan error forbidden
+    // When isEnabled() is false, the action does not run and no forbidden error is emitted
     const disabledAction: ElementAction = {
       id: 'custom.disabled',
       label: 'Nonaktif',
@@ -259,7 +259,7 @@ describe('BOARD-212: Hook izin permissions(action, element, user)', () => {
     const success3 = board.runAction(disabledAction, el);
     expect(success3).toBe(false);
     expect(disabledAction.run).not.toHaveBeenCalled();
-    expect(errorEvents).toHaveLength(1); // tidak bertambah
+    expect(errorEvents).toHaveLength(1); // unchanged
 
     board.dispose();
   });
@@ -286,24 +286,24 @@ describe('BOARD-212: Hook izin permissions(action, element, user)', () => {
       plugins: [basePlugin, pluginA, pluginB, pluginC],
     });
 
-    // Semua mengizinkan -> true
+    // All allow -> true
     expect(board.can('create')).toBe(true);
 
-    // Plugin A menolak -> false
+    // Plugin A rejects -> false
     pluginAAllow = false;
     expect(board.can('create')).toBe(false);
 
-    // Plugin A izinkan, Plugin B menolak -> false
+    // Plugin A allows, Plugin B rejects -> false
     pluginAAllow = true;
     pluginBAllow = false;
     expect(board.can('create')).toBe(false);
 
-    // Plugin B izinkan, Plugin C menolak -> false
+    // Plugin B allows, Plugin C rejects -> false
     pluginBAllow = true;
     pluginCAllow = false;
     expect(board.can('create')).toBe(false);
 
-    // Semua izinkan lagi -> true
+    // All allow again -> true
     pluginCAllow = true;
     expect(board.can('create')).toBe(true);
 
@@ -326,16 +326,16 @@ describe('BOARD-212: Hook izin permissions(action, element, user)', () => {
 
     expect(board.can('update')).toBe(true);
 
-    // Plugin izinkan, aplikasi tolak -> false
+    // Plugin allows, application rejects -> false
     appAllow = false;
     expect(board.can('update')).toBe(false);
 
-    // Aplikasi izinkan, plugin tolak -> false
+    // Application allows, plugin rejects -> false
     appAllow = true;
     pluginAllow = false;
     expect(board.can('update')).toBe(false);
 
-    // Keduanya izinkan -> true
+    // Both allow -> true
     pluginAllow = true;
     expect(board.can('update')).toBe(true);
 
@@ -355,7 +355,7 @@ describe('BOARD-212: Hook izin permissions(action, element, user)', () => {
     expect(errorEvents).toHaveLength(0);
 
     board.dispose();
-    // Setelah dispose, can selalu mengembalikan false
+    // After dispose, can always returns false
     expect(board.can('create')).toBe(false);
   });
 
@@ -369,10 +369,10 @@ describe('BOARD-212: Hook izin permissions(action, element, user)', () => {
     });
     board.on('error', (e) => errorEvents.push(e));
 
-    // can mengembalikan false tanpa crash
+    // can returns false without crashing
     expect(board.can('create')).toBe(false);
 
-    // create membatalkan operasi dan memancarkan event error forbidden
+    // create cancels the operation and emits a forbidden error event
     const created = board.create({ type: 'note' });
     expect(created).toBeUndefined();
     expect(errorEvents).toHaveLength(1);

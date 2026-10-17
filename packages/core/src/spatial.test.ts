@@ -54,7 +54,7 @@ describe('BOARD-404 / BOARD-206: spatial bounds normalization', () => {
       maxY: 200,
     });
 
-    // Menangani min > max
+    // Handles min > max
     expect(normalizeBounds({ minX: 100, minY: 200, maxX: 10, maxY: 20 })).toEqual({
       minX: 10,
       minY: 20,
@@ -62,7 +62,7 @@ describe('BOARD-404 / BOARD-206: spatial bounds normalization', () => {
       maxY: 200,
     });
 
-    // Format rect
+    // Rect format
     expect(normalizeBounds({ x: 10, y: 20, w: 90, h: 180 })).toEqual({
       minX: 10,
       minY: 20,
@@ -70,7 +70,7 @@ describe('BOARD-404 / BOARD-206: spatial bounds normalization', () => {
       maxY: 200,
     });
 
-    // Format rect dengan w/h negatif
+    // Rect format with negative w/h
     expect(normalizeBounds({ x: 100, y: 200, w: -90, h: -180 })).toEqual({
       minX: 10,
       minY: 20,
@@ -96,8 +96,8 @@ describe('BOARD-404: computeElementAABB', () => {
   });
 
   it('menghitung AABB elemen dengan rotasi 90 derajat', () => {
-    // Kotak 100x200 di (0, 0), pusat (50, 100).
-    // Setelah rotasi 90 derajat, dimensi bertukar menjadi 200x100 dengan pusat yang sama (50, 100).
+    // A 100x200 box at (0, 0), center (50, 100).
+    // After a 90-degree rotation, the dimensions swap to 200x100 with the same center (50, 100).
     // minX = 50 - 100 = -50, maxX = 50 + 100 = 150
     // minY = 100 - 50 = 50, maxY = 100 + 50 = 150
     const el = makeElement({ x: 0, y: 0, w: 100, h: 200, rotation: 90 });
@@ -174,24 +174,24 @@ describe('BOARD-404: createSpatialIndex', () => {
     expect(index.getBounds('el-1')).toEqual({ minX: 0, minY: 0, maxX: 50, maxY: 50 });
     expect(index.getBounds('non-existent')).toBeUndefined();
 
-    // Query area yang hanya mencakup el1
+    // Query an area covering only el1
     expect(index.search({ x: -10, y: -10, w: 70, h: 70 })).toEqual(['el-1']);
 
-    // Query area yang mencakup keduanya
+    // Query an area covering both
     expect(index.search({ minX: -10, minY: -10, maxX: 300, maxY: 300 })).toContain('el-1');
     expect(index.search({ minX: -10, minY: -10, maxX: 300, maxY: 300 })).toContain('el-2');
 
-    // Update el1 berpindah ke dekat el2
+    // Update el1 to move near el2
     const el1Moved = makeElement({ id: 'el-1', x: 190, y: 190, w: 50, h: 50 });
     index.update(el1Moved);
     expect(index.search({ x: -10, y: -10, w: 70, h: 70 })).toEqual([]);
     expect(index.search({ x: 180, y: 180, w: 100, h: 100 }).sort()).toEqual(['el-1', 'el-2']);
 
-    // Update dengan bounds sama adalah no-op
+    // Updating with the same bounds is a no-op
     index.update(el1Moved);
     expect(index.size()).toBe(2);
 
-    // Insert ulang id yang sama memicu update
+    // Re-inserting the same id triggers an update
     index.insert(el1Moved);
     expect(index.size()).toBe(2);
 
@@ -200,7 +200,7 @@ describe('BOARD-404: createSpatialIndex', () => {
     expect(index.size()).toBe(1);
     expect(index.search({ x: 180, y: 180, w: 100, h: 100 })).toEqual(['el-2']);
 
-    // Remove ID tidak ada aman
+    // Removing a missing ID is safe
     index.remove('el-not-found');
     expect(index.size()).toBe(1);
 
@@ -256,6 +256,6 @@ describe('BOARD-404: createSpatialIndex', () => {
     const avgMs = elapsed / iterations;
 
     expect(hitsCount).toBeGreaterThan(0);
-    expect(avgMs).toBeLessThan(1.0); // Di bawah 1 ms per query
+    expect(avgMs).toBeLessThan(1.0); // Under 1 ms per query
   });
 });

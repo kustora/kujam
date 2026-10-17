@@ -50,7 +50,7 @@ function withDefaults<P>(def: { type: string; defaults?: Partial<P> }, props: Pa
   return element(def.type, { ...def.defaults, ...props } as P);
 }
 
-/** Konteks Canvas palsu yang mencatat setiap panggilan dan penulisan properti. */
+/** Fake Canvas context that records every call and property write. */
 function recorder(): { g: ElementCanvasContext; calls: string[] } {
   const calls: string[] = [];
   const state: Record<string, unknown> = { globalAlpha: 1 };

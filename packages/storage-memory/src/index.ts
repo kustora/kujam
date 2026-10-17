@@ -1,5 +1,5 @@
 /**
- * `@kujam/storage-memory` — Adapter penyimpanan in-memory untuk pengujian dan demo.
+ * `@kujam/storage-memory` — In-memory storage adapter for testing and demos.
  *
  * @packageDocumentation
  */
@@ -7,7 +7,7 @@
 import { deepClone, type BoardDocument, type StorageAdapter } from '@kujam/core';
 
 /**
- * Membuat adapter penyimpanan berbasis Map di memori.
+ * Creates a Map-backed in-memory storage adapter.
  *
  * @public
  */

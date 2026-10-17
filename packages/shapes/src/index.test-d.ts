@@ -1,4 +1,4 @@
-// Uji tipe untuk BOARD-601 & BOARD-602 di sisi shapes (diperiksa `tsc --noEmit`, tanpa kode runtime).
+// Type tests for BOARD-601 & BOARD-602 on the shapes side (checked by `tsc --noEmit`, with no runtime code).
 import type {
   AnyElementDefinition,
   AnyPluginDefinition,
@@ -11,13 +11,13 @@ type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 type Expect<T extends true> = T;
 
-// Konteks Canvas asli dari DOM bisa langsung diberikan ke `render.canvas`.
+// A real DOM Canvas context can be passed directly to `render.canvas`.
 declare const dom: CanvasRenderingContext2D;
 declare const offscreen: OffscreenCanvasRenderingContext2D;
 const _dom: ElementCanvasContext = dom;
 const _offscreen: ElementCanvasContext = offscreen;
 
-// Elemen dan tool bawaan adalah plugin biasa (BOARD-602) dengan tipe publik yang sama.
+// Built-in elements and tools are ordinary plugins (BOARD-602) with the same public types.
 const _plugins: readonly AnyPluginDefinition[] = [] as unknown as [
   typeof defaultElements,
   typeof defaultTools,

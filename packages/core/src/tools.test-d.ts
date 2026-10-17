@@ -1,5 +1,5 @@
-// Uji tipe untuk BOARD-501: nama state dan `ctx.data` diinferensi dari definisi tool.
-// Diperiksa oleh `tsc --noEmit`.
+// Type tests for BOARD-501: state names and `ctx.data` are inferred from the tool definition.
+// Checked by `tsc --noEmit`.
 import { defineTool, type Board, type BoardInputEvent, type ToolEvent } from './index.js';
 
 type Equal<A, B> =
@@ -21,7 +21,7 @@ export const pen = defineTool({
     },
     drawing: {
       onPointerUp: () => 'idle',
-      // @ts-expect-error -- 'menggambar' bukan state tool ini.
+      // @ts-expect-error -- 'menggambar' is not a state of this tool.
       onPointerMove: () => 'menggambar',
     },
   },
@@ -29,7 +29,7 @@ export const pen = defineTool({
 
 defineTool({
   id: 'salah',
-  // @ts-expect-error -- initial wajib salah satu kunci states.
+  // @ts-expect-error -- initial must be one of the states keys.
   initial: 'diam',
   states: { idle: {} },
 });
@@ -40,7 +40,7 @@ defineTool({
   data: () => ({ n: 0 }),
   states: {
     idle: {
-      // @ts-expect-error -- ctx.data.n bertipe number.
+      // @ts-expect-error -- ctx.data.n is a number.
       onEnter: (ctx) => void ctx.data.n.toUpperCase(),
     },
   },

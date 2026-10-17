@@ -1,5 +1,5 @@
-// Uji tipe untuk BOARD-503: argumen perintah bertipe di `run` dan `isEnabled`.
-// Diperiksa oleh `tsc --noEmit`.
+// Type tests for BOARD-503: typed command arguments in `run` and `isEnabled`.
+// Checked by `tsc --noEmit`.
 import { defineCommand, type Board, type BoardCommands, type CommandDefinition } from './index.js';
 
 type Equal<A, B> =
@@ -19,7 +19,7 @@ export const nudge = defineCommand<{ dx: number }>({
 defineCommand<{ dx: number }>({
   id: 'contoh.salah',
   label: 'l',
-  // @ts-expect-error -- `dx` bertipe number, bukan string.
+  // @ts-expect-error -- `dx` is a number, not a string.
   run: (_board, args) => args?.dx.toUpperCase(),
 });
 

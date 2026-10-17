@@ -1,5 +1,5 @@
 /**
- * Lab skema props (BOARD-203, ADR-007): tulis JSON props, lihat hasil `validate` dan path issue.
+ * Props schema lab (BOARD-203, ADR-007): write props JSON, see the `validate` result and issue paths.
  */
 import {
   array,

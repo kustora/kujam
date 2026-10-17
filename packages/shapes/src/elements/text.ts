@@ -8,7 +8,7 @@ import { EMPTY_RICH_TEXT, richTextSchema, richTextToPlainText } from '../richtex
 export const TEXT_FONT_SIZES = { s: 16, m: 24, l: 32, xl: 48 } as const;
 
 /**
- * Elemen teks (BOARD-1003): rich text, ukuran, perataan, dan mode lebar.
+ * Text element (BOARD-1003): rich text, size, alignment, and width mode.
  *
  * @beta
  */
@@ -18,9 +18,9 @@ export const textElement = defineElement({
   props: schema({
     text: richTextSchema,
     size: enumOf(['s', 'm', 'l', 'xl']),
-    /** Perataan logis agar benar untuk bahasa kanan-ke-kiri. */
+    /** Logical alignment so it is correct for right-to-left languages. */
     align: enumOf(['start', 'center', 'end']),
-    /** `auto`: lebar mengikuti isi; `fixed`: teks dibungkus pada lebar elemen. */
+    /** `auto`: width follows content; `fixed`: text wraps at the element width. */
     widthMode: enumOf(['auto', 'fixed']),
     color: enumOf(COLOR_KEYS),
   }),
@@ -32,10 +32,10 @@ export const textElement = defineElement({
     color: 'black',
   },
   geometry: (el) => rect(el.w, el.h),
-  // Tinggi mengikuti isi (dihitung tata letak teks BOARD-1003a), jadi resize hanya mengubah lebar.
+  // Height follows content (computed by the BOARD-1003a text layout), so resize only changes width.
   resize: (el, proposed) => ({ w: proposed.w, h: el.h }),
   render: {
-    // TODO(BOARD-1003a): renderer rich text (wrap, daftar, tebal/miring, tautan).
+    // TODO(BOARD-1003a): rich text renderer (wrap, lists, bold/italic, links).
     canvas: (g, el) => {
       drawPlainText(g, richTextToPlainText(el.props.text), {
         x: 0,

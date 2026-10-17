@@ -1,4 +1,4 @@
-// Uji tipe untuk BOARD-203: diperiksa oleh `tsc --noEmit` (pnpm typecheck), tanpa kode runtime.
+// Type tests for BOARD-203: checked by `tsc --noEmit` (pnpm typecheck), with no runtime code.
 import type { Infer, OptionalSchema, Schema } from './schema.js';
 import type {
   array,
@@ -50,6 +50,6 @@ export type Checks = [
   Expect<Equal<Infer<ReturnType<typeof opt<number>>>, number | undefined>>,
   Expect<Equal<ReturnType<typeof opt<number>>, OptionalSchema<number>>>,
   Expect<Equal<Infer<Schema<{ a: 1 }>>, { a: 1 }>>,
-  // Uji negatif: kunci wajib tidak boleh terbaca opsional.
+  // Negative test: required keys must not read as optional.
   Expect<Equal<Equal<Infer<typeof _props>, { kind: 'sticky' }>, false>>,
 ];

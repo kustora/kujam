@@ -1,2 +1,2 @@
-// BOARD-106: fixture typecheck. Dengan `lib` core (tanpa `dom`), `window` tidak dikenal.
+// BOARD-106: typecheck fixture. With core's `lib` (no `dom`), `window` is unknown.
 export const width: number = window.innerWidth;

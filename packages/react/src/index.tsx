@@ -1,5 +1,5 @@
 /**
- * `@kujam/react` — Adapter tipis komponen `<Board>` dan hooks untuk React.
+ * `@kujam/react` — Thin `<Board>` component adapter and hooks for React.
  *
  * @packageDocumentation
  */
@@ -9,7 +9,7 @@ import type { Board as CoreBoard } from '@kujam/core';
 import { mountRenderer } from '@kujam/renderer';
 
 /**
- * Props untuk komponen React `<Board>`.
+ * Props for the React `<Board>` component.
  *
  * @public
  */
@@ -20,7 +20,7 @@ export interface BoardProps {
 }
 
 /**
- * Komponen React `<Board>` yang memasang `@kujam/renderer` ke dalam elemen kontainer.
+ * React `<Board>` component that mounts `@kujam/renderer` into a container element.
  *
  * @public
  */

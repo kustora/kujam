@@ -1,5 +1,5 @@
-// Uji tipe untuk BOARD-207 dan BOARD-301: peta event `board.on` bertipe lengkap.
-// Diperiksa oleh `tsc --noEmit`.
+// Type tests for BOARD-207 and BOARD-301: the `board.on` event map is fully typed.
+// Checked by `tsc --noEmit`.
 import type {
   ActionEvent,
   Board,
@@ -59,7 +59,7 @@ board.on('error', (e) => {
   const code: BoardErrorCode = e.code;
   void code;
 });
-// @ts-expect-error event tidak dikenal ditolak
+// @ts-expect-error unknown events are rejected
 board.on('tidak-ada', () => {});
-// @ts-expect-error isi event `change` bukan CameraEvent
+// @ts-expect-error the `change` payload is not a CameraEvent
 board.on('change', (e: CameraEvent) => void e);

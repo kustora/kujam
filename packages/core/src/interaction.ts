@@ -1,11 +1,11 @@
 /**
- * Interaksi tool yang berlangsung selama banyak event input (BOARD-501, ADR-004).
+ * Tool interactions that span many input events (BOARD-501, ADR-004).
  *
- * Setiap `change` diterapkan langsung sebagai transaksi lokal sehingga renderer bisa segera
- * menggambar, tetapi tidak dicatat ke riwayat. Diff semua transaksi digabung per record; saat
- * `commit`, gabungannya dicatat sebagai satu langkah undo. Saat `rollback`, kebalikan gabungan
- * diterapkan, kecuali pada record yang sudah diubah pihak lain sejak tulisan terakhir interaksi
- * (perubahan pihak lain menang, sama dengan strategi konflik riwayat).
+ * Each `change` is applied immediately as a local transaction so the renderer can draw
+ * right away, but it is not recorded in history. The diffs of all transactions are merged per record; on
+ * `commit`, the merged diff is recorded as a single undo step. On `rollback`, the inverse of the merged diff
+ * is applied, except to records changed by another party since the interaction's last write
+ * (the other party's changes win, same as the history conflict strategy).
  */
 
 import { deepEqual } from './clone.js';
@@ -13,7 +13,7 @@ import type { LocalHistory } from './history.js';
 import type { ChangeEvent, RecordStore, RecordUpdate, Transaction } from './store.js';
 import type { BoardRecord } from './types.js';
 
-/** Nilai record sebelum interaksi menyentuhnya dan sesudah tulisan terakhir interaksi. */
+/** Record value before the interaction touched it and after the interaction's last write. */
 interface Span {
   readonly before: BoardRecord | undefined;
   after: BoardRecord | undefined;
@@ -21,19 +21,19 @@ interface Span {
 
 /** @internal */
 export interface Interaction {
-  /** Ada interaksi yang belum di-commit atau di-rollback. */
+  /** There is an interaction that has not been committed or rolled back. */
   readonly active: boolean;
-  /** Apakah transaksi yang sedang di-commit store milik interaksi ini. */
+  /** Whether the transaction the store is committing belongs to this interaction. */
   readonly capturing: boolean;
-  /** Dipanggil untuk event `change` yang terjadi selama `capturing`. */
+  /** Called for `change` events that occur while `capturing`. */
   observe(event: ChangeEvent): void;
-  /** Menerapkan perubahan sebagai bagian interaksi; memulai interaksi bila belum aktif. */
+  /** Applies a change as part of the interaction; starts the interaction when inactive. */
   change(fn: (tx: Transaction) => void, label: string | undefined): void;
-  /** Mencatat gabungan perubahan sebagai satu langkah undo. Tanpa efek bila tidak aktif. */
+  /** Records the merged changes as a single undo step. No effect when inactive. */
   commit(fallbackLabel: string): void;
-  /** Membatalkan semua perubahan interaksi. Mengembalikan `true` bila ada yang dibalik. */
+  /** Cancels all of the interaction's changes. Returns `true` when anything was reverted. */
   rollback(): boolean;
-  /** Melupakan interaksi tanpa mengubah dokumen (misalnya saat dokumen diganti). */
+  /** Forgets the interaction without changing the document (for example when the document is replaced). */
   discard(): void;
 }
 
@@ -126,7 +126,7 @@ export function createInteraction(store: RecordStore, history: LocalHistory): In
       let reverted = false;
       capture((tx) => {
         for (const [id, { before, after }] of current) {
-          // Record yang sudah diubah pihak lain sejak tulisan terakhir interaksi tidak disentuh.
+          // Records changed by another party since the interaction's last write are not touched.
           if (tx.get(id) !== after) continue;
           if (before === undefined) tx.remove(id);
           else tx.put(before);

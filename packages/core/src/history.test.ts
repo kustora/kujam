@@ -54,7 +54,7 @@ describe('undo/redo dasar (BOARD-301)', () => {
 
     board.transact((tx) => tx.put(makeElement()), { label: 'buat' });
     moveX(board, 'el:1', 50, 'geser');
-    board.transact(() => {}, { label: 'kosong' }); // tanpa perubahan bersih: tidak dicatat
+    board.transact(() => {}, { label: 'kosong' }); // no net change: not recorded
     const events = recordEvents(board);
 
     expect(board.history.canUndo).toBe(true);
@@ -266,11 +266,11 @@ describe('perubahan remote di antara undo (strategi 0.1)', () => {
     const events = recordEvents(board);
 
     expect(board.undo()).toBe(true);
-    expect(board.getElement('el:a')?.x).toBe(99); // perubahan remote menang
+    expect(board.getElement('el:a')?.x).toBe(99); // the remote change wins
     expect(board.getElement('el:b')?.x).toBe(0);
     expect(Object.keys(events[0]!.updated)).toEqual(['el:b']);
 
-    // Redo hanya menerapkan ulang bagian yang benar-benar di-undo.
+    // Redo only reapplies the part that was actually undone.
     expect(board.redo()).toBe(true);
     expect(board.getElement('el:a')?.x).toBe(99);
     expect(board.getElement('el:b')?.x).toBe(10);
@@ -281,8 +281,8 @@ describe('perubahan remote di antara undo (strategi 0.1)', () => {
     board.transact((tx) => tx.put(makeElement()));
     moveX(board, 'el:1', 5);
     board.transact((tx) => tx.remove('el:1'), { origin: 'remote' });
-    // Langkah "geser" tidak bisa dibalik sama sekali: dibuang, lalu undo lanjut ke "buat",
-    // yang juga sudah tidak berlaku (record sudah tidak ada). Tidak ada yang berubah.
+    // The "move" step cannot be reversed at all: it is dropped, then undo continues to "create",
+    // which no longer applies either (the record is gone). Nothing changes.
     expect(board.undo()).toBe(false);
     expect(board.getElement('el:1')).toBeUndefined();
     expect(board.history.canUndo).toBe(false);
@@ -330,7 +330,7 @@ describe('perubahan remote di antara undo (strategi 0.1)', () => {
     moveX(board, 'el:1', 2);
     expect(board.undo()).toBe(true);
     expect(board.getElement('el:1')?.x).toBe(9);
-    // Langkah "buat" lebih tua dari perubahan remote: dilewati.
+    // The "create" step is older than the remote change: skipped.
     expect(board.undo()).toBe(false);
     expect(board.getElement('el:1')?.x).toBe(9);
   });
@@ -339,7 +339,7 @@ describe('perubahan remote di antara undo (strategi 0.1)', () => {
     const board = createBoard();
     board.transact((tx) => tx.put(makeElement()));
     moveX(board, 'el:1', 5);
-    // Remote menulis ulang nilai yang sama (objek baru, isi sama).
+    // Remote rewrites the same value (new object, same content).
     board.transact((tx) => tx.put(makeElement({ x: 5 })), { origin: 'remote' });
     expect(board.undo()).toBe(true);
     expect(board.getElement('el:1')?.x).toBe(0);
@@ -358,12 +358,12 @@ describe('event history (notifikasi canUndo/canRedo)', () => {
     });
 
     board.transact((tx) => tx.put(makeElement()));
-    moveX(board, 'el:1', 1); // canUndo tetap true: tanpa event history
+    moveX(board, 'el:1', 1); // canUndo stays true: no history event
     board.undo();
     board.undo();
     board.redo();
     board.history.clear();
-    board.history.clear(); // tidak berubah: tanpa event
+    board.history.clear(); // unchanged: no event
 
     expect(log).toEqual([
       'change:local:true',
@@ -398,8 +398,8 @@ describe('event history (notifikasi canUndo/canRedo)', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-// Property-based: urutan acak transaksi lokal, undo, dan redo dibandingkan dengan model
-// "daftar state + penunjuk". Undo lalu redo selalu kembali ke state awal.
+// Property-based: random sequences of local transactions, undo, and redo compared against a
+// "list of states + pointer" model. Undo followed by redo always returns to the original state.
 
 const IDS = ['el:a', 'el:b', 'el:c', 'page:x'];
 
@@ -453,7 +453,7 @@ describe('property-based (BOARD-301)', () => {
         fc.boolean(),
         (steps, limit, freezeSnapshots) => {
           const board = createBoard({ history: { limit }, freezeSnapshots });
-          // Model: states[pointer] adalah state saat ini; states[< pointer] bisa di-undo.
+          // Model: states[pointer] is the current state; states[< pointer] can be undone.
           let states = [board.getDocument().records];
           let pointer = 0;
 
@@ -464,7 +464,7 @@ describe('property-based (BOARD-301)', () => {
               if (!deepEqual(next, states[pointer])) {
                 states = [...states.slice(0, pointer + 1), next];
                 pointer += 1;
-                // Batas: paling banyak `limit` langkah undo.
+                // Limit: at most `limit` undo steps.
                 const drop = Math.max(0, pointer - limit);
                 states = states.slice(drop);
                 pointer -= drop;
@@ -516,7 +516,7 @@ describe('property-based (BOARD-301)', () => {
         ),
         (txs) => {
           const board = createBoard();
-          // Penulis terakhir per record: 'remote' bila perubahan bersih terakhirnya dari remote.
+          // Last writer per record: 'remote' when its last net change came from remote.
           const lastWriter = new Map<string, 'local' | 'remote'>();
           board.on('change', (e) => {
             const origin = e.origin === 'remote' ? 'remote' : 'local';
@@ -543,7 +543,7 @@ describe('property-based (BOARD-301)', () => {
           const remoteOwned = [...lastWriter].filter(([, w]) => w === 'remote').map(([id]) => id);
           while (board.undo());
           const after = board.getDocument().records;
-          // Record yang terakhir diubah remote (termasuk dihapus) tidak pernah disentuh undo.
+          // Records last changed by remote (including deletion) are never touched by undo.
           for (const id of remoteOwned) expect(after[id]).toBe(beforeUndo[id]);
           expect(board.history.canUndo).toBe(false);
         },

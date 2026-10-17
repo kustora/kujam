@@ -1,43 +1,43 @@
 /**
- * Registri perintah per board (BOARD-503). Perintah adalah satu sumber untuk command palette
- * (BOARD-1405), shortcut (BOARD-504), dan perintah bawaan (BOARD-505). Tidak ada state global:
- * setiap board punya registri sendiri.
+ * Per-board command registry (BOARD-503). Commands are the single source for the command palette
+ * (BOARD-1405), shortcuts (BOARD-504), and built-in commands (BOARD-505). There is no global state:
+ * every board has its own registry.
  */
 
 import type { Unsubscribe } from './events.js';
 import type { Board } from './index.js';
 
 /**
- * Definisi perintah.
+ * Command definition.
  *
- * @typeParam A - Tipe argumen `board.run(id, args)`. Core tidak memvalidasi argumen; perintah
- *   yang menerima argumen dari luar sebaiknya memeriksanya sendiri.
+ * @typeParam A - Argument type of `board.run(id, args)`. Core does not validate arguments; commands
+ *   that accept arguments from outside should check them themselves.
  *
  * @public
  */
 export interface CommandDefinition<A = unknown> {
   /**
-   * ID bernamespace: dua segmen atau lebih dipisah titik, tiap segmen huruf kecil, angka, dan
-   * tanda hubung, misalnya `'layer.bring-forward'` atau `'contoh.kartu.sisipkan'`.
+   * Namespaced ID: two or more dot-separated segments, each made of lowercase letters, digits, and
+   * hyphens, for example `'layer.bring-forward'` or `'example.card.insert'`.
    */
   readonly id: string;
-  /** Kunci i18n untuk label perintah (dipakai command palette dan tooltip). */
+  /** i18n key for the command label (used by the command palette and tooltips). */
   readonly label: string;
   /**
-   * Apakah perintah bisa dijalankan saat ini, misalnya `false` saat tidak ada seleksi atau
-   * papan `readOnly`. Bila tidak diisi, perintah selalu aktif.
+   * Whether the command can run right now, for example `false` when nothing is selected or the
+   * board is `readOnly`. When omitted, the command is always enabled.
    */
   readonly isEnabled?: (board: Board, args: A | undefined) => boolean;
   /**
-   * Menjalankan perintah. Wajib sinkron. Perintah tidak dibungkus transaksi otomatis: perintah
-   * yang mengubah dokumen memanggil `board.transact` sendiri, sehingga perintah seperti undo
-   * atau kamera tetap bisa dibuat.
+   * Runs the command. Must be synchronous. Commands are not automatically wrapped in a transaction:
+   * commands that change the document call `board.transact` themselves, so commands such as undo
+   * or camera commands are still possible.
    */
   readonly run: (board: Board, args: A | undefined) => void;
 }
 
 /**
- * Definisi perintah dengan tipe argumen apa pun, untuk koleksi campuran.
+ * Command definition with any argument type, for mixed collections.
  *
  * @public
  */
@@ -45,26 +45,26 @@ export interface CommandDefinition<A = unknown> {
 export type AnyCommandDefinition = CommandDefinition<any>;
 
 /**
- * Kode {@link CommandError}.
+ * Codes for {@link CommandError}.
  *
- * - `invalid-command`: definisi perintah tidak valid.
- * - `duplicate-command`: ID perintah sudah terdaftar (misalnya dua plugin memakai ID sama).
- * - `unknown-command`: `board.run` dipanggil dengan ID yang tidak terdaftar.
+ * - `invalid-command`: the command definition is invalid.
+ * - `duplicate-command`: the command ID is already registered (for example two plugins use the same ID).
+ * - `unknown-command`: `board.run` was called with an unregistered ID.
  *
  * @public
  */
 export type CommandErrorCode = 'invalid-command' | 'duplicate-command' | 'unknown-command';
 
 /**
- * Error registri perintah.
+ * Command registry error.
  *
  * @public
  */
 export class CommandError extends Error {
   readonly code: CommandErrorCode;
-  /** ID perintah yang bermasalah, atau `undefined` bila `id` sendiri tidak valid. */
+  /** The offending command ID, or `undefined` when `id` itself is invalid. */
   readonly commandId: string | undefined;
-  /** Daftar masalah definisi; kosong selain untuk `invalid-command`. */
+  /** Definition problems; empty except for `invalid-command`. */
   readonly errors: readonly string[];
 
   constructor(
@@ -119,8 +119,8 @@ function assertValidCommand(definition: unknown): void {
 }
 
 /**
- * Mendefinisikan perintah. Definisi divalidasi segera (lihat {@link CommandError}) dan objeknya
- * dibekukan dangkal.
+ * Defines a command. The definition is validated immediately (see {@link CommandError}) and the object is
+ * shallow-frozen.
  *
  * @example
  * ```ts
@@ -141,37 +141,37 @@ export function defineCommand<A = unknown>(definition: CommandDefinition<A>): Co
 }
 
 /**
- * Registri perintah milik satu board (`board.commands`).
+ * Command registry owned by one board (`board.commands`).
  *
  * @public
  */
 export interface BoardCommands {
   /**
-   * Mendaftarkan perintah dan mengembalikan fungsi untuk melepasnya (aman dipanggil lebih dari
-   * sekali). Melempar {@link CommandError} berkode `duplicate-command` bila ID sudah terdaftar,
-   * atau `invalid-command` bila definisi tidak valid.
+   * Registers a command and returns a function that unregisters it (safe to call more than
+   * once). Throws {@link CommandError} with code `duplicate-command` when the ID is already registered,
+   * or `invalid-command` when the definition is invalid.
    *
-   * @beta Plugin akan mendaftarkan perintah lewat `definePlugin` (BOARD-602).
+   * @beta Plugins will register commands via `definePlugin` (BOARD-602).
    */
   register(definition: AnyCommandDefinition): Unsubscribe;
-  /** Definisi untuk ID, atau `undefined` bila tidak terdaftar. */
+  /** Definition for the ID, or `undefined` when not registered. */
   get(id: string): AnyCommandDefinition | undefined;
   has(id: string): boolean;
-  /** Semua perintah sesuai urutan pendaftaran. */
+  /** All commands in registration order. */
   list(): readonly AnyCommandDefinition[];
   /**
-   * Apakah perintah terdaftar dan aktif. `false` untuk ID yang tidak terdaftar, sehingga aman
-   * dipakai command palette dan toolbar.
+   * Whether the command is registered and enabled. `false` for unregistered IDs, so it is safe
+   * to use from the command palette and toolbar.
    */
   isEnabled(id: string, args?: unknown): boolean;
 }
 
-/** Bagian internal registri yang dipakai `createBoard`. */
+/** Internal part of the registry used by `createBoard`. */
 export interface CommandRegistry {
   readonly api: BoardCommands;
   /**
-   * Menjalankan perintah. Mengembalikan `false` tanpa menjalankan bila `isEnabled` menolak.
-   * Error dari `isEnabled` atau `run` diteruskan ke pemanggil.
+   * Runs a command. Returns `false` without running when `isEnabled` rejects it.
+   * Errors from `isEnabled` or `run` are propagated to the caller.
    */
   run(id: string, args: unknown): boolean;
   clear(): void;
@@ -199,7 +199,7 @@ export function createCommandRegistry(getBoard: () => Board): CommandRegistry {
       const frozen = Object.isFrozen(definition) ? definition : Object.freeze({ ...definition });
       byId.set(id, frozen);
       return () => {
-        // Hanya melepas definisi ini, bukan definisi lain yang didaftarkan ulang dengan ID sama.
+        // Only unregister this definition, not another one re-registered with the same ID.
         if (byId.get(id) === frozen) byId.delete(id);
       };
     },

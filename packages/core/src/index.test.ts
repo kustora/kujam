@@ -532,7 +532,7 @@ describe('BOARD-211: board.dispose()', () => {
     board.dispose();
     expect(board.disposed).toBe(true);
 
-    // Panggilan kedua tidak melempar error
+    // The second call does not throw
     expect(() => board.dispose()).not.toThrow();
     expect(board.disposed).toBe(true);
   });
@@ -568,7 +568,7 @@ describe('BOARD-211: board.dispose()', () => {
 
     board.dispose();
 
-    // Mendaftarkan listener baru setelah dispose mengembalikan noop unlisten
+    // Registering a new listener after dispose returns a noop unlisten
     let afterCalls = 0;
     const unsub = board.on('change', () => {
       afterCalls++;
