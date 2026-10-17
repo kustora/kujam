@@ -172,6 +172,19 @@ export {
   type ViewportSize,
   type ZoomRange,
 } from './camera.js';
+export {
+  attachStorage,
+  DEFAULT_SAVE_DEBOUNCE_MS,
+  type AttachStorageOptions,
+  type PageLifecycleTarget,
+  type SaveErrorEvent,
+  type SaveRetryOptions,
+  type SaveStartEvent,
+  type SaveSuccessEvent,
+  type StorageAttachment,
+  type StorageEventMap,
+  type StorageStatus,
+} from './storage.js';
 
 /**
  * Global map from element type to props type, for declaration merging (BOARD-607).
@@ -1157,6 +1170,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     dispose(): void {
       if (disposed) return;
       try {
+        events.emit('dispose', undefined);
         plugins.dispose();
       } finally {
         disposed = true;

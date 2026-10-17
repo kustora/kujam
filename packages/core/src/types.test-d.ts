@@ -1,3 +1,4 @@
+import type { attachStorage } from './index.js';
 import type {
   AssetAdapter,
   AssetRecord,
@@ -27,6 +28,11 @@ import type {
   Point,
   RectBounds,
   SelectionInput,
+  StorageAttachment,
+  StorageStatus,
+  SaveErrorEvent,
+  AttachStorageOptions,
+  StorageAdapter,
   SpatialIndex,
   UpdateOptions,
   ViewportSize,
@@ -174,6 +180,18 @@ export type Tests = [
   Expect<Equal<Parameters<Board['addToSelection']>, [ids: SelectionInput]>>,
   Expect<Equal<Parameters<Board['removeFromSelection']>, [ids: SelectionInput]>>,
   Expect<Equal<ReturnType<Board['clearSelection']>, void>>,
+  // BOARD-1601: storage attachment type tests
+  Expect<
+    Equal<
+      Parameters<typeof attachStorage>,
+      [board: Board, adapter: StorageAdapter, options: AttachStorageOptions]
+    >
+  >,
+  Expect<Equal<ReturnType<typeof attachStorage>, StorageAttachment>>,
+  Expect<Equal<StorageAttachment['ready'], Promise<void>>>,
+  Expect<Equal<ReturnType<StorageAttachment['flush']>, Promise<boolean>>>,
+  Expect<Equal<StorageStatus, 'loading' | 'idle' | 'pending' | 'saving' | 'error' | 'detached'>>,
+  Expect<Equal<SaveErrorEvent['willRetry'], boolean>>,
 ];
 
 declare const _dummyBoard: Board;
