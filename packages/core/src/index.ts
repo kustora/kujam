@@ -23,6 +23,7 @@ import {
 import {
   createLocalHistory,
   resolveHistoryLimit,
+  resolveMergeWindow,
   type BoardHistory,
   type HistoryOptions,
 } from './history.js';
@@ -150,6 +151,7 @@ export type {
 } from './events.js';
 export {
   DEFAULT_HISTORY_LIMIT,
+  DEFAULT_MERGE_WINDOW_MS,
   type BoardHistory,
   type HistoryEvent,
   type HistoryOptions,
@@ -574,7 +576,8 @@ export interface Board {
   /**
    * Undo history state. Only transactions with origin `'local'` are recorded; a new local change
    * clears the redo stack; `loadDocument` and migrations clear the history. Changes to
-   * `canUndo`/`canRedo` are emitted through the `history` event.
+   * `canUndo`/`canRedo` are emitted through the `history` event. A tool interaction is one step;
+   * other continuous edits merge with `mergeKey` or `history.batch` (BOARD-302).
    */
   readonly history: BoardHistory;
   /**
@@ -965,6 +968,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   const defaultTool = options.defaultTool ?? DEFAULT_TOOL_ID;
   if (typeof defaultTool !== 'string') throw new TypeError('Opsi defaultTool wajib berupa string.');
   const historyLimit = resolveHistoryLimit(options.history);
+  const mergeWindowMs = resolveMergeWindow(options.history);
   let disposed = false;
 
   const events = createEmitter<BoardEventMap>((type, error) => {
@@ -1056,6 +1060,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   );
   const history = createLocalHistory(store, {
     limit: historyLimit,
+    mergeWindowMs,
     onStateChange: (state) => events.emit('history', state),
   });
   const camera = createCamera({

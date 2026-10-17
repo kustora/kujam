@@ -13,7 +13,9 @@ import type {
   Bounds,
   BoxBounds,
   CameraState,
+  BoardHistory,
   ChangeEvent,
+  HistoryOptions,
   CreateBoardOptions,
   DeleteOptions,
   DocumentPropsValidator,
@@ -28,6 +30,7 @@ import type {
   MigrationError,
   MigrationSource,
   MutateOptions,
+  TransactOptions,
   PathGeometry,
   Point,
   SnapPoint,
@@ -241,6 +244,14 @@ export type Tests = [
   Expect<Equal<DocumentTooNewReason['kind'], 'schema' | 'element' | 'plugin'>>,
   Expect<Equal<ElementRecord['typeVersion'], number | undefined>>,
   Expect<Equal<BoardDocument['pluginVersions'], Record<string, number> | undefined>>,
+  // BOARD-302: undo coalescing type tests
+  Expect<Equal<TransactOptions['mergeKey'], string | undefined>>,
+  Expect<Equal<MutateOptions['mergeKey'], string | undefined>>,
+  Expect<Equal<ChangeEvent['mergeKey'], string | undefined>>,
+  Expect<Equal<HistoryOptions['mergeWindowMs'], number | undefined>>,
+  Expect<Equal<BoardHistory['mergeWindowMs'], number>>,
+  Expect<Equal<ReturnType<typeof _dummyBoard.history.batch<number>>, number>>,
+  Expect<Equal<Parameters<BoardHistory['batch']>[0], string>>,
 ];
 
 declare const _dummyBoard: Board;
