@@ -184,6 +184,23 @@ export {
 } from './spatial.js';
 export { queryElements, type HitTestOptions, type QueryFilter } from './query.js';
 export {
+  DEFAULT_MIN_SIZE,
+  moveElements,
+  resizeElements,
+  RESIZE_HANDLES,
+  rotateElements,
+  ROTATION_SNAP_DEGREES,
+  selectionFrame,
+  transformHandles,
+  type ResizeHandle,
+  type ResizeOptions,
+  type RotateOptions,
+  type TransformBehavior,
+  type TransformHandlePoint,
+  type TransformOptions,
+  type TransformResult,
+} from './transform.js';
+export {
   CORE_MIGRATIONS,
   MigrationError,
   migrateSchema,

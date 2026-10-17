@@ -1,4 +1,4 @@
-import type { attachStorage } from './index.js';
+import type { attachStorage, resizeElements, rotateElements } from './index.js';
 import type {
   AssetAdapter,
   AssetRecord,
@@ -10,6 +10,12 @@ import type {
   BoardRecord,
   BoardResolvers,
   BoardUser,
+  ElementDefinition,
+  ElementSize,
+  ResizeHandle,
+  ResizeOptions,
+  RotateOptions,
+  TransformResult,
   Bounds,
   BoxBounds,
   CameraState,
@@ -241,6 +247,23 @@ export type Tests = [
   Expect<Equal<DocumentTooNewReason['kind'], 'schema' | 'element' | 'plugin'>>,
   Expect<Equal<ElementRecord['typeVersion'], number | undefined>>,
   Expect<Equal<BoardDocument['pluginVersions'], Record<string, number> | undefined>>,
+  // BOARD-406: transform type tests
+  Expect<Equal<ResizeHandle, 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w'>>,
+  Expect<
+    Equal<
+      Parameters<typeof resizeElements>,
+      [
+        elements: readonly Readonly<ElementRecord>[],
+        handle: ResizeHandle,
+        start: Point,
+        current: Point,
+        options?: ResizeOptions,
+      ]
+    >
+  >,
+  Expect<Equal<ReturnType<typeof rotateElements>, TransformResult[]>>,
+  Expect<Equal<RotateOptions['snap'], number | undefined>>,
+  Expect<Equal<ElementDefinition['minSize'], ElementSize | undefined>>,
 ];
 
 declare const _dummyBoard: Board;
