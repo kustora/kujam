@@ -6,6 +6,7 @@
  */
 
 import { compareIndex, indexAbove } from './indexing.js';
+import { countPoints } from './limits.js';
 import type { ElementRegistry } from './elements.js';
 import type { BoardErrorCode } from './events.js';
 import type { BoardUser, PermissionAction } from './plugins.js';
@@ -104,6 +105,7 @@ export interface ElementPatch<P = Record<string, unknown>> {
 /** @internal */
 export interface MutationLimits {
   readonly maxElements: number;
+  readonly maxDrawPoints: number;
 }
 
 /** @internal */
@@ -141,6 +143,18 @@ function findTopIndexOnPage(doc: Readonly<BoardDocument>, pageId: string): strin
     }
   }
   return top;
+}
+
+/** Emits `limit-exceeded` and returns `false` when `props.points` exceeds `maxDrawPoints` (BOARD-210). */
+function withinPointLimit(ctx: MutationContext, type: string, props: unknown): boolean {
+  const points = countPoints(props);
+  if (points <= ctx.limits.maxDrawPoints) return true;
+  ctx.emitError(
+    'limit-exceeded',
+    `Elemen "${type}" berisi ${points} titik, melebihi batas maksimum (${ctx.limits.maxDrawPoints}).`,
+    { limit: ctx.limits.maxDrawPoints, current: points, type },
+  );
+  return false;
 }
 
 /**
@@ -188,6 +202,8 @@ export function createElementRecord<P = Record<string, unknown>>(
     ...(def.defaults ?? {}),
     ...(partial.props ?? {}),
   } as Record<string, unknown>;
+
+  if (!withinPointLimit(ctx, partial.type, mergedProps)) return undefined;
 
   const validation = ctx.elements.validateElementProps(partial.type, mergedProps);
   if (validation && !validation.ok) {
@@ -294,6 +310,7 @@ export function updateElementRecord<P = Record<string, unknown>>(
       return undefined;
     }
     nextProps = { ...current.props, ...patch.props };
+    if (!withinPointLimit(ctx, current.type, nextProps)) return undefined;
     const validation = ctx.elements.validateElementProps(current.type, nextProps);
     if (validation && !validation.ok) {
       ctx.emitError(

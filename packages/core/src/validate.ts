@@ -2,6 +2,8 @@
  * Structural validation of board documents, shared by client and server (BOARD-210).
  */
 
+import type { ElementRegistry } from './elements.js';
+import { countPoints, measureDocumentBytes, resolveLimits, type BoardLimits } from './limits.js';
 import type { BoardDocument } from './types.js';
 import { CURRENT_SCHEMA_VERSION } from './types.js';
 
@@ -11,9 +13,38 @@ import { CURRENT_SCHEMA_VERSION } from './types.js';
  * @public
  */
 export interface ValidationResult {
+  /** `true` when there are no document-level and no record-level problems. */
   valid: boolean;
+  /** Every problem message: document-level problems first, then record-level ones. */
   errors: string[];
+  /**
+   * Record-level problems keyed by record ID (BOARD-210). These records can be rejected one by one
+   * while the rest of the document still loads; `createBoard` and `loadDocument` do exactly that.
+   * Problems missing from this map are document-level and make the whole document unusable.
+   */
+  invalidRecords: Record<string, string[]>;
 }
+
+/**
+ * Options for {@link validateDocument}.
+ *
+ * @public
+ */
+export interface ValidateDocumentOptions {
+  /**
+   * Size limits to enforce. Omitted values fall back to {@link DEFAULT_BOARD_LIMITS}, the same
+   * defaults `createBoard` uses.
+   */
+  limits?: Partial<BoardLimits>;
+}
+
+/**
+ * Element type registry, or just the part `validateDocument` needs, so a server can pass a
+ * registry built from the same plugins as its clients.
+ *
+ * @public
+ */
+export type DocumentPropsValidator = Pick<ElementRegistry, 'validateElementProps'>;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -134,45 +165,136 @@ function validateRecord(id: string, rec: unknown, errors: string[]): void {
   }
 }
 
+/** @internal Document-level and record-level problems, kept apart. */
+export interface DocumentInspection {
+  readonly documentErrors: string[];
+  readonly invalidRecords: Record<string, string[]>;
+}
+
 /**
- * Validates board document structure: document shape, schema version, and the required fields
- * of every record. Per-element-type props validation comes with the element registry.
+ * Inspects a document without throwing. Record-level problems: structure, props failing the
+ * registered type schema (unregistered types are skipped, BOARD-209), and too many stroke points.
+ * Document-level problems: shape, schema version, `meta`, `records`, byte size, and element count
+ * (counting only records without problems).
  *
- * Documents with a `schemaVersion` newer than {@link CURRENT_SCHEMA_VERSION}
- * are considered invalid for this package version.
- *
- * @public
+ * @internal
  */
-export function validateDocument(doc: unknown): ValidationResult {
+export function inspectDocument(
+  doc: unknown,
+  registry?: DocumentPropsValidator,
+  limitsInput?: Partial<BoardLimits>,
+): DocumentInspection {
+  const limits = resolveLimits(limitsInput);
+  const invalidRecords: Record<string, string[]> = {};
   if (!isPlainObject(doc)) {
-    return { valid: false, errors: ['Dokumen harus berupa objek JSON.'] };
+    return { documentErrors: ['Dokumen harus berupa objek JSON.'], invalidRecords };
   }
 
   const candidate = doc as Partial<BoardDocument> & Record<string, unknown>;
-  const errors: string[] = [];
+  const documentErrors: string[] = [];
 
   const version = candidate.schemaVersion;
   if (!Number.isInteger(version) || (version as number) < 1) {
-    errors.push('Field schemaVersion wajib berupa bilangan bulat positif.');
+    documentErrors.push('Field schemaVersion wajib berupa bilangan bulat positif.');
   } else if ((version as number) > CURRENT_SCHEMA_VERSION) {
-    errors.push(
+    documentErrors.push(
       `schemaVersion ${version} lebih baru dari versi yang didukung (${CURRENT_SCHEMA_VERSION}).`,
     );
   }
 
   if (!isPlainObject(candidate.meta)) {
-    errors.push('Field meta wajib berupa objek.');
+    documentErrors.push('Field meta wajib berupa objek.');
   }
 
   if (!isPlainObject(candidate.records)) {
-    errors.push('Field records wajib berupa objek peta record.');
+    documentErrors.push('Field records wajib berupa objek peta record.');
   } else {
+    let elements = 0;
     for (const [id, rec] of Object.entries(candidate.records)) {
+      const errors: string[] = [];
       validateRecord(id, rec, errors);
+      if (errors.length === 0 && (rec as { kind: unknown }).kind === 'element') {
+        checkElementContent(
+          id,
+          rec as unknown as Record<string, unknown>,
+          registry,
+          limits,
+          errors,
+        );
+      }
+      if (errors.length > 0) {
+        invalidRecords[id] = errors;
+      } else if ((rec as { kind: unknown }).kind === 'element') {
+        elements++;
+      }
+    }
+    if (elements > limits.maxElements) {
+      documentErrors.push(
+        `Jumlah elemen (${elements}) melebihi batas maksimum (${limits.maxElements}).`,
+      );
     }
   }
 
-  return { valid: errors.length === 0, errors };
+  const bytes = measureDocumentBytes(doc);
+  if (bytes > limits.maxDocumentBytes) {
+    documentErrors.push(
+      Number.isFinite(bytes)
+        ? `Ukuran dokumen (${bytes} byte) melebihi batas maksimum (${limits.maxDocumentBytes} byte).`
+        : 'Dokumen tidak bisa diserialisasi ke JSON.',
+    );
+  }
+
+  return { documentErrors, invalidRecords };
+}
+
+/** Checks props against the registered schema and the stroke point limit. */
+function checkElementContent(
+  id: string,
+  rec: Record<string, unknown>,
+  registry: DocumentPropsValidator | undefined,
+  limits: Readonly<BoardLimits>,
+  errors: string[],
+): void {
+  const path = `records["${id}"]`;
+  const points = countPoints(rec.props);
+  if (points > limits.maxDrawPoints) {
+    errors.push(
+      `${path}.props.points berisi ${points} titik, melebihi batas maksimum (${limits.maxDrawPoints}).`,
+    );
+  }
+  const result = registry?.validateElementProps(rec.type as string, rec.props);
+  if (result && !result.ok) {
+    const detail = result.issues
+      .map((issue) => `${issue.path.length > 0 ? issue.path.join('.') : '(akar)'}: ${issue.code}`)
+      .join(', ');
+    errors.push(`${path}.props tidak lolos skema tipe "${String(rec.type)}" (${detail}).`);
+  }
+}
+
+/**
+ * Validates an incoming board document (BOARD-210). The same function runs on the client
+ * (`createBoard`, `loadDocument`) and on the server (`@kujam/server`), so both apply the same rules.
+ *
+ * Checks the document shape, schema version, and required fields of every record; with a
+ * `registry`, also element props against their registered type schema (unregistered types are
+ * left as-is, BOARD-209); and the size limits (document bytes, element count, stroke points).
+ *
+ * Documents with a `schemaVersion` newer than {@link CURRENT_SCHEMA_VERSION}
+ * are considered invalid for this package version.
+ *
+ * @param doc - Untrusted input, for example parsed JSON from storage or the network.
+ * @param registry - Element type registry used to validate props; omit to check structure only.
+ * @param options - Limits to enforce; defaults to {@link DEFAULT_BOARD_LIMITS}.
+ * @public
+ */
+export function validateDocument(
+  doc: unknown,
+  registry?: DocumentPropsValidator,
+  options?: ValidateDocumentOptions,
+): ValidationResult {
+  const { documentErrors, invalidRecords } = inspectDocument(doc, registry, options?.limits);
+  const errors = [...documentErrors, ...Object.values(invalidRecords).flat()];
+  return { valid: errors.length === 0, errors, invalidRecords };
 }
 
 /**

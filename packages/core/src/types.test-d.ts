@@ -13,6 +13,8 @@ import type {
   ChangeEvent,
   CreateBoardOptions,
   DeleteOptions,
+  DocumentPropsValidator,
+  ElementRegistry,
   ElementAction,
   ElementPatch,
   ElementRecord,
@@ -26,7 +28,10 @@ import type {
   SelectionInput,
   SpatialIndex,
   UpdateOptions,
+  ValidateDocumentOptions,
+  ValidationResult,
 } from './index.js';
+import type { validateDocument } from './index.js';
 
 declare module './index.js' {
   interface BoardElementTypes {
@@ -158,6 +163,17 @@ export type Tests = [
   Expect<Equal<Parameters<Board['addToSelection']>, [ids: SelectionInput]>>,
   Expect<Equal<Parameters<Board['removeFromSelection']>, [ids: SelectionInput]>>,
   Expect<Equal<ReturnType<Board['clearSelection']>, void>>,
+  // BOARD-210: shared document validation with registry and limits
+  Expect<
+    Equal<
+      Parameters<typeof validateDocument>,
+      [doc: unknown, registry?: DocumentPropsValidator, options?: ValidateDocumentOptions]
+    >
+  >,
+  Expect<Equal<ReturnType<typeof validateDocument>['invalidRecords'], Record<string, string[]>>>,
+  Expect<Equal<ValidationResult['errors'], string[]>>,
+  Expect<Equal<ValidateDocumentOptions['limits'], Partial<BoardLimits> | undefined>>,
+  Expect<ElementRegistry extends DocumentPropsValidator ? true : false>,
 ];
 
 declare const _dummyBoard: Board;
