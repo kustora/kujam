@@ -9,6 +9,7 @@
  */
 
 import { definePlugin } from '@kujam/core';
+import { DEFAULT_BRUSHES } from './brushes.js';
 import { drawElement } from './elements/draw.js';
 import { geoElement } from './elements/geo.js';
 import { stickyElement } from './elements/sticky.js';
@@ -16,6 +17,7 @@ import { textElement } from './elements/text.js';
 import { handTool } from './tools/hand.js';
 import { selectTool } from './tools/select.js';
 
+export { DEFAULT_BRUSHES, highlighterBrush, penBrush } from './brushes.js';
 export { stickyElement } from './elements/sticky.js';
 export { drawElement, MAX_DRAW_POINTS } from './elements/draw.js';
 export { textElement } from './elements/text.js';
@@ -41,7 +43,8 @@ export {
 } from './richtext.js';
 
 /**
- * Built-in elements plugin for release 0.1 (`sticky`, `draw`, `text`, `geo`), ready to install via
+ * Built-in elements plugin for release 0.1 (`sticky`, `draw`, `text`, `geo`) with the `pen` and
+ * `highlighter` brushes used by `draw` (BOARD-603), ready to install via
  * `createBoard({ plugins: [defaultElements, defaultTools] })` or `createElementRegistry(defaultElements)`.
  * Connectors, frames, images, and groups follow in 0.2 (BOARD-1101, BOARD-1105, BOARD-1103, BOARD-1104).
  *
@@ -50,6 +53,7 @@ export {
 export const defaultElements = definePlugin({
   id: 'default-elements',
   elements: Object.freeze([stickyElement, drawElement, textElement, geoElement] as const),
+  brushes: DEFAULT_BRUSHES,
 });
 
 /**

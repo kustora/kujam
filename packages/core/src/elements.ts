@@ -6,6 +6,7 @@
  * BOARD-205, and props migration on load belongs to BOARD-702.
  */
 
+import type { BrushDefinition } from './brushes.js';
 import type { Geometry } from './geometry.js';
 import type { InferShape, ObjectSchema, SchemaResult, SchemaShape } from './schema.js';
 import { object, validate } from './schema.js';
@@ -113,6 +114,13 @@ export interface ElementContext {
    * @beta
    */
   emit(name: string, payload?: unknown): void;
+  /**
+   * The brush to draw a stroke with (BOARD-603): the registered brush, or the default pen for
+   * unknown IDs. Same as `board.brushes.resolve`.
+   *
+   * @beta
+   */
+  resolveBrush(id: string): Readonly<BrushDefinition>;
 }
 
 /**
@@ -208,13 +216,15 @@ export interface ElementRenderers<P, D> {
   /**
    * Draws the element on Canvas 2D in the element's local coordinates: the renderer has already applied
    * the `x, y` translation, rotation, and opacity before calling. `data` is always `undefined` when
-   * the element has no `resolve`.
+   * the element has no `resolve`. Renderers pass the board's element context as `ctx`; it may be
+   * missing for callers outside a board (thumbnails, tests), so elements must handle `undefined`.
    */
   canvas?(
     g: ElementCanvasContext,
     el: ElementRecord<P>,
     data: D | undefined,
     lod: ElementLodState,
+    ctx?: ElementContext,
   ): void;
   /**
    * Renders the element as DOM in the HTML layer (BOARD-1201).

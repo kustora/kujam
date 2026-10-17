@@ -1,10 +1,23 @@
-import type { attachStorage, resizeElements, rotateElements, snapTranslation } from './index.js';
+import type {
+  attachStorage,
+  defineBrush,
+  resizeElements,
+  rotateElements,
+  snapTranslation,
+} from './index.js';
 import type {
   AssetAdapter,
   AssetRecord,
   BindingRecord,
   Board,
   BoardCamera,
+  BrushBlendMode,
+  BrushDefinition,
+  BrushInput,
+  BrushRegistry,
+  BrushStrokeOptions,
+  ElementRenderers,
+  PluginBrushDefinition,
   BoardDocument,
   BoardLimits,
   BoardRecord,
@@ -316,6 +329,21 @@ export type Tests = [
   Expect<Equal<BoardCamera['reducedMotion'], boolean>>,
   Expect<Equal<CreateBoardOptions['frameScheduler'], FrameScheduler | undefined>>,
   Expect<Equal<CreateBoardOptions['reducedMotion'], boolean | undefined>>,
+  // BOARD-603: brushes
+  Expect<Equal<Board['brushes'], BrushRegistry>>,
+  Expect<Equal<Parameters<typeof defineBrush>, [definition: BrushInput]>>,
+  Expect<Equal<ReturnType<typeof defineBrush>, BrushDefinition>>,
+  Expect<Equal<ReturnType<BrushRegistry['resolve']>, Readonly<BrushDefinition>>>,
+  Expect<Equal<BrushDefinition['blend'], BrushBlendMode>>,
+  Expect<Equal<PluginBrushDefinition, BrushInput>>,
+  Expect<Equal<BrushInput['strokeOptions'], BrushStrokeOptions | undefined>>,
+  Expect<Equal<ReturnType<ElementContext['resolveBrush']>, Readonly<BrushDefinition>>>,
+  Expect<
+    Equal<
+      Parameters<NonNullable<ElementRenderers<unknown, undefined>['canvas']>>[4],
+      ElementContext | undefined
+    >
+  >,
 ];
 
 declare const _dummyBoard: Board;

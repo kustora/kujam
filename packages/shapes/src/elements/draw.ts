@@ -1,4 +1,5 @@
 import { array, defineElement, enumOf, number, path, schema, string } from '@kujam/core';
+import { builtInBrush } from '../brushes.js';
 import { COLOR_KEYS, COLOR_VALUES } from '../colors.js';
 import { localize } from '../i18n.js';
 
@@ -22,7 +23,10 @@ export const drawElement = defineElement({
     points: array(array(number(), { maxLength: 3 }), { maxLength: MAX_DRAW_POINTS }),
     color: enumOf(COLOR_KEYS),
     thickness: number({ min: 0.5, max: 64 }),
-    /** Brush ID (BOARD-603); unknown brushes are drawn with the default pen. */
+    /**
+     * Brush ID (BOARD-603), stored as-is even when the brush is not registered; unknown brushes
+     * are drawn with the default pen.
+     */
     brush: string({ minLength: 1, maxLength: 64 }),
   }),
   defaults: { points: [], color: 'black', thickness: 4, brush: 'pen' },
@@ -30,8 +34,8 @@ export const drawElement = defineElement({
   // TODO(BOARD-1002, BOARD-406): resize needs to scale the points or store a scale.
   resize: 'free',
   render: {
-    // TODO(BOARD-1002, BOARD-603): perfect-freehand strokes with pressure and brushes.
-    canvas: (g, el) => {
+    // TODO(BOARD-1002): perfect-freehand strokes with pressure, using `brush.strokeOptions`.
+    canvas: (g, el, _data, _lod, ctx) => {
       const points = el.props.points;
       if (points.length === 0) return;
       g.beginPath();
@@ -41,7 +45,8 @@ export const drawElement = defineElement({
       g.lineWidth = el.props.thickness;
       g.lineCap = 'round';
       g.lineJoin = 'round';
-      if (el.props.brush === 'highlighter') g.globalCompositeOperation = 'multiply';
+      const brush = ctx ? ctx.resolveBrush(el.props.brush) : builtInBrush(el.props.brush);
+      g.globalCompositeOperation = brush.blend;
       g.stroke();
     },
   },
