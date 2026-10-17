@@ -11,14 +11,14 @@
  */
 
 import type { Board, ViewportSize } from '@kujam/core';
-import { HtmlLayer, type EditorBounds } from './html-layer.js';
-import { attachInput } from './input.js';
-import { CanvasRenderer, type RenderStats } from './render-canvas.js';
-import { OverlayRenderer, type OverlayRenderStats } from './overlay.js';
+import { HtmlLayer, type EditorBounds } from './layers/html-layer.js';
+import { attachInput } from './input/input.js';
+import { CanvasRenderer, type RenderStats } from './layers/render-canvas.js';
+import { OverlayRenderer, type OverlayRenderStats } from './layers/overlay.js';
 
-export type { RenderStats } from './render-canvas.js';
-export type { OverlayRenderStats } from './overlay.js';
-export type { EditorBounds } from './html-layer.js';
+export type { RenderStats } from './layers/render-canvas.js';
+export type { OverlayRenderStats } from './layers/overlay.js';
+export type { EditorBounds } from './layers/html-layer.js';
 
 /**
  * Options for {@link mountRenderer}.

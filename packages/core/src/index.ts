@@ -4,16 +4,16 @@
  * @packageDocumentation
  */
 
-import { createBrushRegistry, type BrushDefinition, type BrushRegistry } from './brushes.js';
-import { deepClone } from './clone.js';
-import { createCommandRegistry, type BoardCommands } from './commands.js';
+import { createBrushRegistry, type BrushDefinition, type BrushRegistry } from './elements/brushes.js';
+import { deepClone } from './utils/clone.js';
+import { createCommandRegistry, type BoardCommands } from './tools/commands.js';
 import {
   createElementRegistry,
   type ElementAction,
   type ElementContext,
   type ElementRegistry,
   type ResolveResult,
-} from './elements.js';
+} from './elements/elements.js';
 import {
   createEmitter,
   reportUnhandled,
@@ -21,17 +21,17 @@ import {
   type BoardEventMap,
   type Listener,
   type Unsubscribe,
-} from './events.js';
+} from './events/events.js';
 import {
   createLocalHistory,
   resolveHistoryLimit,
   resolveMergeWindow,
   type BoardHistory,
   type HistoryOptions,
-} from './history.js';
-import { createId as createRandomId, type IdGenerator } from './ids.js';
-import { createInteraction } from './interaction.js';
-import { resolveLimits, type BoardLimits } from './limits.js';
+} from './history/history.js';
+import { createId as createRandomId, type IdGenerator } from './utils/ids.js';
+import { createInteraction } from './tools/interaction.js';
+import { resolveLimits, type BoardLimits } from './document/limits.js';
 import {
   createPluginRuntime,
   resolvePluginOrder,
@@ -41,15 +41,15 @@ import {
   type PermissionAction,
   type PermissionHook,
   type PluginMigrations,
-} from './plugins.js';
-import { createRecordStore, type TransactOptions, type Transaction } from './store.js';
+} from './plugins/plugins.js';
+import { createRecordStore, type TransactOptions, type Transaction } from './document/store.js';
 import {
   createToolRuntime,
   DEFAULT_TOOL_ID,
   type BoardInputEvent,
   type BoardTools,
   type ToolKeyEvent,
-} from './tools.js';
+} from './tools/tools.js';
 import {
   createElementRecord,
   deleteElementRecords,
@@ -60,7 +60,7 @@ import {
   type MutationContext,
   type PartialElement,
   type UpdateOptions,
-} from './mutate.js';
+} from './document/mutate.js';
 import {
   createCamera,
   resolveFrameScheduler,
@@ -68,41 +68,41 @@ import {
   type BoardCamera,
   type FrameScheduler,
   type ZoomRange,
-} from './camera.js';
+} from './camera/camera.js';
 import {
   findTooNew,
   latestPluginVersion,
   migrateContent,
   migrateSchema,
   type DocumentTooNewReason,
-} from './migrations.js';
-import { createPages, type BoardPages } from './pages.js';
-import { createSelection, type SelectionInput } from './selection.js';
-import { resolveSnapOptions, type SnapOptions } from './snap.js';
-import { createSpatialIndex, unionBounds, type BoxBounds, type SpatialIndex } from './spatial.js';
-import { hitTestElements, queryElements, type HitTestOptions, type QueryFilter } from './query.js';
-import { resolveElementGeometry, toBoardTolerance, type Geometry, type Point } from './geometry.js';
+} from './document/migrations.js';
+import { createPages, type BoardPages } from './pages/pages.js';
+import { createSelection, type SelectionInput } from './selection/selection.js';
+import { resolveSnapOptions, type SnapOptions } from './geometry/snap.js';
+import { createSpatialIndex, unionBounds, type BoxBounds, type SpatialIndex } from './geometry/spatial.js';
+import { hitTestElements, queryElements, type HitTestOptions, type QueryFilter } from './geometry/query.js';
+import { resolveElementGeometry, toBoardTolerance, type Geometry, type Point } from './geometry/geometry.js';
 import type { BoardDocument, CameraState, ElementRecord } from './types.js';
 import { CURRENT_SCHEMA_VERSION } from './types.js';
-import { InvalidDocumentError, inspectDocument } from './validate.js';
+import { InvalidDocumentError, inspectDocument } from './document/validate.js';
 import {
   createKeymap,
   detectPlatform,
   type BoardKeybindings,
   type KeyboardPlatform,
-} from './keybindings.js';
+} from './tools/keybindings.js';
 
 export * from './types.js';
-export { deepClone } from './clone.js';
+export { deepClone } from './utils/clone.js';
 export {
   InvalidDocumentError,
   validateDocument,
   type DocumentPropsValidator,
   type ValidateDocumentOptions,
   type ValidationResult,
-} from './validate.js';
-export { DEFAULT_BOARD_LIMITS, type BoardLimits } from './limits.js';
-export * from './schema.js';
+} from './document/validate.js';
+export { DEFAULT_BOARD_LIMITS, type BoardLimits } from './document/limits.js';
+export * from './document/schema.js';
 export {
   DEFAULT_URL_SCHEMES,
   isSafeUrl,
@@ -111,9 +111,9 @@ export {
   safeLinkAttributes,
   sanitizeUrl,
   type SafeUrlOptions,
-} from './url.js';
-export * from './elements.js';
-export * from './geometry.js';
+} from './utils/url.js';
+export * from './elements/elements.js';
+export * from './geometry/geometry.js';
 export {
   definePlugin,
   PluginError,
@@ -135,7 +135,7 @@ export {
   type PluginSetup,
   type PluginTeardown,
   type PluginToolbarItem,
-} from './plugins.js';
+} from './plugins/plugins.js';
 export {
   CommandError,
   defineCommand,
@@ -143,7 +143,7 @@ export {
   type BoardCommands,
   type CommandDefinition,
   type CommandErrorCode,
-} from './commands.js';
+} from './tools/commands.js';
 export {
   DEFAULT_TOOL_ID,
   defineTool,
@@ -162,7 +162,7 @@ export {
   type ToolPointerEvent,
   type ToolStateDefinition,
   type ToolWheelEvent,
-} from './tools.js';
+} from './tools/tools.js';
 export {
   BRUSH_BLEND_MODES,
   BrushError,
@@ -174,9 +174,9 @@ export {
   type BrushInput,
   type BrushRegistry,
   type BrushStrokeOptions,
-} from './brushes.js';
-export { createId, DEFAULT_ID_LENGTH, type IdGenerator } from './ids.js';
-export { compareIndex, indexAbove, indexBelow, indexBetween, indicesBetween } from './indexing.js';
+} from './elements/brushes.js';
+export { createId, DEFAULT_ID_LENGTH, type IdGenerator } from './utils/ids.js';
+export { compareIndex, indexAbove, indexBelow, indexBetween, indicesBetween } from './document/indexing.js';
 export type {
   ActionEvent,
   BoardErrorCode,
@@ -188,14 +188,14 @@ export type {
   SelectionEvent,
   ToolEvent,
   Unsubscribe,
-} from './events.js';
+} from './events/events.js';
 export {
   DEFAULT_HISTORY_LIMIT,
   DEFAULT_MERGE_WINDOW_MS,
   type BoardHistory,
   type HistoryEvent,
   type HistoryOptions,
-} from './history.js';
+} from './history/history.js';
 export {
   CHANGE_ORIGINS,
   ReadOnlyBoardError,
@@ -205,14 +205,14 @@ export {
   type RecordsDiff,
   type TransactOptions,
   type Transaction,
-} from './store.js';
+} from './document/store.js';
 export {
   type DeleteOptions,
   type ElementPatch,
   type MutateOptions,
   type PartialElement,
   type UpdateOptions,
-} from './mutate.js';
+} from './document/mutate.js';
 export {
   computeElementAABB,
   createSpatialIndex,
@@ -223,14 +223,14 @@ export {
   type BoxBounds,
   type RectBounds,
   type SpatialIndex,
-} from './spatial.js';
-export { queryElements, type HitTestOptions, type QueryFilter } from './query.js';
-export type { BoardKeybindings, Keybinding, KeyboardPlatform } from './keybindings.js';
+} from './geometry/spatial.js';
+export { queryElements, type HitTestOptions, type QueryFilter } from './geometry/query.js';
+export type { BoardKeybindings, Keybinding, KeyboardPlatform } from './tools/keybindings.js';
 export {
   DEFAULT_DUPLICATE_OFFSET,
   defaultCommands,
   type DuplicateArgs,
-} from './default-commands.js';
+} from './tools/default-commands.js';
 export {
   DEFAULT_MIN_SIZE,
   moveElements,
@@ -247,7 +247,7 @@ export {
   type TransformHandlePoint,
   type TransformOptions,
   type TransformResult,
-} from './transform.js';
+} from './geometry/transform.js';
 export {
   computeSnap,
   DEFAULT_SNAP_OPTIONS,
@@ -258,7 +258,7 @@ export {
   type SnapOptions,
   type SnapResult,
   type SnapTranslationOptions,
-} from './snap.js';
+} from './geometry/snap.js';
 export {
   CORE_MIGRATIONS,
   MigrationError,
@@ -267,9 +267,9 @@ export {
   type MigrationSource,
   type SchemaMigration,
   type SchemaMigrations,
-} from './migrations.js';
-export type { BoardPages, PageInput } from './pages.js';
-export type { SelectionInput } from './selection.js';
+} from './document/migrations.js';
+export type { BoardPages, PageInput } from './pages/pages.js';
+export type { SelectionInput } from './selection/selection.js';
 export {
   DEFAULT_CAMERA_ANIMATION_MS,
   DEFAULT_ZOOM_PADDING,
@@ -280,7 +280,7 @@ export {
   type ViewportSize,
   type ZoomRange,
   type ZoomToOptions,
-} from './camera.js';
+} from './camera/camera.js';
 export {
   attachStorage,
   DEFAULT_SAVE_DEBOUNCE_MS,
@@ -293,7 +293,7 @@ export {
   type StorageAttachment,
   type StorageEventMap,
   type StorageStatus,
-} from './storage.js';
+} from './storage/storage.js';
 
 /**
  * Global map from element type to props type, for declaration merging (BOARD-607).

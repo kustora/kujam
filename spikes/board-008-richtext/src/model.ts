@@ -18,7 +18,7 @@ import {
   validate,
   type Infer,
   type SchemaResult,
-} from '../../../packages/core/src/schema.ts';
+} from '../../../packages/core/src/document/schema.ts';
 
 export const MAX_RICH_TEXT_LENGTH = 20_000;
 export const MAX_LINK_LENGTH = 2048;

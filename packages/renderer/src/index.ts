@@ -23,4 +23,4 @@ export {
   SELECTION_COLOR,
   SNAP_GUIDE_COLOR,
   type RemoteCursor,
-} from './overlay.js';
+} from './layers/overlay.js';
