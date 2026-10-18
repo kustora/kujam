@@ -133,6 +133,9 @@ importers:
       '@kujam/shapes':
         specifier: workspace:*
         version: link:../../packages/shapes
+      '@kujam/storage-indexeddb':
+        specifier: workspace:*
+        version: link:../../packages/storage-indexeddb
     devDependencies:
       vite:
         specifier: ^6.2.0

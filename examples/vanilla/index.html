@@ -4,9 +4,50 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@kujam/* Vanilla Example</title>
+    <style>
+      body {
+        margin: 0;
+        width: 100vw;
+        height: 100vh;
+        font:
+          13px system-ui,
+          sans-serif;
+      }
+      #board {
+        position: absolute;
+        inset: 0;
+      }
+      #toolbar {
+        position: absolute;
+        left: 50%;
+        bottom: 16px;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 4px;
+        padding: 6px;
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+      }
+      #toolbar button[aria-pressed='true'] {
+        background: #2f6fdb;
+        color: #fff;
+      }
+      #status {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: #fff;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+    </style>
   </head>
-  <body style="margin: 0; width: 100vw; height: 100vh">
-    <div id="board" style="width: 100%; height: 100%"></div>
+  <body>
+    <div id="board"></div>
+    <div id="toolbar" role="toolbar" aria-label="Alat papan"></div>
+    <div id="status" role="status" aria-live="polite">Memuat...</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
