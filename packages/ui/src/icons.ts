@@ -64,6 +64,53 @@ const ICONS: Readonly<Record<string, readonly IconShape[]>> = {
   ],
   minus: [['path', { d: 'M5 12h14' }]],
   chevron: [['path', { d: 'M7 14l5-5 5 5' }]],
+  lock: [
+    ['rect', { x: '5', y: '11', width: '14', height: '10', rx: '2' }],
+    ['path', { d: 'M8 11V7a4 4 0 0 1 8 0v4' }],
+  ],
+  unlock: [
+    ['rect', { x: '5', y: '11', width: '14', height: '10', rx: '2' }],
+    ['path', { d: 'M8 11V7a4 4 0 0 1 7.7-1.5' }],
+  ],
+  trash: [
+    ['path', { d: 'M3 6h18' }],
+    ['path', { d: 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6' }],
+    ['path', { d: 'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2' }],
+  ],
+  duplicate: [
+    ['rect', { x: '9', y: '9', width: '13', height: '13', rx: '2' }],
+    ['path', { d: 'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1' }],
+  ],
+  layer: [
+    ['polygon', { points: '12 2 2 7 12 12 22 7 12 2' }],
+    ['polyline', { points: '2 17 12 22 22 17' }],
+    ['polyline', { points: '2 12 12 17 22 12' }],
+  ],
+  alignLeft: [
+    ['path', { d: 'M21 6H3' }],
+    ['path', { d: 'M15 12H3' }],
+    ['path', { d: 'M17 18H3' }],
+  ],
+  alignCenter: [
+    ['path', { d: 'M21 6H3' }],
+    ['path', { d: 'M17 12H7' }],
+    ['path', { d: 'M19 18H5' }],
+  ],
+  alignRight: [
+    ['path', { d: 'M21 6H3' }],
+    ['path', { d: 'M21 12H9' }],
+    ['path', { d: 'M21 18H7' }],
+  ],
+  dashSolid: [['line', { x1: '3', y1: '12', x2: '21', y2: '12' }]],
+  dashDashed: [
+    ['line', { x1: '3', y1: '12', x2: '9', y2: '12' }],
+    ['line', { x1: '15', y1: '12', x2: '21', y2: '12' }],
+  ],
+  dashDotted: [
+    ['line', { x1: '3', y1: '12', x2: '5', y2: '12' }],
+    ['line', { x1: '11', y1: '12', x2: '13', y2: '12' }],
+    ['line', { x1: '19', y1: '12', x2: '21', y2: '12' }],
+  ],
 };
 
 /**

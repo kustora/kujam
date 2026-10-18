@@ -646,3 +646,193 @@ describe('BOARD-1402: style popovers (BOARD-1108)', () => {
     expect(checked().style.getPropertyValue('--kujam-ui-swatch')).toBe(board.theme.colors.blue);
   });
 });
+
+describe('BOARD-1403: contextual selection toolbar', () => {
+  const customElementPlugin = definePlugin({
+    id: 'test-plugin',
+    elements: [
+      defineElement({
+        type: 'test-box',
+        version: 1,
+        props: object({ color: enumOf(STICKY_COLORS), size: string() }),
+        defaults: { color: 'yellow', size: 'm' },
+        actions: (el, _data, ctx) => [
+          {
+            id: 'style.color.yellow',
+            label: 'Warna: Kuning',
+            group: 'style.color',
+            isActive: () => el.props.color === 'yellow',
+            run: () => ctx.updateProps({ color: 'yellow' }),
+          },
+          {
+            id: 'style.color.blue',
+            label: 'Warna: Biru',
+            group: 'style.color',
+            isActive: () => el.props.color === 'blue',
+            run: () => ctx.updateProps({ color: 'blue' }),
+          },
+          {
+            id: 'style.size.s',
+            label: 'Ukuran: Kecil',
+            group: 'style.size',
+            isActive: () => el.props.size === 's',
+            run: () => ctx.updateProps({ size: 's' }),
+          },
+          {
+            id: 'style.size.m',
+            label: 'Ukuran: Sedang',
+            group: 'style.size',
+            isActive: () => el.props.size === 'm',
+            run: () => ctx.updateProps({ size: 'm' }),
+          },
+        ],
+      }),
+    ],
+  });
+
+  const boardWithCustom = () =>
+    newBoard({ plugins: [builtInTools, defaultCommands, customElementPlugin] });
+
+  it('is hidden when there is no selection and appears when elements are selected', () => {
+    const board = boardWithCustom();
+    const rec = board.create({
+      type: 'test-box',
+      x: 100,
+      y: 100,
+      w: 100,
+      h: 100,
+      props: { color: 'yellow', size: 'm' },
+    })!;
+    const el = mountToolbar(board, UI_TAGS.selection);
+
+    expect(el.hidden).toBe(true);
+    board.select(rec.id);
+    expect(el.hidden).toBe(false);
+
+    board.clearSelection();
+    expect(el.hidden).toBe(true);
+  });
+
+  it('renders style action groups from board.getActions and runs chosen style', () => {
+    const board = boardWithCustom();
+    const rec = board.create({
+      type: 'test-box',
+      x: 100,
+      y: 100,
+      w: 100,
+      h: 100,
+      props: { color: 'yellow', size: 'm' },
+    })!;
+    board.select(rec.id);
+    const el = mountToolbar(board, UI_TAGS.selection);
+
+    const colorBtn = el.shadowRoot!.querySelector<HTMLButtonElement>('[data-action="style.color"]');
+    expect(colorBtn).not.toBeNull();
+    const colorMenu = el.shadowRoot!.querySelector<HTMLElement>('#kujam-selection-style\\.color')!;
+    expect(colorMenu).not.toBeNull();
+    expect(colorMenu.hidden).toBe(true);
+
+    colorBtn!.click();
+    expect(colorMenu.hidden).toBe(false);
+    const blueOption = colorMenu.querySelector<HTMLButtonElement>('[data-id="style.color.blue"]')!;
+    blueOption.click();
+
+    expect(board.getElement(rec.id)?.props.color).toBe('blue');
+  });
+
+  it('renders standard element commands: lock/unlock, duplicate, and delete', () => {
+    const board = boardWithCustom();
+    const rec = board.create({
+      type: 'test-box',
+      x: 100,
+      y: 100,
+      w: 100,
+      h: 100,
+      props: { color: 'yellow', size: 'm' },
+    })!;
+    board.select(rec.id);
+    const el = mountToolbar(board, UI_TAGS.selection);
+
+    const dupBtn = el.shadowRoot!.querySelector<HTMLButtonElement>('[data-action="duplicate"]')!;
+    expect(dupBtn).not.toBeNull();
+    dupBtn.click();
+    expect(board.query().length).toBe(2);
+
+    const lockBtn = el.shadowRoot!.querySelector<HTMLButtonElement>('[data-action="lock"]')!;
+    expect(lockBtn).not.toBeNull();
+    expect(lockBtn.getAttribute('aria-label')).toBe('Kunci');
+    lockBtn.click();
+    expect(board.getElement(board.selection[0]!)?.locked).toBe(true);
+
+    // After locking, it shows unlock
+    const unlockBtn = el.shadowRoot!.querySelector<HTMLButtonElement>('[data-action="lock"]')!;
+    expect(unlockBtn.getAttribute('aria-label')).toBe('Buka kunci');
+    unlockBtn.click();
+    expect(board.getElement(board.selection[0]!)?.locked).toBe(false);
+
+    // Delete
+    const delBtn = el.shadowRoot!.querySelector<HTMLButtonElement>('[data-action="delete"]')!;
+    expect(delBtn).not.toBeNull();
+    delBtn.click();
+    expect(board.query().length).toBe(1);
+  });
+
+  it('hides during pointer drag outside the toolbar and reappears on pointer up', () => {
+    const board = boardWithCustom();
+    const rec = board.create({
+      type: 'test-box',
+      x: 100,
+      y: 100,
+      w: 100,
+      h: 100,
+      props: { color: 'yellow', size: 'm' },
+    })!;
+    board.select(rec.id);
+    const el = mountToolbar(board, UI_TAGS.selection);
+
+    expect(el.hidden).toBe(false);
+
+    // Pointer down on canvas outside toolbar
+    const canvas = document.createElement('canvas');
+    document.body.append(canvas);
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+
+    expect(el.style.opacity).toBe('0');
+    expect(el.style.pointerEvents).toBe('none');
+
+    document.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+    expect(el.style.opacity).toBe('1');
+    expect(el.style.pointerEvents).toBe('auto');
+  });
+
+  it('adjusts position and flips below when near top edge', () => {
+    const board = boardWithCustom();
+    // Element near the top edge
+    const rec = board.create({
+      type: 'test-box',
+      x: 200,
+      y: 5,
+      w: 100,
+      h: 100,
+      props: { color: 'yellow', size: 'm' },
+    })!;
+    board.select(rec.id);
+    const el = mountToolbar(board, UI_TAGS.selection);
+
+    expect(el.dataset.placement).toBe('below');
+  });
+
+  it('mounts and unmounts selection toolbar cleanly via mountDefaultUi', () => {
+    const board = boardWithCustom();
+    const container = document.createElement('div');
+    document.body.append(container);
+    const ui = mountDefaultUi({ board, container });
+
+    expect(ui.selection).not.toBeNull();
+    expect(ui.selection.tagName.toLowerCase()).toBe('kujam-selection-toolbar');
+
+    ui.unmount();
+    expect(container.querySelector('kujam-selection-toolbar')).toBeNull();
+  });
+});
+

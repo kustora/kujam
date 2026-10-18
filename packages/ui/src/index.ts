@@ -6,6 +6,7 @@
 
 import type { Board } from '@kujam/core';
 import type { KujamUiElement, UiWindow } from './base.js';
+import { createSelectionToolbarClass } from './selection-toolbar.js';
 import { createToolbarClass } from './toolbar.js';
 import { createHistoryControlClass, createZoomControlClass } from './zoom.js';
 
@@ -30,11 +31,12 @@ export const UI_TAGS = Object.freeze({
   toolbar: 'kujam-toolbar',
   zoom: 'kujam-zoom-control',
   history: 'kujam-history-control',
+  selection: 'kujam-selection-toolbar',
 } as const);
 
 /**
- * Registers the UI custom elements in a window's `customElements` (BOARD-1401). Safe to call
- * more than once; tags that are already defined are left alone.
+ * Registers the UI custom elements in a window's `customElements` (BOARD-1401, BOARD-1403). Safe
+ * to call more than once; tags that are already defined are left alone.
  *
  * @param win - Window to define the elements in. Defaults to the global `window`.
  * @throws `Error` when there is no window with `customElements` (for example on a server).
@@ -50,6 +52,7 @@ export function defineUiElements(win?: Window): void {
     [UI_TAGS.toolbar]: createToolbarClass,
     [UI_TAGS.zoom]: createZoomControlClass,
     [UI_TAGS.history]: createHistoryControlClass,
+    [UI_TAGS.selection]: createSelectionToolbarClass,
   };
   for (const [tag, create] of Object.entries(factories)) {
     if (!target.customElements.get(tag)) target.customElements.define(tag, create(target));
@@ -82,13 +85,16 @@ export interface MountedUi {
   readonly zoom: KujamUiElement;
   /** The undo and redo control, at the bottom left (BOARD-1404). */
   readonly history: KujamUiElement;
+  /** Contextual selection toolbar floating above the selection (BOARD-1403). */
+  readonly selection: KujamUiElement;
   /** Removes the UI elements. Safe to call more than once. */
   unmount(): void;
 }
 
 /**
  * Mounts the default UI over a board: the main toolbar at the bottom center (BOARD-1402), the
- * zoom control at the bottom right, and undo and redo at the bottom left (BOARD-1404).
+ * zoom control at the bottom right, undo/redo at the bottom left (BOARD-1404), and the
+ * contextual selection toolbar above the active selection (BOARD-1403).
  *
  * @example
  * ```ts
@@ -121,13 +127,15 @@ export function mountDefaultUi(options: MountUiOptions): MountedUi {
   const toolbar = place(UI_TAGS.toolbar, { left: '50%', transform: 'translateX(-50%)' });
   const zoom = place(UI_TAGS.zoom, { right: '20px' });
   const history = place(UI_TAGS.history, { left: '20px' });
+  const selection = place(UI_TAGS.selection, { bottom: 'auto', zIndex: '25' });
 
   return {
     toolbar,
     zoom,
     history,
+    selection,
     unmount() {
-      for (const el of [toolbar, zoom, history]) {
+      for (const el of [toolbar, zoom, history, selection]) {
         el.board = null;
         el.remove();
       }
@@ -140,5 +148,7 @@ declare global {
     'kujam-toolbar': KujamUiElement;
     'kujam-zoom-control': KujamUiElement;
     'kujam-history-control': KujamUiElement;
+    'kujam-selection-toolbar': KujamUiElement;
   }
 }
+
