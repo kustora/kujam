@@ -241,37 +241,58 @@ export function getStrokeOptions(
 }
 
 /**
+ * Path tracing commands shared by `CanvasRenderingContext2D` and `Path2D`.
+ *
+ * @internal
+ */
+export interface PathSink {
+  moveTo(x: number, y: number): void;
+  lineTo(x: number, y: number): void;
+  quadraticCurveTo(cpx: number, cpy: number, x: number, y: number): void;
+  closePath(): void;
+}
+
+/**
+ * Stroke outline polygon as returned by perfect-freehand.
+ *
+ * @internal
+ */
+export type StrokeOutline = readonly (readonly number[])[];
+
+/**
+ * Traces a closed stroke outline with quadratic curves between midpoints (BOARD-1002).
+ *
+ * @internal
+ */
+export function traceStrokeOutline(sink: PathSink, outline: StrokeOutline): void {
+  const first = outline[0];
+  if (!first) return;
+
+  sink.moveTo(first[0] ?? 0, first[1] ?? 0);
+  if (outline.length < 3) {
+    for (let i = 1; i < outline.length; i++) {
+      const pt = outline[i]!;
+      sink.lineTo(pt[0] ?? 0, pt[1] ?? 0);
+    }
+  } else {
+    for (let i = 0; i < outline.length; i++) {
+      const p0 = outline[i]!;
+      const p1 = outline[(i + 1) % outline.length]!;
+      sink.quadraticCurveTo(p0[0]!, p0[1]!, (p0[0]! + p1[0]!) / 2, (p0[1]! + p1[1]!) / 2);
+    }
+  }
+  sink.closePath();
+}
+
+/**
  * Renders a closed polygon outline onto a Canvas 2D context using quadratic curves between midpoints.
  *
  * @internal
  */
-export function renderStrokeOutline(
-  g: ElementCanvasContext,
-  outline: readonly (readonly [number, number])[] | readonly number[][],
-): void {
+export function renderStrokeOutline(g: ElementCanvasContext, outline: StrokeOutline): void {
   if (outline.length === 0) return;
-
-  const first = outline[0];
-  if (!first) return;
-
   g.beginPath();
-  if (outline.length < 3) {
-    g.moveTo(first[0] ?? 0, first[1] ?? 0);
-    for (let i = 1; i < outline.length; i++) {
-      const pt = outline[i];
-      if (pt) g.lineTo(pt[0] ?? 0, pt[1] ?? 0);
-    }
-  } else {
-    g.moveTo(first[0] ?? 0, first[1] ?? 0);
-    for (let i = 0; i < outline.length; i++) {
-      const p0 = outline[i]!;
-      const p1 = outline[(i + 1) % outline.length]!;
-      const midX = (p0[0]! + p1[0]!) / 2;
-      const midY = (p0[1]! + p1[1]!) / 2;
-      g.quadraticCurveTo(p0[0]!, p0[1]!, midX, midY);
-    }
-  }
-  g.closePath();
+  traceStrokeOutline(g, outline);
   g.fill();
 }
 
