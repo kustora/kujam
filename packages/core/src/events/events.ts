@@ -6,6 +6,7 @@
 import type { HistoryEvent } from '../history/history.js';
 import type { ChangeEvent } from '../document/store.js';
 import type { ThemeDefinition } from '../theme/theme.js';
+import type { ToolStyleEvent } from '../tools/tool-styles.js';
 import type { CameraState } from '../types.js';
 
 /**
@@ -154,6 +155,12 @@ export interface BoardEventMap {
    * @beta
    */
   tool: ToolEvent;
+  /**
+   * A tool's remembered style changed via `board.toolStyles.set` (BOARD-1108).
+   *
+   * @beta
+   */
+  'tool-style': ToolStyleEvent;
   /**
    * The current page changed via `board.pages.setCurrent`, or because the current page was
    * deleted (BOARD-208).

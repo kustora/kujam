@@ -51,6 +51,9 @@ import type {
   DocumentPropsValidator,
   DocumentTooNewReason,
   ElementAction,
+  ElementActionContext,
+  ToolStyle,
+  ToolStyles,
   ElementPatch,
   ElementRecord,
   ElementRegistry,
@@ -219,6 +222,12 @@ export type Tests = [
     Equal<Parameters<Board['runAction']>, [action: ElementAction, element: Readonly<ElementRecord>]>
   >,
   Expect<Equal<ReturnType<Board['runAction']>, boolean>>,
+  // BOARD-1108: style actions for a selection and remembered tool styles
+  Expect<Equal<Parameters<Board['getActions']>, [ids?: SelectionInput]>>,
+  Expect<Equal<ReturnType<Board['getActions']>, readonly ElementAction[]>>,
+  Expect<Equal<Board['toolStyles'], ToolStyles>>,
+  Expect<Equal<ReturnType<ToolStyles['get']>, ToolStyle>>,
+  Expect<ElementActionContext extends ElementContext ? true : false>,
   // BOARD-401: camera type tests
   Expect<Equal<Board['camera'], BoardCamera>>,
   Expect<Equal<ReturnType<BoardCamera['get']>, Readonly<CameraState>>>,

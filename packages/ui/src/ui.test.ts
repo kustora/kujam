@@ -1,12 +1,19 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  COLOR_KEYS,
   createBoard,
+  defaultCommands,
+  defineBrush,
   defineCommand,
   defineElement,
   definePlugin,
   defineTool,
+  enumOf,
+  number,
   object,
+  STICKY_COLORS,
+  string,
   type Board,
   type BoardOptions,
 } from '@kujam/core';
@@ -458,5 +465,184 @@ describe('BOARD-1404: history control', () => {
     const el = mountToolbar(board, UI_TAGS.history);
     const undo = el.shadowRoot!.querySelector<HTMLButtonElement>('[data-control="undo"]')!;
     expect(undo.getAttribute('aria-label')).toMatch(/^Urungkan \((⌘Z|Ctrl\+Z)\)$/);
+  });
+
+  it('BOARD-505: shows the defaultCommands shortcuts in names and tooltips', () => {
+    const control = (board: Board, id: string) =>
+      mountToolbar(board, UI_TAGS.history).shadowRoot!.querySelector<HTMLButtonElement>(
+        `[data-control="${id}"]`,
+      )!;
+    const other = newBoard({ plugins: [builtInTools, defaultCommands], platform: 'other' });
+    expect(control(other, 'undo').getAttribute('aria-label')).toBe('Urungkan (Ctrl+Z)');
+    expect(control(other, 'undo').nextElementSibling!.textContent).toBe('UrungkanCtrl+Z');
+    expect(control(other, 'redo').getAttribute('aria-label')).toMatch(/\(Ctrl\+Shift\+Z\)$/);
+
+    const mac = newBoard({ plugins: [builtInTools, defaultCommands], platform: 'mac' });
+    expect(control(mac, 'undo').getAttribute('aria-label')).toBe('Urungkan (⌘Z)');
+    expect(control(mac, 'redo').getAttribute('aria-label')).toMatch(/\(⇧⌘Z\)$/);
+  });
+});
+
+describe('BOARD-1402: style popovers (BOARD-1108)', () => {
+  // Stand-ins for the built-in sticky and stroke elements: ui does not depend on shapes.
+  const styled = definePlugin({
+    id: 'styled',
+    elements: [
+      defineElement({
+        type: 'sticky',
+        version: 1,
+        props: object({ color: enumOf(STICKY_COLORS) }),
+        defaults: { color: 'yellow' },
+      }),
+      defineElement({
+        type: 'draw',
+        version: 1,
+        props: object({ color: enumOf(COLOR_KEYS), brush: string(), thickness: number() }),
+        defaults: { color: 'black', brush: 'pen', thickness: 4 },
+      }),
+    ],
+    brushes: [
+      defineBrush({ id: 'pen', label: 'brush.pen' }),
+      defineBrush({ id: 'highlighter', label: 'brush.highlighter', blend: 'multiply' }),
+      defineBrush({ id: 'example.marker', label: 'Spidol' }),
+    ],
+  });
+
+  const styledBoard = (options: BoardOptions = {}) =>
+    newBoard({ plugins: [builtInTools, styled], ...options });
+
+  function menuOf(el: KujamUiElement, item: string): HTMLElement {
+    const id = button(el, item).getAttribute('aria-controls')!;
+    return el.shadowRoot!.querySelector<HTMLElement>(`#${id}`)!;
+  }
+
+  function choices(menu: HTMLElement, group: string): HTMLButtonElement[] {
+    return [
+      ...menu.querySelectorAll<HTMLButtonElement>(`[data-group="${group}"] [role="menuitemradio"]`),
+    ];
+  }
+
+  it('lists sticky colors and pen brushes and colors only for registered elements', () => {
+    const items = buildToolbarItems(styledBoard());
+    const sticky = items.find((i) => i.id === 'sticky')!;
+    expect(sticky.styles!.map((g) => [g.key, g.palette, g.fallback])).toEqual([
+      ['color', 'sticky', 'yellow'],
+    ]);
+    expect(sticky.styles![0]!.options.map((o) => o.label)).toEqual([
+      'Kuning',
+      'Hijau',
+      'Merah muda',
+      'Biru',
+      'Ungu',
+      'Abu-abu',
+    ]);
+    const draw = items.find((i) => i.id === 'draw')!;
+    expect(draw.styles!.map((g) => [g.key, g.palette, g.fallback])).toEqual([
+      ['brush', undefined, 'pen'],
+      ['color', 'colors', 'black'],
+    ]);
+    expect(draw.styles![0]!.options.map((o) => [o.value, o.label])).toEqual([
+      ['pen', 'Pena'],
+      ['highlighter', 'Stabilo'],
+      ['example.marker', 'Spidol'],
+    ]);
+    expect(draw.styles![1]!.options).toHaveLength(COLOR_KEYS.length);
+
+    const plain = buildToolbarItems(newBoard());
+    expect(plain.every((i) => i.styles === undefined)).toBe(true);
+  });
+
+  it('chooses the next sticky color from a swatch popover', () => {
+    const board = styledBoard();
+    const el = mountToolbar(board);
+    const sticky = button(el, 'sticky');
+    const menu = menuOf(el, 'sticky');
+    expect(sticky.getAttribute('aria-haspopup')).toBe('menu');
+    expect(sticky.getAttribute('aria-label')).toBe('Sticky (S)');
+    const dot = sticky.querySelector<HTMLElement>('.dot')!;
+    expect(dot.style.background).toBe(board.theme.sticky.yellow);
+
+    // The first click activates the tool, the second opens the popover.
+    sticky.click();
+    expect(board.tool).toBe('sticky');
+    expect(menu.hidden).toBe(true);
+    sticky.click();
+    expect(menu.hidden).toBe(false);
+
+    const group = menu.querySelector('[role="group"]')!;
+    expect(group.getAttribute('aria-label')).toBe('Warna');
+    const swatches = choices(menu, 'color');
+    expect(swatches.map((s) => s.getAttribute('aria-label'))).toEqual([
+      'Kuning',
+      'Hijau',
+      'Merah muda',
+      'Biru',
+      'Ungu',
+      'Abu-abu',
+    ]);
+    expect(swatches.map((s) => s.getAttribute('aria-checked'))).toEqual([
+      'true',
+      'false',
+      'false',
+      'false',
+      'false',
+      'false',
+    ]);
+    expect(swatches[2]!.style.getPropertyValue('--kujam-ui-swatch')).toBe(board.theme.sticky.pink);
+    expect(el.shadowRoot!.activeElement).toBe(swatches[0]);
+
+    key(swatches[0]!, 'ArrowRight');
+    expect(el.shadowRoot!.activeElement).toBe(swatches[1]);
+    swatches[2]!.click();
+    expect(board.toolStyles.get('sticky')).toEqual({ color: 'pink' });
+    expect(menu.hidden).toBe(true);
+    expect(el.shadowRoot!.activeElement).toBe(sticky);
+    expect(dot.style.background).toBe(board.theme.sticky.pink);
+    expect(choices(menu, 'color')[2]!.getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('chooses the pen brush and color, activating the pen', () => {
+    const board = styledBoard({ locale: 'en' });
+    board.toolStyles.set('draw', { thickness: 2 });
+    const el = mountToolbar(board);
+    const draw = button(el, 'draw');
+    const menu = menuOf(el, 'draw');
+
+    draw.focus();
+    key(draw, 'ArrowUp');
+    expect(menu.hidden).toBe(false);
+    const groups = [...menu.querySelectorAll('[role="group"]')];
+    expect(groups.map((g) => g.getAttribute('aria-label'))).toEqual(['Brush', 'Color']);
+    const brushes = choices(menu, 'brush');
+    expect(brushes.map((b) => [b.textContent, b.getAttribute('aria-checked')])).toEqual([
+      ['Pen', 'true'],
+      ['Highlighter', 'false'],
+      ['Spidol', 'false'],
+    ]);
+    brushes[1]!.click();
+    expect(board.tool).toBe('draw');
+    // The brush starts at its own size: the remembered thickness is cleared.
+    expect(board.toolStyles.get('draw')).toEqual({ brush: 'highlighter' });
+
+    draw.click();
+    const red = choices(menu, 'color').find((s) => s.getAttribute('aria-label') === 'Red')!;
+    red.click();
+    expect(board.toolStyles.get('draw')).toEqual({ brush: 'highlighter', color: 'red' });
+    expect(draw.querySelector<HTMLElement>('.dot')!.style.background).toBe(board.theme.colors.red);
+  });
+
+  it('follows styles set elsewhere and the theme', () => {
+    const board = styledBoard();
+    const el = mountToolbar(board);
+    const dot = button(el, 'draw').querySelector<HTMLElement>('.dot')!;
+    board.toolStyles.set('draw', { color: 'blue' });
+    expect(dot.style.background).toBe(board.theme.colors.blue);
+    const checked = () =>
+      choices(menuOf(el, 'draw'), 'color').find((s) => s.getAttribute('aria-checked') === 'true')!;
+    expect(checked().getAttribute('aria-label')).toBe('Biru');
+
+    board.setTheme('dark');
+    expect(dot.style.background).toBe(board.theme.colors.blue);
+    expect(checked().style.getPropertyValue('--kujam-ui-swatch')).toBe(board.theme.colors.blue);
   });
 });

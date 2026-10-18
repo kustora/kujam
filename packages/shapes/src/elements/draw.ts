@@ -12,6 +12,7 @@ import { getStroke } from 'perfect-freehand';
 import { builtInBrush } from '../brushes.js';
 import { COLOR_KEYS, COLOR_VALUES } from '../colors.js';
 import { localize } from '../i18n.js';
+import { drawActions } from '../styles.js';
 import { StrokePathCache } from './stroke-cache.js';
 import { getStrokeOptions } from './stroke-utils.js';
 
@@ -77,5 +78,6 @@ export const drawElement = defineElement({
     role: 'img',
     label: localize({ id: 'Coretan', en: 'Drawing' }, ctx.locale),
   }),
+  actions: (el, _data, ctx) => drawActions(el, ctx),
   export: { text: () => '' },
 });

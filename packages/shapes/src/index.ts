@@ -34,6 +34,7 @@ export {
 } from './elements/stroke-utils.js';
 export { textElement } from './elements/text.js';
 export { geoElement, geoGeometry, GEO_KINDS, type GeoKind } from './elements/geo.js';
+export { DRAW_THICKNESSES, GEO_STROKE_WIDTHS } from './styles.js';
 export {
   DRAG_THRESHOLD_PX,
   HANDLE_TOLERANCE_PX,

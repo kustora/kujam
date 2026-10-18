@@ -12,6 +12,7 @@ import {
 import { drawRichText, layoutRichText, traceGeometry, traceRoundedRect } from '../canvas.js';
 import { COLOR_KEYS, COLOR_VALUES } from '../colors.js';
 import { a11yLabel, localize, type Bilingual } from '../i18n.js';
+import { geoActions } from '../styles.js';
 import { EMPTY_RICH_TEXT, isRichTextEmpty, richTextSchema, richTextToPlainText } from '../richtext.js';
 
 /**
@@ -234,5 +235,6 @@ export const geoElement = defineElement({
       richTextToPlainText(el.props.label),
     ),
   }),
+  actions: (el, _data, ctx) => geoActions(el, ctx),
   export: { text: (el) => richTextToPlainText(el.props.label) },
 });

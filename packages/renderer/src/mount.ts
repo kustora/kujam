@@ -3,7 +3,8 @@
  *
  * The view stacks three layers inside one root element: the main Canvas 2D (elements), the HTML
  * layer (custom elements rendered as DOM), and the overlay canvas (selection, handles, snap
- * guides). It follows the container size with a `ResizeObserver`, reports that size to
+ * guides). A visually hidden accessibility tree sits between the HTML layer and the overlay
+ * (BOARD-1901). It follows the container size with a `ResizeObserver`, reports that size to
  * `board.camera.setViewport`, and coalesces render requests into one `requestAnimationFrame`.
  *
  * Every browser API is taken from the container's own window, and nothing is shared between
@@ -17,6 +18,7 @@ import { attachClipboard } from './input/clipboard.js';
 import { CanvasRenderer, type RenderStats } from './layers/render-canvas.js';
 import { OverlayRenderer, type OverlayRenderStats } from './layers/overlay.js';
 import { assertBackground, type BoardBackground } from './layers/background.js';
+import { A11yTree } from './a11y/a11y-tree.js';
 
 export type { RenderStats } from './layers/render-canvas.js';
 export type { OverlayRenderStats } from './layers/overlay.js';
@@ -75,6 +77,14 @@ export interface RendererLayers {
    * Camera wrapper inside the HTML layer; transforms with the camera in board units (BOARD-804).
    */
   readonly htmlCamera: HTMLDivElement;
+  /**
+   * Visually hidden accessibility tree between the HTML layer and the overlay (BOARD-1901): a
+   * `role="list"` with one item per element near the viewport, in reading order. Receives no
+   * pointer events.
+   *
+   * @beta
+   */
+  readonly a11y: HTMLDivElement;
   /** Overlay canvas for selection, handles, the selection box, and snap guides. */
   readonly overlay: HTMLCanvasElement;
 }
@@ -107,7 +117,8 @@ export interface BoardView {
    * Mounts an active DOM editor (e.g. text or rich text editor) inside the HTML camera layer (BOARD-804).
    * The editor is positioned in board coordinates and moves automatically with camera pan and zoom.
    *
-   * @returns Unmount callback that removes the editor from the layer.
+   * @returns Unmount callback that removes the editor from the layer. When the editor has focus at
+   *   that moment, focus returns to the selected element's accessibility item, or to the view.
    */
   mountEditor(editor: HTMLElement, bounds: EditorBounds): () => void;
   /**
@@ -266,8 +277,12 @@ export function mountRenderer(
 
   const canvas = createLayer(doc, 'canvas', 'canvas', true);
   const html = createLayer(doc, 'div', 'html', false);
+  const a11y = createLayer(doc, 'div', 'a11y', false);
   const overlay = createLayer(doc, 'canvas', 'overlay', false);
-  root.append(canvas, html, overlay);
+  // The canvases carry no semantics; the a11y layer describes their content (BOARD-1901).
+  canvas.setAttribute('aria-hidden', 'true');
+  overlay.setAttribute('aria-hidden', 'true');
+  root.append(canvas, html, a11y, overlay);
   container.appendChild(root);
 
   const htmlLayer = new HtmlLayer(board, html);
@@ -276,8 +291,10 @@ export function mountRenderer(
     canvas,
     html,
     htmlCamera: htmlLayer.cameraHost,
+    a11y,
     overlay,
   });
+  const a11yTree = new A11yTree(board, root, a11y, { interactive: htmlLayer.elementsHost });
   const overlayRenderer = new OverlayRenderer(board);
   let overlayStats: Readonly<OverlayRenderStats> = Object.freeze({
     rendered: false,
@@ -299,6 +316,8 @@ export function mountRenderer(
         scheduleRender();
       }
     },
+    filterKey: (e) => a11yTree.filterKey(e),
+    afterKey: (e) => a11yTree.afterKey(e),
   });
   const detachClipboard = attachClipboard(board, root, { onError: options.onClipboardError });
   let size: Readonly<ViewportSize> = Object.freeze({ width: 0, height: 0 });
@@ -320,6 +339,7 @@ export function mountRenderer(
       canvasRenderer.render(canvas, main, effectivePixelRatio, debug);
     }
     htmlLayer.updateElements();
+    a11yTree.frame();
     const top = overlay.getContext('2d');
     if (top) {
       overlayStats = overlayRenderer.render(overlay, top, effectivePixelRatio);
@@ -374,6 +394,7 @@ export function mountRenderer(
   // The root fills the container's content box and has no padding or border, so its client size
   // is the view size.
   resize(root.clientWidth, root.clientHeight);
+  a11yTree.syncNow();
 
   const Observer = win?.ResizeObserver;
   const observer = Observer
@@ -387,22 +408,29 @@ export function mountRenderer(
   const unsubscribers = [
     board.on('camera', () => {
       canvasRenderer.markAllDirty();
+      a11yTree.onCamera();
       scheduleRender();
     }),
     board.on('page', () => {
       canvasRenderer.markAllDirty();
       htmlLayer.clearAll();
+      a11yTree.onPage();
       scheduleRender();
     }),
     board.on('change', (event) => {
       canvasRenderer.markChange(event);
+      a11yTree.onChange(event);
       scheduleRender();
     }),
-    board.on('selection', scheduleRender),
+    board.on('selection', (event) => {
+      a11yTree.onSelection(event.ids);
+      scheduleRender();
+    }),
     board.on('tool', scheduleRender),
     board.on('theme', (theme) => {
       root.style.backgroundColor = theme.canvas.background;
       canvasRenderer.markAllDirty();
+      a11yTree.onTheme();
       scheduleRender();
     }),
     board.on('dispose', unmount),
@@ -430,6 +458,7 @@ export function mountRenderer(
     unsubscribers.length = 0;
     detachInput();
     detachClipboard();
+    a11yTree.dispose();
     htmlLayer.dispose();
     root.remove();
   }
@@ -479,7 +508,16 @@ export function mountRenderer(
       canvasRenderer.markAllDirty();
       scheduleRender();
     },
-    mountEditor: (editor, bounds) => htmlLayer.mountEditor(editor, bounds),
+    mountEditor(editor, bounds) {
+      const remove = htmlLayer.mountEditor(editor, bounds);
+      return () => {
+        // Closing a focused editor (Esc) would drop focus to the page body: keep it on the
+        // edited element instead (BOARD-1902).
+        const hadFocus = editor.contains(doc.activeElement);
+        remove();
+        if (hadFocus && mounted) a11yTree.restoreFocus();
+      };
+    },
     requestRender,
     unmount,
   };

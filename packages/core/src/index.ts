@@ -10,6 +10,7 @@ import { createCommandRegistry, type BoardCommands } from './tools/commands.js';
 import {
   createElementRegistry,
   type ElementAction,
+  type ElementActionContext,
   type ElementContext,
   type ElementRegistry,
   type ResolveResult,
@@ -31,6 +32,7 @@ import {
 } from './history/history.js';
 import { createId as createRandomId, type IdGenerator } from './utils/ids.js';
 import { createInteraction } from './tools/interaction.js';
+import { createToolStyles, type ToolStyles } from './tools/tool-styles.js';
 import { resolveLimits, type BoardLimits } from './document/limits.js';
 import {
   createPluginRuntime,
@@ -169,6 +171,13 @@ export {
   type ToolStateDefinition,
   type ToolWheelEvent,
 } from './tools/tools.js';
+export type {
+  ToolStyle,
+  ToolStyleEvent,
+  ToolStylePatch,
+  ToolStyles,
+  ToolStyleValue,
+} from './tools/tool-styles.js';
 export {
   BRUSH_BLEND_MODES,
   BrushError,
@@ -247,8 +256,21 @@ export type { BoardKeybindings, Keybinding, KeyboardPlatform } from './tools/key
 export {
   DEFAULT_DUPLICATE_OFFSET,
   defaultCommands,
+  NUDGE_DISTANCE,
+  NUDGE_DISTANCE_LARGE,
   type DuplicateArgs,
+  type NudgeArgs,
 } from './tools/default-commands.js';
+export {
+  getReadingOrder,
+  nextInReadingOrder,
+  revealBounds,
+  sortReadingOrder,
+  type ReadingDirection,
+  type ReadingOrder,
+  type ReadingOrderItem,
+  type RevealOptions,
+} from './a11y/reading-order.js';
 export {
   DEFAULT_MIN_SIZE,
   moveElements,
@@ -958,6 +980,29 @@ export interface Board {
    */
   runAction(action: ElementAction, element: Readonly<ElementRecord>): boolean;
   /**
+   * Contextual actions shared by every given element, `board.selection` by default (BOARD-605,
+   * BOARD-1108): only actions whose ID every element provides, in the first element's order. With
+   * no element, or an element whose type has no `actions`, the list is empty.
+   *
+   * The returned actions apply to all the elements at once: `run()` runs each element's action in
+   * one transaction (one undo step, labelled with the action ID). Like {@link Board.runAction}, it
+   * checks `board.can('action', element)` first; when any element is rejected, nothing runs and an
+   * `error` event with code `'forbidden'` is emitted. `isEnabled()` is `true` only when every
+   * element allows and enables the action; `isActive()` only when the action is active on every
+   * element.
+   *
+   * @beta
+   */
+  getActions(ids?: SelectionInput): readonly ElementAction[];
+  /**
+   * Remembered style per tool (BOARD-1108): creation tools read it for the next element, and the UI
+   * and element style actions write it. Session state: not in the document, not saved, not in undo
+   * history, and allowed on `readOnly` boards. Changes emit a `tool-style` event.
+   *
+   * @beta
+   */
+  readonly toolStyles: ToolStyles;
+  /**
    * Whether the board has been disposed with {@link Board.dispose}.
    *
    * @public
@@ -1346,6 +1391,78 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       events.emit('action', Object.freeze({ name, payload }));
     },
   });
+  const toolStyles = createToolStyles((event) => events.emit('tool-style', event));
+
+  /** Context for an element's `actions` (BOARD-605, BOARD-1108). */
+  function actionContext(el: Readonly<ElementRecord>): ElementActionContext {
+    return Object.freeze({
+      locale,
+      get theme() {
+        return activeTheme;
+      },
+      resolveBrush: elementContext.resolveBrush,
+      emit: elementContext.emit,
+      updateProps: (patch: Partial<Record<string, unknown>>): boolean =>
+        board.update(el.id, { props: patch }) !== undefined,
+      brushes: brushes.api.list(),
+      toolStyles: toolStyles.api,
+    });
+  }
+
+  /** Valid actions of one element by ID, or `null` when its type has no `actions`. */
+  function actionsOf(el: Readonly<ElementRecord>): Map<string, ElementAction> | null {
+    const def = elements.get(el.type);
+    if (typeof def?.actions !== 'function') return null;
+    const list: unknown = def.actions(el as never, undefined, actionContext(el) as never);
+    const byId = new Map<string, ElementAction>();
+    if (!Array.isArray(list)) return byId;
+    for (const action of list as unknown[]) {
+      if (!isPlainObject(action) || typeof action.id !== 'string') continue;
+      if (typeof action.run !== 'function' || byId.has(action.id)) continue;
+      byId.set(action.id, action as unknown as ElementAction);
+    }
+    return byId;
+  }
+
+  /** One action applied to several elements at once (BOARD-605, BOARD-1108). */
+  function mergeAction(
+    first: ElementAction,
+    targets: readonly (readonly [Readonly<ElementRecord>, ElementAction])[],
+  ): ElementAction {
+    return Object.freeze({
+      id: first.id,
+      label: first.label,
+      ...(first.icon !== undefined ? { icon: first.icon } : {}),
+      ...(first.group !== undefined ? { group: first.group } : {}),
+      isEnabled: () =>
+        targets.every(([el, action]) => can('action', el) && action.isEnabled?.() !== false),
+      ...(typeof first.isActive === 'function'
+        ? { isActive: () => targets.every(([, action]) => action.isActive?.() === true) }
+        : {}),
+      run(): void {
+        assertUsable();
+        const denied = targets.find(([el]) => !can('action', el));
+        if (denied) {
+          const [element] = denied;
+          emitError(
+            'forbidden',
+            `Menjalankan aksi "${first.id}" pada elemen "${element.id}" ditolak oleh hook izin.`,
+            { action: 'action', actionId: first.id, element, user },
+          );
+          return;
+        }
+        store.transact(
+          () => {
+            for (const [, action] of targets) {
+              if (action.isEnabled?.() !== false) action.run();
+            }
+          },
+          { label: first.id },
+        );
+      },
+    });
+  }
+
   const selection = createSelection({
     isElement: (id) => {
       const rec = store.getRecord(id);
@@ -1390,16 +1507,17 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
    * match, a repeat, an unregistered target, or a command whose `isEnabled` rejected it.
    */
   function runShortcut(event: ToolKeyEvent): boolean {
-    if (event.repeat) return false;
     const binding = keymap.api.match(event);
     if (!binding) return false;
     if (binding.target.startsWith('tool:')) {
       const id = binding.target.slice('tool:'.length);
-      if (!tools.api.has(id)) return false;
+      if (event.repeat || !tools.api.has(id)) return false;
       tools.setTool(id);
       return true;
     }
-    if (!commands.api.get(binding.target)) return false;
+    const command = commands.api.get(binding.target);
+    // A held key only repeats commands that ask for it (BOARD-1902), for example arrow-key nudges.
+    if (!command || (event.repeat && command.repeatable !== true)) return false;
     return commands.run(binding.target, undefined);
   }
 
@@ -1516,6 +1634,40 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       action.run();
       return true;
     },
+    getActions(ids) {
+      assertUsable();
+      const input = ids === undefined ? selection.ids : typeof ids === 'string' ? [ids] : ids;
+      if (!Array.isArray(input) || input.some((id) => typeof id !== 'string')) {
+        throw new TypeError(
+          'Argumen ids pada board.getActions wajib berupa string atau array string.',
+        );
+      }
+      const targets: Readonly<ElementRecord>[] = [];
+      for (const id of new Set(input as readonly string[])) {
+        const el = board.getElement(id);
+        if (el) targets.push(el);
+      }
+      const lists: Map<string, ElementAction>[] = [];
+      for (const el of targets) {
+        const list = actionsOf(el);
+        if (!list) return [];
+        lists.push(list);
+      }
+      const [firstList] = lists;
+      if (!firstList) return [];
+      const merged: ElementAction[] = [];
+      for (const [id, first] of firstList) {
+        if (!lists.every((list) => list.has(id))) continue;
+        merged.push(
+          mergeAction(
+            first,
+            targets.map((el, i) => [el, lists[i]!.get(id)!] as const),
+          ),
+        );
+      }
+      return Object.freeze(merged);
+    },
+    toolStyles: toolStyles.api,
     get disposed(): boolean {
       return disposed;
     },
@@ -1727,6 +1879,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
         commands.clear();
         tools.clear();
         brushes.clear();
+        toolStyles.clear();
         history.dispose();
         store.dispose();
       }

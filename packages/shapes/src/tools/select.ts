@@ -17,6 +17,7 @@ import {
   type ResizeHandle,
   type SnapGuide,
   type ToolContext,
+  type ToolKeyEvent,
   type ToolPointerEvent,
   type TransformResult,
 } from '@kujam/core';
@@ -152,6 +153,25 @@ function pressed(e: ToolPointerEvent): boolean {
   return e.button === 0;
 }
 
+function plainKey(e: ToolKeyEvent, key: string): boolean {
+  const m = e.modifiers;
+  return e.key === key && !e.repeat && !m.shift && !m.alt && !m.ctrl && !m.meta;
+}
+
+/**
+ * Enter on a single selected element does what a double click does, for example opening the text
+ * editor of a sticky (BOARD-1902). Returns `false` (key not handled) when there is nothing to edit.
+ */
+function editSelected(ctx: Ctx, e: ToolKeyEvent): false | void {
+  if (!plainKey(e, 'Enter')) return false;
+  const { board } = ctx;
+  if (board.readOnly || board.selection.length !== 1) return false;
+  const el = board.getElement(board.selection[0]!);
+  const onDoubleClick = el && !el.locked ? board.elements.get(el.type)?.onDoubleClick : undefined;
+  if (!el || !onDoubleClick) return false;
+  onDoubleClick(el as never, board.elementContext);
+}
+
 /**
  * Select tool (BOARD-502).
  *
@@ -162,7 +182,8 @@ function pressed(e: ToolPointerEvent): boolean {
  * - Dragging a selected element moves the selection, snapping to other elements and the grid
  *   (Ctrl/Cmd turns snapping off).
  * - Dragging a handle resizes (Shift keeps the ratio) or rotates (Shift snaps to 15 degrees).
- * - Double click forwards to the element type's `onDoubleClick`.
+ * - Double click forwards to the element type's `onDoubleClick`; so does Enter on a single
+ *   selected, unlocked element (BOARD-1902). Other keys are left unhandled.
  * - Esc (or pointer cancel) rolls back the interaction and restores the previous selection.
  * - Wheel scrolls, Ctrl/Cmd+wheel and pinch zoom.
  *
@@ -218,6 +239,7 @@ export const selectTool = defineTool({
         }
         return 'pointing';
       },
+      onKeyDown: editSelected,
       onWheel: (ctx, e) => handleWheel(ctx.board, e),
       onPinch: (ctx, e) => handlePinch(ctx.board, e),
     },

@@ -79,6 +79,13 @@ export interface ThemeSelectionTokens {
   readonly brushStroke: string;
   /** Hover outline color. */
   readonly hoverStroke: string;
+  /**
+   * Keyboard focus ring color (DESIGN.md `focus-ring`): a 2px ring 2px outside the focused element
+   * (BOARD-1902, BOARD-1904). Falls back to `stroke` when omitted.
+   *
+   * @beta
+   */
+  readonly focusRing?: string;
 }
 
 /**
@@ -136,6 +143,7 @@ export const DEFAULT_LIGHT_THEME: Readonly<ThemeDefinition> = Object.freeze({
     brushFill: 'rgba(47, 111, 219, 0.08)',
     brushStroke: 'rgba(47, 111, 219, 0.8)',
     hoverStroke: 'rgba(47, 111, 219, 0.5)',
+    focusRing: '#2F6FDB',
   }),
   typography: Object.freeze({
     fontFamily: 'Plus Jakarta Sans, ui-sans-serif, system-ui, sans-serif',
@@ -183,6 +191,7 @@ export const DEFAULT_DARK_THEME: Readonly<ThemeDefinition> = Object.freeze({
     brushFill: 'rgba(47, 111, 219, 0.12)',
     brushStroke: 'rgba(47, 111, 219, 0.8)',
     hoverStroke: 'rgba(47, 111, 219, 0.5)',
+    focusRing: '#6EA0F0',
   }),
   typography: Object.freeze({
     fontFamily: 'Plus Jakarta Sans, ui-sans-serif, system-ui, sans-serif',

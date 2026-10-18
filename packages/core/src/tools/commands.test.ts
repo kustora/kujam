@@ -186,6 +186,34 @@ describe('registri perintah (BOARD-503)', () => {
     expect(board.getDocument().records['page:main']?.meta).toEqual({});
   });
 
+  it('BOARD-1902: repeatable commands also run on key auto-repeat', () => {
+    expect(() =>
+      defineCommand({ id: 'contoh.a', label: 'a', run: () => {}, repeatable: 'ya' as never }),
+    ).toThrow(/repeatable/);
+    let runs = 0;
+    const board = createBoard({
+      platform: 'other',
+      keybindings: { ArrowRight: 'contoh.held', ArrowLeft: 'contoh.once' },
+    });
+    board.commands.register({
+      id: 'contoh.held',
+      label: 'a',
+      repeatable: true,
+      run: () => void runs++,
+    });
+    board.commands.register({ id: 'contoh.once', label: 'b', run: () => void runs++ });
+    const held = (k: string) => ({
+      type: 'key-down' as const,
+      key: k,
+      code: k,
+      repeat: true,
+      modifiers: { shift: false, alt: false, ctrl: false, meta: false },
+    });
+    expect(board.dispatch(held('ArrowRight'))).toBe(true);
+    expect(board.dispatch(held('ArrowLeft'))).toBe(false);
+    expect(runs).toBe(1);
+  });
+
   it('registri per board, tanpa state global', () => {
     const a = createBoard();
     const b = createBoard();

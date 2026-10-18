@@ -30,15 +30,30 @@ Renderer mengisi elemen wadahnya, jadi wadah wajib punya ukuran.
 ### 3. Buat papan dan pasang renderer
 
 ```ts
-import { createBoard } from '@kujam/core';
+import { createBoard, defaultCommands } from '@kujam/core';
 import { mountRenderer } from '@kujam/renderer';
-import { defaultElements, defaultTools } from '@kujam/shapes';
+import { attachTextEditor, defaultElements, defaultTools } from '@kujam/shapes';
 
-const board = createBoard({ locale: 'id', plugins: [defaultElements, defaultTools] });
+const board = createBoard({
+  locale: 'id',
+  plugins: [defaultCommands, defaultElements, defaultTools],
+});
 const view = mountRenderer(board, document.getElementById('board')!, { theme: 'light' });
+attachTextEditor(view); // edit teks sticky, teks, dan bentuk (klik dua kali atau Enter)
 ```
 
 Sampai di sini papan sudah bisa dipakai. Shortcut bawaan: `V` pilih, `H` tangan, `S` sticky, `P` pena, `T` teks, `R` kotak, `O` elips, `E` hapus. Ctrl/Cmd+C, X, dan V menyalin dan menempel antar papan.
+
+Papan bisa dipakai penuh tanpa mouse (`defaultCommands`), dan pembaca layar membaca daftar elemen tersembunyi yang dibuat renderer:
+
+| Tombol                     | Aksi                                                                                                        |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `Tab` / `Shift+Tab`        | Pindah ke elemen berikutnya / sebelumnya (urutan baca: atas ke bawah, kiri ke kanan); kamera mengikuti      |
+| Panah / `Shift`+panah      | Geser elemen terpilih 1 px / 10 px                                                                          |
+| `Enter`                    | Dengan tool pilih: edit elemen terpilih. Dengan tool sticky, teks, atau bentuk: buat elemen di tengah layar |
+| `Esc`                      | Keluar dari editor, lalu kembali ke tool pilih, lalu lepas pilihan                                          |
+| `Esc` lalu `Tab`           | Keluar dari papan ke kontrol berikutnya (`Shift+Tab` dari papan juga keluar)                                |
+| `Delete`, `Mod+D`, `Mod+A` | Hapus, duplikat, pilih semua                                                                                |
 
 ### 4. Simpan ke IndexedDB
 

@@ -11,6 +11,7 @@ import type { Geometry } from '../geometry/geometry.js';
 import type { InferShape, ObjectSchema, SchemaResult, SchemaShape } from '../document/schema.js';
 import { object, validate } from '../document/schema.js';
 import type { ThemeDefinition } from '../theme/theme.js';
+import type { ToolStyles } from '../tools/tool-styles.js';
 import type { ElementRecord } from '../types.js';
 
 // ---------- Render context and callbacks ----------
@@ -292,7 +293,34 @@ export interface ElementAction {
   readonly icon?: string;
   readonly group?: string;
   isEnabled?(): boolean;
+  /**
+   * Whether the action's choice is the current one, for actions that pick a value such as a color
+   * (BOARD-1108). UIs show it as checked.
+   *
+   * @beta
+   */
+  isActive?(): boolean;
   run(): void;
+}
+
+/**
+ * Context passed to an element's `actions` (BOARD-605, BOARD-1108): the element context plus what
+ * an action needs to change its element. Changes made while an action runs form one undo step.
+ *
+ * @beta
+ */
+export interface ElementActionContext<P = Record<string, unknown>> extends ElementContext {
+  /**
+   * Merges `patch` into the element's props, like `board.update(el.id, { props: patch })`.
+   *
+   * @returns `false` when the update was rejected (for example the element is locked or the props
+   *   fail the type schema).
+   */
+  updateProps(patch: Partial<P>): boolean;
+  /** Brushes registered on the board, in registration order (BOARD-603). */
+  readonly brushes: readonly Readonly<BrushDefinition>[];
+  /** Remembered style per tool, so a style action also applies to the next element (BOARD-1108). */
+  readonly toolStyles: ToolStyles;
 }
 
 /**
@@ -377,14 +405,15 @@ export interface ElementDefinition<
    */
   readonly lod?: ElementLod;
   /**
-   * Element contextual actions (BOARD-605).
+   * Element contextual actions (BOARD-605), for example the style actions of built-in elements
+   * (BOARD-1108). Collected and merged for a selection with `board.getActions`.
    *
    * @beta
    */
   actions?(
     el: ElementRecord<InferShape<S>>,
     data: D | undefined,
-    ctx: ElementContext,
+    ctx: ElementActionContext<InferShape<S>>,
   ): readonly ElementAction[];
   /**
    * Placeholder when the resolver fails (BOARD-1202).

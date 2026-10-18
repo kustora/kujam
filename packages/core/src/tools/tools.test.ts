@@ -749,6 +749,47 @@ describe('event keyboard, wheel, dan pinch', () => {
     board.setTool('select');
     expect(board.dispatch(key('key-down', 'a', 'KeyA'))).toBe(false);
   });
+
+  it('BOARD-1902: a key handler returning false leaves the key unhandled', () => {
+    const seen: string[] = [];
+    const tool = defineTool({
+      id: 'enter-only',
+      initial: 'idle',
+      states: {
+        idle: {
+          onKeyDown: (_c, e) => {
+            seen.push(e.key);
+            if (e.key !== 'Enter') return false;
+            return 'active';
+          },
+          onKeyUp: () => false,
+          // `false` from non-key handlers is ignored: the event still counts as handled.
+          onWheel: () => false as never,
+        },
+        active: {},
+      },
+    });
+    const { board } = setup();
+    board.tools.register(tool);
+    board.setTool('enter-only');
+
+    expect(board.dispatch(key('key-down', 'Tab', 'Tab'))).toBe(false);
+    expect(board.toolState).toBe('idle');
+    expect(board.dispatch(key('key-up', 'Tab', 'Tab'))).toBe(false);
+    expect(
+      board.dispatch({
+        type: 'wheel',
+        point: { x: 0, y: 0 },
+        screen: { x: 0, y: 0 },
+        deltaX: 0,
+        deltaY: 1,
+        modifiers: NO_MODS,
+      }),
+    ).toBe(true);
+    expect(board.dispatch(key('key-down', 'Enter', 'Enter'))).toBe(true);
+    expect(board.toolState).toBe('active');
+    expect(seen).toEqual(['Tab', 'Enter']);
+  });
 });
 
 describe('siklus hidup', () => {

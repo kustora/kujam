@@ -34,6 +34,14 @@ export interface CommandDefinition<A = unknown> {
    * or camera commands are still possible.
    */
   readonly run: (board: Board, args: A | undefined) => void;
+  /**
+   * Whether a shortcut bound to this command also runs on key auto-repeat (a held key), for
+   * example moving the selection with the arrow keys (BOARD-1902). Defaults to `false`, so a held
+   * shortcut runs once.
+   *
+   * @beta
+   */
+  readonly repeatable?: boolean;
 }
 
 /**
@@ -101,6 +109,9 @@ function collectCommandErrors(definition: unknown): string[] {
   if (typeof def.run !== 'function') errors.push('run wajib berupa fungsi.');
   if (def.isEnabled !== undefined && typeof def.isEnabled !== 'function') {
     errors.push('isEnabled wajib berupa fungsi.');
+  }
+  if (def.repeatable !== undefined && typeof def.repeatable !== 'boolean') {
+    errors.push('repeatable wajib berupa boolean.');
   }
   return errors;
 }

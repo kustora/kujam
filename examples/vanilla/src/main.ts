@@ -1,16 +1,20 @@
-import { attachStorage, createBoard } from '@kujam/core';
+import { attachStorage, createBoard, defaultCommands } from '@kujam/core';
 import { mountRenderer } from '@kujam/renderer';
-import { defaultElements, defaultTools } from '@kujam/shapes';
+import { attachTextEditor, defaultElements, defaultTools } from '@kujam/shapes';
 import { createIndexedDbStorage } from '@kujam/storage-indexeddb';
 import { mountDefaultUi } from '@kujam/ui';
 
-// 1. Board with the built-in elements and tools.
-const board = createBoard({ locale: 'id', plugins: [defaultElements, defaultTools] });
+// 1. Board with the built-in commands (shortcuts and keyboard navigation), elements, and tools.
+const board = createBoard({
+  locale: 'id',
+  plugins: [defaultCommands, defaultElements, defaultTools],
+});
 board.setTool('select');
 
-// 2. Mount the renderer into a sized element.
+// 2. Mount the renderer into a sized element, with the inline text editor (double click or Enter).
 const container = document.getElementById('board')!;
-mountRenderer(board, container, { theme: 'light' });
+const view = mountRenderer(board, container, { theme: 'light' });
+attachTextEditor(view);
 
 // 3. Load from IndexedDB, then save automatically after every change (debounced).
 const adapter = createIndexedDbStorage({ databaseName: 'kujam-example-vanilla' });

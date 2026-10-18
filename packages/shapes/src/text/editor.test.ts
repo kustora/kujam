@@ -172,6 +172,46 @@ describe('Inline HTML contenteditable rich text editor (BOARD-1003b, 1003c, 1003
       attachment.detach();
     });
 
+    it('does not touch the selection when the editor closes before it gets focus', () => {
+      vi.useFakeTimers();
+      try {
+        const connectedHost: TextEditorHost = {
+          board,
+          mountEditor: (editor) => {
+            document.body.append(editor);
+            return () => editor.remove();
+          },
+        };
+        const attachment = attachTextEditor(connectedHost);
+        board.create({
+          id: 'fast',
+          type: 'sticky',
+          x: 0,
+          y: 0,
+          w: 192,
+          h: 144,
+          props: { text: [{ insert: 'Cepat\n' }], color: 'yellow', authorId: null },
+        });
+
+        attachment.edit('fast');
+        const editor = document.querySelector<HTMLElement>('[data-kujam-inline-editor="fast"]')!;
+        // Esc before the deferred focus runs, as when a user creates and leaves at once.
+        editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        expect(editor.isConnected).toBe(false);
+
+        const selection = document.getSelection()!;
+        const selectAll = vi.spyOn(selection, 'selectAllChildren');
+        const collapse = vi.spyOn(selection, 'collapseToEnd');
+        expect(() => vi.runAllTimers()).not.toThrow();
+        // Browsers throw from collapseToEnd on an empty selection; the closed editor is skipped.
+        expect(selectAll).not.toHaveBeenCalled();
+        expect(collapse).not.toHaveBeenCalled();
+        attachment.detach();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('guards IME composition: Escape during isComposing does not exit edit mode', () => {
       const attachment = attachTextEditor(host);
 

@@ -511,11 +511,13 @@ export function attachTextEditor(
 
     // Focus editor and select all text
     setTimeout(() => {
+      // The editor may already be closed (for example Esc right after creating an element).
+      if (!editor.isConnected) return;
       editor.focus();
       const sel = doc.getSelection();
       if (sel) {
         sel.selectAllChildren(editor);
-        sel.collapseToEnd();
+        if (sel.rangeCount > 0) sel.collapseToEnd();
       }
     }, 0);
   }

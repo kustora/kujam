@@ -115,25 +115,29 @@ afterEach(() => {
 describe('BOARD-801: mountRenderer', () => {
   it('stacks the main canvas, HTML layer, and overlay canvas in one root', () => {
     const { view, container } = setup();
-    const { root, canvas, html, overlay } = view.layers;
+    const { root, canvas, html, a11y, overlay } = view.layers;
 
     expect(container.children).toHaveLength(1);
     expect(container.firstElementChild).toBe(root);
-    expect([...root.children]).toEqual([canvas, html, overlay]);
+    // The accessibility tree (BOARD-1901) sits between the HTML layer and the overlay.
+    expect([...root.children]).toEqual([canvas, html, a11y, overlay]);
     expect(canvas.tagName).toBe('CANVAS');
     expect(html.tagName).toBe('DIV');
+    expect(a11y.tagName).toBe('DIV');
     expect(overlay.tagName).toBe('CANVAS');
-    expect([canvas, html, overlay].map((el) => el.dataset.kujamLayer)).toEqual([
+    expect([canvas, html, a11y, overlay].map((el) => el.dataset.kujamLayer)).toEqual([
       'canvas',
       'html',
+      'a11y',
       'overlay',
     ]);
-    for (const layer of [canvas, html, overlay]) {
+    for (const layer of [canvas, html, a11y, overlay]) {
       expect(layer.style.position).toBe('absolute');
     }
     // Only the main canvas receives input; the layers above let pointer events through.
     expect(canvas.style.pointerEvents).toBe('');
     expect(html.style.pointerEvents).toBe('none');
+    expect(a11y.style.pointerEvents).toBe('none');
     expect(overlay.style.pointerEvents).toBe('none');
     expect(root.style.overflow).toBe('hidden');
     expect(view.mounted).toBe(true);

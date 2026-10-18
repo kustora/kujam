@@ -7,7 +7,8 @@ import type { GeoKind } from '../elements/geo.js';
 import { createBoxTool, type BoxToolData, type BoxToolState } from './box-tool.js';
 
 /**
- * Creates a shape creation tool for the specified geometric kind.
+ * Creates a shape creation tool for the specified geometric kind. New shapes get the style
+ * remembered under `board.toolStyles` key `geo`, shared by every shape tool (BOARD-1108).
  *
  * @public
  */
@@ -23,6 +24,8 @@ export function createGeoTool(
     minSize: { w: 10, h: 10 },
     lockAspectWithShift: true,
     props: { geo: kind },
+    // Every shape tool remembers one shared shape style (BOARD-1108).
+    styleId: 'geo',
   });
 }
 

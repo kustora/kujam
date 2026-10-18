@@ -48,6 +48,20 @@ const card = define({
   migrate: { 0: (props) => ({ ...props, size: 'm' }) },
   a11y: (el, _data, ctx) => ({ role: 'article', label: `${ctx.locale}: ${el.props.refId}` }),
   export: { text: (el) => el.props.note ?? el.props.refId },
+  // BOARD-1108: the action context's `updateProps` is typed with the element's props.
+  actions: (el, _data, ctx) => [
+    {
+      id: 'style.size.s',
+      label: 'S',
+      isActive: () => el.props.size === 's',
+      run: () => {
+        ctx.updateProps({ size: 's' });
+        // @ts-expect-error: not one of the size values
+        ctx.updateProps({ size: 'xl' });
+        ctx.toolStyles.set('contact-card', { size: 's' });
+      },
+    },
+  ],
 });
 
 // Element with external data: `D` is inferred from `resolve`.

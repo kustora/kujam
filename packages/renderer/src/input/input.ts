@@ -95,6 +95,13 @@ function midpoint(p1: Point, p2: Point): Point {
 export interface AttachInputOptions {
   onHover?: (id: string | null) => void;
   onEvent?: (event: BoardInputEvent) => void;
+  /**
+   * Called before a `keydown` is sent to the board; `false` skips the board and keeps the
+   * browser's default action (BOARD-1902, for example Tab leaving the board).
+   */
+  filterKey?: (e: KeyboardEvent) => boolean;
+  /** Called after a `keydown` was sent to the board (or skipped), with whether it was handled. */
+  afterKey?: (e: KeyboardEvent, handled: boolean) => void;
 }
 
 /**
@@ -547,6 +554,10 @@ export function attachInput(
   function onKeyDown(e: KeyboardEvent): void {
     // Only capture keyboard when the board is focused
     if (!root.contains(document.activeElement)) return;
+    if (options?.filterKey && !options.filterKey(e)) {
+      options.afterKey?.(e, false);
+      return;
+    }
 
     const handled = dispatch({
       type: 'key-down',
@@ -560,6 +571,7 @@ export function attachInput(
     if (handled) {
       e.preventDefault();
     }
+    options?.afterKey?.(e, handled);
   }
 
   function onKeyUp(e: KeyboardEvent): void {

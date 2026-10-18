@@ -7,6 +7,7 @@ import {
   STICKY_TEXT_COLOR,
 } from '../colors.js';
 import { a11yLabel, localize } from '../i18n.js';
+import { stickyActions } from '../styles.js';
 import { EMPTY_RICH_TEXT, isRichTextEmpty, richTextSchema, richTextToPlainText } from '../richtext.js';
 
 const PADDING = 16;
@@ -62,5 +63,6 @@ export const stickyElement = defineElement({
     const kind = localize({ id: `Sticky ${color}`, en: `${color} sticky` }, ctx.locale);
     return { role: 'note', label: a11yLabel(kind, richTextToPlainText(el.props.text)) };
   },
+  actions: (el, _data, ctx) => stickyActions(el, ctx),
   export: { text: (el) => richTextToPlainText(el.props.text) },
 });

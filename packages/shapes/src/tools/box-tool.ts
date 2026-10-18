@@ -10,7 +10,9 @@ import {
   type Point,
   type ToolContext,
   type ToolDefinition,
+  type ToolKeyEvent,
 } from '@kujam/core';
+import { rememberedProps } from '../styles.js';
 import { handlePinch, handleWheel } from './navigation.js';
 
 export const DRAG_THRESHOLD_PX = 4;
@@ -29,7 +31,13 @@ export interface BoxToolOptions<P = Record<string, unknown>> {
   readonly type: string;
   readonly cursor?: string;
   readonly defaultSize: { readonly w: number; readonly h: number };
+  /** Fixed props of every new element; they win over the remembered style. */
   readonly props?: Partial<P> | ((board: Board) => Partial<P>);
+  /**
+   * `board.toolStyles` key whose style new elements get (BOARD-1108). Defaults to `id`; tools that
+   * are variants of one another can share one, as the built-in shape tools share `geo`.
+   */
+  readonly styleId?: string;
   readonly minSize?: { readonly w: number; readonly h: number };
   readonly lockAspectWithShift?: boolean;
   readonly onCreated?: (el: ElementRecord<P>, ctx: ToolContext<BoxToolState, BoxToolData>) => void;
@@ -38,6 +46,41 @@ export interface BoxToolOptions<P = Record<string, unknown>> {
 function highestIndex(board: Board): string | null {
   const elements = board.query();
   return elements.length > 0 ? (elements[elements.length - 1]?.index ?? null) : null;
+}
+
+/** Props of a new element: type defaults, then the remembered tool style, then fixed props. */
+function newProps<P>(board: Board, options: BoxToolOptions<P>): P {
+  const def = board.elements.get(options.type);
+  const fixed = typeof options.props === 'function' ? options.props(board) : (options.props ?? {});
+  return {
+    ...(def?.defaults ?? {}),
+    ...rememberedProps(board, options.styleId ?? options.id, options.type),
+    ...fixed,
+  } as P;
+}
+
+/** New element record of the tool's type at the given box, with the tool's props. */
+function buildElement<P>(
+  board: Board,
+  options: BoxToolOptions<P>,
+  box: { x: number; y: number; w: number; h: number },
+): ElementRecord<P> {
+  const def = board.elements.get(options.type);
+  return {
+    id: board.createId(),
+    kind: 'element',
+    type: options.type,
+    pageId: board.pages.current,
+    parentId: null,
+    index: indexAbove(highestIndex(board)),
+    ...box,
+    rotation: 0,
+    locked: false,
+    opacity: 1,
+    props: newProps(board, options),
+    typeVersion: def?.version ?? 1,
+    meta: {},
+  };
 }
 
 function initialData(): BoxToolData {
@@ -52,8 +95,9 @@ function initialData(): BoxToolData {
 /**
  * Creates a tool definition that places or drags a box-shaped element (BOARD-913).
  *
- * Click creates an element at default size, dragging creates an element with the dragged bounds.
- * Remains active until Esc.
+ * Click creates an element at default size, dragging creates an element with the dragged bounds,
+ * and Enter creates one at default size in the center of the viewport (BOARD-1902). Other keys
+ * are left unhandled. Remains active until Esc.
  *
  * @internal
  */
@@ -62,6 +106,27 @@ export function createBoxTool<P = Record<string, unknown>>(
 ): ToolDefinition<BoxToolState, BoxToolData> {
   const minW = options.minSize?.w ?? 10;
   const minH = options.minSize?.h ?? 10;
+  type Ctx = ToolContext<BoxToolState, BoxToolData>;
+
+  /** Creates an element of the default size with its top-left corner at `x`, `y`, and selects it. */
+  function place(ctx: Ctx, x: number, y: number): void {
+    const { board } = ctx;
+    const el = buildElement(board, options, { x, y, ...options.defaultSize });
+    ctx.change((tx) => tx.put(el as unknown as ElementRecord), { label: options.id });
+    board.select([el.id]);
+    options.onCreated?.(el, ctx);
+  }
+
+  /** Enter places an element of the default size at the viewport center (BOARD-1902). */
+  function placeAtCenter(ctx: Ctx, e: ToolKeyEvent): false | void {
+    const m = e.modifiers;
+    if (e.key !== 'Enter' || e.repeat || m.shift || m.alt || m.ctrl || m.meta) return false;
+    const { board } = ctx;
+    const { width, height } = board.camera.viewport;
+    if (board.readOnly || width <= 0 || height <= 0) return false;
+    const center = board.camera.screenToBoard({ x: width / 2, y: height / 2 });
+    place(ctx, center.x - options.defaultSize.w / 2, center.y - options.defaultSize.h / 2);
+  }
 
   return defineTool<BoxToolState, BoxToolData>({
     id: options.id,
@@ -79,6 +144,7 @@ export function createBoxTool<P = Record<string, unknown>>(
           data.dragged = false;
           return 'pointing';
         },
+        onKeyDown: placeAtCenter,
         onWheel: (ctx, e) => handleWheel(ctx.board, e),
         onPinch: (ctx, e) => handlePinch(ctx.board, e),
       },
@@ -92,33 +158,7 @@ export function createBoxTool<P = Record<string, unknown>>(
           if (!data.dragged) {
             if (travel < DRAG_THRESHOLD_PX) return;
             data.dragged = true;
-
-            const def = board.elements.get(options.type);
-            const propsObj =
-              typeof options.props === 'function' ? options.props(board) : (options.props ?? {});
-            const mergedProps = {
-              ...(def?.defaults ?? {}),
-              ...propsObj,
-            } as P;
-
-            const el: ElementRecord<P> = {
-              id: board.createId(),
-              kind: 'element',
-              type: options.type,
-              pageId: board.pages.current,
-              parentId: null,
-              index: indexAbove(highestIndex(board)),
-              x: data.start.x,
-              y: data.start.y,
-              rotation: 0,
-              w: minW,
-              h: minH,
-              locked: false,
-              opacity: 1,
-              props: mergedProps,
-              typeVersion: def?.version ?? 1,
-              meta: {},
-            };
+            const el = buildElement(board, options, { ...data.start, w: minW, h: minH });
             data.element = el as unknown as ElementRecord;
           }
 
@@ -152,35 +192,7 @@ export function createBoxTool<P = Record<string, unknown>>(
 
           if (!data.dragged) {
             // Click to create default size
-            const def = board.elements.get(options.type);
-            const propsObj =
-              typeof options.props === 'function' ? options.props(board) : (options.props ?? {});
-            const mergedProps = {
-              ...(def?.defaults ?? {}),
-              ...propsObj,
-            } as P;
-
-            const el: ElementRecord<P> = {
-              id: board.createId(),
-              kind: 'element',
-              type: options.type,
-              pageId: board.pages.current,
-              parentId: null,
-              index: indexAbove(highestIndex(board)),
-              x: data.start.x,
-              y: data.start.y,
-              rotation: 0,
-              w: options.defaultSize.w,
-              h: options.defaultSize.h,
-              locked: false,
-              opacity: 1,
-              props: mergedProps,
-              typeVersion: def?.version ?? 1,
-              meta: {},
-            };
-            ctx.change((tx) => tx.put(el as unknown as ElementRecord), { label: options.id });
-            board.select([el.id]);
-            options.onCreated?.(el, ctx);
+            place(ctx, data.start.x, data.start.y);
           } else if (data.element) {
             board.select([data.element.id]);
             options.onCreated?.(data.element as unknown as ElementRecord<P>, ctx);

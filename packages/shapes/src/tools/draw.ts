@@ -15,6 +15,7 @@ import {
 import { COLOR_VALUES, type ColorKey } from '../colors.js';
 import { MAX_DRAW_POINTS } from '../elements/draw.js';
 import { chunkPoints, simplifyPoints } from '../elements/stroke-utils.js';
+import { rememberedProps } from '../styles.js';
 import { handlePinch, handleWheel } from './navigation.js';
 
 export interface ActiveStroke {
@@ -35,9 +36,14 @@ export interface DrawToolData {
   brush: string;
 }
 
+/**
+ * Options of {@link createDrawTool}. `color`, `thickness`, and `brush` are the starting style; the
+ * style remembered for the tool in `board.toolStyles` wins over them (BOARD-1108).
+ */
 export interface DrawToolOptions {
   readonly id?: string;
   readonly color?: ColorKey;
+  /** Stroke thickness. Defaults to the brush's `strokeOptions.size`, else 4. */
   readonly thickness?: number;
   readonly brush?: string;
 }
@@ -45,6 +51,22 @@ export interface DrawToolOptions {
 function highestIndex(board: Board): string | null {
   const elements = board.query();
   return elements.length > 0 ? (elements[elements.length - 1]?.index ?? null) : null;
+}
+
+/**
+ * Applies the tool's current style to `data` (BOARD-1108): the remembered style, then the tool
+ * options, then the brush's default size for the thickness.
+ */
+function applyStyle(board: Board, toolId: string, data: DrawToolData, options?: DrawToolOptions) {
+  const style = rememberedProps(board, toolId, 'draw') as {
+    color?: ColorKey;
+    thickness?: number;
+    brush?: string;
+  };
+  data.color = style.color ?? options?.color ?? 'black';
+  data.brush = style.brush ?? options?.brush ?? 'pen';
+  data.thickness =
+    style.thickness ?? options?.thickness ?? board.brushes.get(data.brush)?.strokeOptions.size ?? 4;
 }
 
 function initialData(options?: DrawToolOptions): () => DrawToolData {
@@ -82,6 +104,7 @@ export function createDrawTool(
         onPointerDown(ctx, e) {
           if (e.button !== 0) return;
           const { data } = ctx;
+          applyStyle(ctx.board, toolId, data, options);
           const pressure = e.pressure || 0.5;
           data.points = [[e.point.x, e.point.y, pressure]];
           data.activeStroke = {

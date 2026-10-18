@@ -45,6 +45,68 @@ const order = (board: Board) => board.query().map((el) => el.id);
 const indexes = (board: Board) =>
   Object.fromEntries(board.query().map((el) => [el.id, el.index] as const));
 
+describe('BOARD-505: undo and redo commands', () => {
+  function twoSteps(platform: 'mac' | 'other' = 'other'): Board {
+    const board = createBoard({ plugins: [notes, defaultCommands], platform });
+    board.create({ id: 'a', type: 'note' });
+    board.create({ id: 'b', type: 'note' });
+    return board;
+  }
+
+  it('Mod+Z undoes, Shift+Mod+Z and Mod+Y redo', () => {
+    const board = twoSteps();
+    expect(board.dispatch(keyDown('z', 'KeyZ', { ctrl: true }))).toBe(true);
+    expect(order(board)).toEqual(['a']);
+    // Shift turns the key into `'Z'`; Mod+Z must not match it, or this would undo again.
+    expect(board.dispatch(keyDown('Z', 'KeyZ', { ctrl: true, shift: true }))).toBe(true);
+    expect(order(board)).toEqual(['a', 'b']);
+    board.undo();
+    expect(board.dispatch(keyDown('y', 'KeyY', { ctrl: true }))).toBe(true);
+    expect(order(board)).toEqual(['a', 'b']);
+  });
+
+  it('uses Cmd on macOS', () => {
+    const board = twoSteps('mac');
+    expect(board.dispatch(keyDown('z', 'KeyZ', { ctrl: true }))).toBe(false);
+    expect(board.dispatch(keyDown('z', 'KeyZ', { meta: true }))).toBe(true);
+    expect(order(board)).toEqual(['a']);
+    expect(board.dispatch(keyDown('z', 'KeyZ', { meta: true, shift: true }))).toBe(true);
+    expect(order(board)).toEqual(['a', 'b']);
+    expect(board.keybindings.format(board.keybindings.forTarget('history.redo')[0]!.shortcut)).toBe(
+      '⇧⌘Z',
+    );
+  });
+
+  it('is disabled with nothing to undo or redo, leaving the key to the browser', () => {
+    const board = createBoard({ plugins: [notes, defaultCommands], platform: 'other' });
+    expect(board.commands.isEnabled('history.undo')).toBe(false);
+    expect(board.commands.isEnabled('history.redo')).toBe(false);
+    expect(board.dispatch(keyDown('z', 'KeyZ', { ctrl: true }))).toBe(false);
+    board.create({ id: 'a', type: 'note' });
+    expect(board.commands.isEnabled('history.undo')).toBe(true);
+    expect(board.run('history.undo')).toBe(true);
+    expect(board.commands.isEnabled('history.undo')).toBe(false);
+    expect(board.commands.isEnabled('history.redo')).toBe(true);
+    expect(board.run('history.redo')).toBe(true);
+    expect(order(board)).toEqual(['a']);
+
+    const ro = setup(true);
+    expect(ro.commands.isEnabled('history.undo')).toBe(false);
+    expect(ro.commands.isEnabled('history.redo')).toBe(false);
+  });
+
+  it('ignores the shortcuts while typing in a text input', () => {
+    const board = twoSteps();
+    const typing = (event: ToolKeyEvent): ToolKeyEvent => ({ ...event, inTextInput: true });
+    expect(board.dispatch(typing(keyDown('z', 'KeyZ', { ctrl: true })))).toBe(false);
+    expect(order(board)).toEqual(['a', 'b']);
+    board.undo();
+    expect(board.dispatch(typing(keyDown('Z', 'KeyZ', { ctrl: true, shift: true })))).toBe(false);
+    expect(board.dispatch(typing(keyDown('y', 'KeyY', { ctrl: true })))).toBe(false);
+    expect(order(board)).toEqual(['a']);
+  });
+});
+
 describe('BOARD-505: layer commands', () => {
   it('bring-forward moves the selection up past one sibling and changes only its index', () => {
     const board = setup();
@@ -253,5 +315,140 @@ describe('BOARD-505: zoom commands', () => {
 
     board.clearSelection();
     expect(board.commands.isEnabled('camera.zoom-to-selection')).toBe(false);
+  });
+});
+
+describe('BOARD-1902: keyboard navigation commands', () => {
+  const tab = (shift = false) => keyDown('Tab', 'Tab', { shift });
+  const arrow = (key: string, shift = false, repeat = false): ToolKeyEvent => ({
+    ...keyDown(key, key, { shift }),
+    repeat,
+  });
+
+  it('Tab and Shift+Tab move the selection through the reading order', () => {
+    const board = setup();
+    // Notes a..e sit in one row, left to right.
+    expect(board.dispatch(tab())).toBe(true);
+    expect(board.selection).toEqual(['a']);
+    board.dispatch(tab());
+    board.dispatch(tab());
+    expect(board.selection).toEqual(['c']);
+    expect(board.dispatch(tab(true))).toBe(true);
+    expect(board.selection).toEqual(['b']);
+  });
+
+  it('follows reading position, not the layer order', () => {
+    const board = setup();
+    board.update('a', { y: 500 });
+    board.select('e');
+    board.dispatch(tab());
+    expect(board.selection).toEqual(['a']);
+  });
+
+  it('leaves Tab to the browser at the last element and Shift+Tab at the first', () => {
+    const board = setup();
+    board.select('e');
+    expect(board.commands.isEnabled('selection.next')).toBe(false);
+    expect(board.dispatch(tab())).toBe(false);
+    expect(board.selection).toEqual(['e']);
+
+    board.select('a');
+    expect(board.dispatch(tab(true))).toBe(false);
+    board.clearSelection();
+    expect(board.dispatch(tab(true))).toBe(false);
+
+    const empty = createBoard({ plugins: [notes, defaultCommands] });
+    expect(empty.dispatch(tab())).toBe(false);
+  });
+
+  it('continues from the most recently selected element of a multi-selection', () => {
+    const board = setup();
+    board.select(['d', 'b']);
+    board.dispatch(tab());
+    expect(board.selection).toEqual(['c']);
+  });
+
+  it('the camera follows the focused element', () => {
+    const board = setup();
+    board.camera.setViewport({ width: 250, height: 200 });
+    board.select('b');
+    board.dispatch(tab());
+    expect(board.selection).toEqual(['c']);
+    // c spans 200..300; the viewport is 250 wide with 48 px padding.
+    expect(board.camera.get()).toMatchObject({ x: 300 + 48 - 250, y: 0, zoom: 1 });
+  });
+
+  it('also navigates read-only boards and locked elements', () => {
+    const ro = setup(true);
+    ro.dispatch(tab());
+    expect(ro.selection).toEqual(['a']);
+    const board = setup();
+    board.update('b', { locked: true });
+    board.select('a');
+    board.dispatch(tab());
+    expect(board.selection).toEqual(['b']);
+  });
+
+  it('Esc clears the selection only when the tool has nothing to cancel', () => {
+    const board = setup();
+    expect(board.dispatch(keyDown('Escape', 'Escape'))).toBe(false);
+    board.select(['a', 'b']);
+    expect(board.dispatch(keyDown('Escape', 'Escape'))).toBe(true);
+    expect(board.selection).toEqual([]);
+  });
+
+  it('arrow keys nudge the selection by 1 unit and Shift+arrow by 10', () => {
+    const board = setup();
+    board.select(['b', 'c']);
+    expect(board.dispatch(arrow('ArrowRight'))).toBe(true);
+    expect(board.dispatch(arrow('ArrowDown', true))).toBe(true);
+    expect(board.getElement('b')).toMatchObject({ x: 101, y: 10 });
+    expect(board.getElement('c')).toMatchObject({ x: 201, y: 10 });
+    board.dispatch(arrow('ArrowLeft', true));
+    board.dispatch(arrow('ArrowUp'));
+    expect(board.getElement('b')).toMatchObject({ x: 91, y: 9 });
+    board.run('element.nudge-left', { distance: 50 });
+    expect(board.getElement('b')).toMatchObject({ x: 41 });
+  });
+
+  it('a held arrow key repeats, and a run of nudges is one undo step', () => {
+    const board = setup();
+    board.select('a');
+    board.dispatch(arrow('ArrowRight'));
+    for (let i = 0; i < 4; i++) expect(board.dispatch(arrow('ArrowRight', false, true))).toBe(true);
+    expect(board.getElement('a')).toMatchObject({ x: 5 });
+    board.undo();
+    expect(board.getElement('a')).toMatchObject({ x: 0 });
+  });
+
+  it('does not nudge locked elements, read-only boards, or an empty selection', () => {
+    const board = setup();
+    expect(board.dispatch(arrow('ArrowRight'))).toBe(false);
+    board.update('a', { locked: true });
+    board.select(['a', 'b']);
+    board.dispatch(arrow('ArrowRight'));
+    expect(board.getElement('a')).toMatchObject({ x: 0 });
+    expect(board.getElement('b')).toMatchObject({ x: 101 });
+
+    const ro = setup(true);
+    ro.select('a');
+    expect(ro.dispatch(arrow('ArrowRight'))).toBe(false);
+    expect(ro.getElement('a')).toMatchObject({ x: 0 });
+  });
+
+  it('keeps the existing shortcuts and binds no letters', () => {
+    const board = setup();
+    const targets = Object.fromEntries(board.keybindings.list().map((b) => [b.shortcut, b.target]));
+    expect(targets).toMatchObject({
+      Tab: 'selection.next',
+      'Shift+Tab': 'selection.previous',
+      Escape: 'selection.clear',
+      ArrowLeft: 'element.nudge-left',
+      'Shift+ArrowDown': 'element.nudge-down-large',
+      Delete: 'element.delete',
+      'Mod+D': 'element.duplicate',
+    });
+    // Letters stay free for tool shortcuts (v, h, s, p, t, r, o, e in @kujam/shapes).
+    expect(Object.keys(targets).filter((s) => /^[a-z]$/i.test(s))).toEqual([]);
   });
 });

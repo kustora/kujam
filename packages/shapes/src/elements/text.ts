@@ -2,6 +2,7 @@ import { defineElement, enumOf, rect, schema } from '@kujam/core';
 import { drawRichText, layoutRichText } from '../canvas.js';
 import { COLOR_KEYS, COLOR_VALUES } from '../colors.js';
 import { a11yLabel, localize } from '../i18n.js';
+import { textActions } from '../styles.js';
 import { EMPTY_RICH_TEXT, isRichTextEmpty, richTextSchema, richTextToPlainText } from '../richtext.js';
 
 /** @internal */
@@ -64,5 +65,6 @@ export const textElement = defineElement({
       richTextToPlainText(el.props.text),
     ),
   }),
+  actions: (el, _data, ctx) => textActions(el, ctx),
   export: { text: (el) => richTextToPlainText(el.props.text) },
 });

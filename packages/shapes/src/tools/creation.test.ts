@@ -405,3 +405,86 @@ describe('BOARD-913: Element creation tools', () => {
     });
   });
 });
+
+describe('BOARD-1902: creating and editing without a mouse', () => {
+  const enter = (mods: Partial<InputModifiers> = {}, repeat = false) => ({
+    type: 'key-down' as const,
+    key: 'Enter',
+    code: 'Enter',
+    repeat,
+    modifiers: { ...MODS, ...mods },
+  });
+  const edits = (board: Board) => {
+    const ids: unknown[] = [];
+    board.on('action', (e) => {
+      if (e.name === 'edit') ids.push((e.payload as { id: string }).id);
+    });
+    return ids;
+  };
+
+  it('Enter with a creation tool places a default-size element at the viewport center', () => {
+    const board = setup();
+    board.camera.set({ x: 500, y: -200, zoom: 2 });
+    const editIds = edits(board);
+    board.setTool('sticky');
+    expect(board.dispatch(enter())).toBe(true);
+    const [sticky] = board.query({ type: 'sticky' });
+    // Viewport 1000×1000 at zoom 2 shows 500..1000 × -200..300: center (750, 50).
+    expect(sticky).toMatchObject({ x: 750 - 96, y: 50 - 72, w: 192, h: 144 });
+    expect(board.selection).toEqual([sticky!.id]);
+    expect(editIds).toEqual([sticky!.id]);
+    expect(board.tool).toBe('sticky');
+    board.undo();
+    expect(board.query({ type: 'sticky' })).toHaveLength(0);
+
+    board.setTool('rectangle');
+    board.dispatch(enter());
+    expect(board.query({ type: 'geo' })[0]).toMatchObject({ x: 700, y: 0, w: 100, h: 100 });
+  });
+
+  it('other keys, modified Enter, and a held Enter stay unhandled', () => {
+    const board = setup();
+    board.setTool('text');
+    expect(board.dispatch({ ...enter(), key: 'Tab', code: 'Tab' })).toBe(false);
+    expect(board.dispatch(enter({ shift: true }))).toBe(false);
+    expect(board.dispatch(enter({}, true))).toBe(false);
+    expect(board.query()).toHaveLength(0);
+  });
+
+  it('Enter with the select tool edits the single selected element', () => {
+    const board = setup();
+    const editIds = edits(board);
+    board.setTool('select');
+    const sticky = board.create({ type: 'sticky', x: 0, y: 0, w: 192, h: 144 })!;
+    const draw = board.create({
+      type: 'draw',
+      x: 300,
+      y: 0,
+      w: 10,
+      h: 10,
+      props: {
+        points: [
+          [0, 0, 0.5],
+          [10, 10, 0.5],
+        ],
+        color: 'black',
+        thickness: 4,
+        brush: 'pen',
+      },
+    })!;
+
+    expect(board.dispatch(enter())).toBe(false); // nothing selected
+    board.select(sticky.id);
+    expect(board.dispatch(enter())).toBe(true);
+    expect(editIds).toEqual([sticky.id]);
+
+    board.select([sticky.id, draw.id]);
+    expect(board.dispatch(enter())).toBe(false);
+    board.select(draw.id); // no `onDoubleClick`: nothing to edit
+    expect(board.dispatch(enter())).toBe(false);
+    board.update(sticky.id, { locked: true });
+    board.select(sticky.id);
+    expect(board.dispatch(enter())).toBe(false);
+    expect(editIds).toHaveLength(1);
+  });
+});

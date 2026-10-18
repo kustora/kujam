@@ -51,12 +51,26 @@ export function labelButton(
   button.after(createTooltip(button.ownerDocument, label, shortcut));
 }
 
+/** A labelled group of menu entries, for menus with several choices (BOARD-1402). */
+export interface MenuGroup {
+  readonly id: string;
+  readonly label: string;
+  /** `swatches` lays the entries out as a grid of color swatches. Defaults to `list`. */
+  readonly layout?: 'list' | 'swatches';
+  /** Swatches per row. Defaults to 5. */
+  readonly columns?: number;
+}
+
 /** One entry of a {@link PopupMenu}. */
 export interface MenuEntry {
   readonly id: string;
   readonly label: string;
   readonly shortcut?: string | undefined;
   readonly icon?: Node | null;
+  /** Group the entry belongs to; consecutive entries of one group share a `role="group"`. */
+  readonly group?: MenuGroup;
+  /** CSS color of a swatch entry; its label is then only its accessible name and tooltip. */
+  readonly swatch?: string;
   /** For radio menus: whether this entry is the current choice. */
   readonly checked?: boolean;
   readonly disabled?: boolean;
@@ -110,8 +124,9 @@ export function createMenu(
     const list = items();
     const index = list.indexOf(e.target as HTMLButtonElement);
     let next = -1;
-    if (e.key === 'ArrowDown') next = (index + 1) % list.length;
-    else if (e.key === 'ArrowUp') next = (index - 1 + list.length) % list.length;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next = (index + 1) % list.length;
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft')
+      next = (index - 1 + list.length) % list.length;
     else if (e.key === 'Home') next = 0;
     else if (e.key === 'End') next = list.length - 1;
     else if (e.key === 'Escape') {
@@ -136,20 +151,48 @@ export function createMenu(
     },
     setEntries(entries) {
       element.replaceChildren();
+      let parent: HTMLElement = element;
+      let group: MenuGroup | undefined;
       for (const entry of entries) {
+        if (entry.group?.id !== group?.id) {
+          group = entry.group;
+          parent = element;
+          if (group) {
+            parent = doc.createElement('div');
+            parent.className = 'group';
+            parent.dataset.group = group.id;
+            parent.setAttribute('role', 'group');
+            parent.setAttribute('aria-label', group.label);
+            const heading = doc.createElement('div');
+            heading.className = 'group-label';
+            heading.setAttribute('aria-hidden', 'true');
+            heading.textContent = group.label;
+            const body = doc.createElement('div');
+            body.className = group.layout === 'swatches' ? 'swatches' : 'entries';
+            if (group.columns) body.style.setProperty('--kujam-ui-columns', String(group.columns));
+            parent.append(heading, body);
+            element.append(parent);
+            parent = body;
+          }
+        }
         const el = doc.createElement('button');
         el.type = 'button';
-        el.className = 'option';
+        el.className = entry.swatch === undefined ? 'option' : 'option swatch';
         el.tabIndex = -1;
         el.dataset.id = entry.id;
         el.disabled = Boolean(entry.disabled);
         el.setAttribute('role', options.radio ? 'menuitemradio' : 'menuitem');
         if (options.radio) el.setAttribute('aria-checked', String(Boolean(entry.checked)));
         el.setAttribute('aria-label', accessibleName(entry.label, entry.shortcut));
-        if (entry.icon) el.append(entry.icon);
-        const text = doc.createElement('span');
-        text.textContent = entry.label;
-        el.append(text);
+        if (entry.swatch !== undefined) {
+          el.title = entry.label;
+          el.style.setProperty('--kujam-ui-swatch', entry.swatch);
+        } else {
+          if (entry.icon) el.append(entry.icon);
+          const text = doc.createElement('span');
+          text.textContent = entry.label;
+          el.append(text);
+        }
         if (entry.shortcut) {
           const kbd = doc.createElement('kbd');
           kbd.setAttribute('aria-hidden', 'true');
@@ -160,7 +203,7 @@ export function createMenu(
           menu.close(true);
           entry.select();
         });
-        element.append(el);
+        parent.append(el);
       }
     },
     open(focusId) {
@@ -254,6 +297,46 @@ export const CONTROL_CSS = `
   }
   .option[aria-checked='true'] {
     color: var(--kujam-ui-focus-ring);
+  }
+  .group + .group {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid var(--kujam-ui-border);
+  }
+  .group-label {
+    padding: 4px 8px;
+    color: var(--kujam-ui-ink-muted);
+  }
+  .entries {
+    display: flex;
+    flex-direction: column;
+  }
+  .swatches {
+    display: grid;
+    grid-template-columns: repeat(var(--kujam-ui-columns, 5), 32px);
+    gap: 4px;
+    padding: 4px;
+  }
+  .option.swatch {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+  }
+  .option.swatch::before {
+    content: '';
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--kujam-ui-swatch);
+    box-shadow: inset 0 0 0 1px var(--kujam-ui-border-strong);
+  }
+  .option.swatch[aria-checked='true']::before {
+    box-shadow:
+      inset 0 0 0 1px var(--kujam-ui-border-strong),
+      0 0 0 2px var(--kujam-ui-surface),
+      0 0 0 4px var(--kujam-ui-focus-ring);
   }
   .option kbd {
     margin-left: auto;

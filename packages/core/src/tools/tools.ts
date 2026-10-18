@@ -165,7 +165,9 @@ export interface ToolContext<S extends string = string, D = Record<string, unkno
 
 /**
  * Handlers for one state. Event handlers may return the next state name; with no return
- * value, the tool stays in the same state.
+ * value, the tool stays in the same state. Key handlers may also return `false` to leave the key
+ * unhandled (BOARD-1902): `board.dispatch` then returns `false`, so the renderer keeps the
+ * browser's default action, for example Tab moving focus out of the board.
  *
  * @beta
  */
@@ -179,8 +181,8 @@ export interface ToolStateDefinition<S extends string = string, D = Record<strin
   readonly onPointerDown?: (ctx: ToolContext<S, D>, event: ToolPointerEvent) => S | void;
   readonly onPointerMove?: (ctx: ToolContext<S, D>, event: ToolPointerEvent) => S | void;
   readonly onPointerUp?: (ctx: ToolContext<S, D>, event: ToolPointerEvent) => S | void;
-  readonly onKeyDown?: (ctx: ToolContext<S, D>, event: ToolKeyEvent) => S | void;
-  readonly onKeyUp?: (ctx: ToolContext<S, D>, event: ToolKeyEvent) => S | void;
+  readonly onKeyDown?: (ctx: ToolContext<S, D>, event: ToolKeyEvent) => S | void | false;
+  readonly onKeyUp?: (ctx: ToolContext<S, D>, event: ToolKeyEvent) => S | void | false;
   readonly onWheel?: (ctx: ToolContext<S, D>, event: ToolWheelEvent) => S | void;
   readonly onPinch?: (ctx: ToolContext<S, D>, event: ToolPinchEvent) => S | void;
 }
@@ -432,7 +434,7 @@ export interface ToolRuntime {
   clear(): void;
 }
 
-type Handler = (ctx: ToolContext, event?: BoardInputEvent) => string | void;
+type Handler = (ctx: ToolContext, event?: BoardInputEvent) => string | void | false;
 
 const HANDLER_FOR: Record<BoardInputEvent['type'], keyof ToolStateDefinition | null> = {
   'pointer-down': 'onPointerDown',
@@ -481,7 +483,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
     a: Active,
     key: K,
     event?: BoardInputEvent,
-  ): string | void {
+  ): string | void | false {
     const handler = stateDef(a)[key] as Handler | undefined;
     return handler?.(a.ctx, event);
   }
@@ -528,8 +530,8 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
     a.data = makeData(a.definition);
   }
 
-  function transition(a: Active, next: string | void, depth = 0): void {
-    if (next === undefined || next === a.state || active !== a) return;
+  function transition(a: Active, next: string | void | false, depth = 0): void {
+    if (next === undefined || next === false || next === a.state || active !== a) return;
     if (!Object.hasOwn(a.definition.states, next)) {
       throw new ToolError(
         'unknown-state',
@@ -672,10 +674,13 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
     const key = HANDLER_FOR[event.type];
     if (!key || !stateDef(a)[key]) return false;
     const wasIdle = a.state === a.definition.initial;
+    let handled = true;
     guarded(a, () => {
       const gen = a.generation;
       const next = call(a, key, event);
-      if (active === a && gen === a.generation) transition(a, next);
+      // Only key handlers may decline an event; `false` from other handlers is ignored.
+      if (next === false) handled = !(event.type === 'key-down' || event.type === 'key-up');
+      else if (active === a && gen === a.generation) transition(a, next);
       // Changes in the initial state (for example a single click to place an element) are committed immediately.
       if (active === a && a.state === a.definition.initial) interaction.commit(a.definition.id);
     });
@@ -687,7 +692,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
     ) {
       a.pointerId = event.pointerId;
     }
-    return true;
+    return handled;
   }
 
   const api: BoardTools = {

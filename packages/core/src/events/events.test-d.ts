@@ -13,6 +13,7 @@ import type {
   SelectionEvent,
   ThemeDefinition,
   ToolEvent,
+  ToolStyleEvent,
 } from '../index.js';
 
 type Equal<A, B> =
@@ -30,6 +31,7 @@ export type Tests = [
       | 'selection'
       | 'camera'
       | 'tool'
+      | 'tool-style'
       | 'page'
       | 'action'
       | 'error'
@@ -42,6 +44,7 @@ export type Tests = [
   Expect<Equal<BoardEventMap['selection'], SelectionEvent>>,
   Expect<Equal<BoardEventMap['camera'], CameraEvent>>,
   Expect<Equal<BoardEventMap['tool'], ToolEvent>>,
+  Expect<Equal<BoardEventMap['tool-style'], ToolStyleEvent>>,
   Expect<Equal<BoardEventMap['page'], PageEvent>>,
   Expect<Equal<BoardEventMap['action'], ActionEvent>>,
   Expect<Equal<BoardEventMap['error'], BoardErrorEvent>>,

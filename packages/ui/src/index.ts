@@ -10,7 +10,13 @@ import { createToolbarClass } from './toolbar.js';
 import { createHistoryControlClass, createZoomControlClass } from './zoom.js';
 
 export type { KujamUiElement } from './base.js';
-export { buildToolbarItems, type ToolbarItem, type ToolbarOption } from './toolbar.js';
+export {
+  buildToolbarItems,
+  type ToolbarItem,
+  type ToolbarOption,
+  type ToolbarStyleGroup,
+  type ToolbarStyleOption,
+} from './toolbar.js';
 export { UI_ICON_NAMES } from './icons.js';
 export { nextZoomStep, ZOOM_STEPS } from './zoom.js';
 export { uiToken, type UiTokenName } from './theme.js';
