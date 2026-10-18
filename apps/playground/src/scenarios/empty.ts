@@ -1,5 +1,5 @@
-import { createBoard, type Board } from '@kujam/core';
-import { mountRenderer } from '@kujam/renderer';
+import { createBoard, defaultCommands, type Board } from '@kujam/core';
+import { mountRenderer, type BoardBackground } from '@kujam/renderer';
 import {
   attachTextEditor,
   defaultElements,
@@ -7,6 +7,7 @@ import {
   DEFAULT_ELEMENT_TYPES,
   DEFAULT_TOOL_IDS,
 } from '@kujam/shapes';
+import { mountDefaultUi, type MountedUi } from '@kujam/ui';
 import { h, json, section } from '../dom.js';
 import { defineScenario } from '../scenario.js';
 
@@ -170,18 +171,57 @@ function seedDemoElements(board: Board): void {
 export default defineScenario({
   id: 'empty',
   title: 'Papan interaktif',
-  description: 'Papan whiteboard lengkap dengan elemen bawaan, tool interaktif, dan inline editor.',
+  description: 'Papan whiteboard lengkap dengan elemen bawaan, bilah UI @kujam/ui, dan inline editor.',
   order: 0,
   layout: 'board',
-  mount({ main, controls, debug }) {
+  mount({ main, controls, debug, state }) {
     const board = createBoard({
       locale: 'id',
-      plugins: [defaultElements, defaultTools],
+      plugins: [defaultCommands, defaultElements, defaultTools],
     });
 
+    if (state.get('theme') === 'dark') {
+      board.setTheme('dark');
+    }
+
+    const backgroundOrder = ['dots', 'grid', 'none'] as const;
+    const backgroundLabels = {
+      dots: '⋯ Latar: Titik',
+      grid: '▦ Latar: Grid',
+      none: '▢ Latar: Polos',
+    } as const;
+    const initialBg = state.get('bg');
+    const background: BoardBackground =
+      initialBg && backgroundOrder.includes(initialBg as (typeof backgroundOrder)[number])
+        ? (initialBg as (typeof backgroundOrder)[number])
+        : 'dots';
+
     // Mount canvas renderer and attach inline text editor
-    const view = mountRenderer(board, main);
+    const view = mountRenderer(board, main, { background });
     const textEditor = attachTextEditor(view);
+
+    // Mount floating @kujam/ui controls over the board
+    let ui: MountedUi | null = null;
+    const setUiEnabled = (enabled: boolean) => {
+      if (enabled && !ui) {
+        ui = mountDefaultUi({ board, container: main });
+      } else if (!enabled && ui) {
+        ui.unmount();
+        ui = null;
+      }
+      uiBtn.textContent = ui ? '🎨 UI: Aktif' : '🎨 UI: Nonaktif';
+      state.set('ui', ui ? null : '0');
+    };
+
+    const uiBtn = h(
+      'button',
+      {
+        type: 'button',
+        onclick: () => setUiEnabled(!ui),
+      },
+      '🎨 UI: Aktif',
+    );
+    setUiEnabled(state.get('ui') !== '0');
 
     // Initial tool
     board.setTool('select');
@@ -247,31 +287,33 @@ export default defineScenario({
     const historyRow = h('div', { class: 'row' }, undoBtn, redoBtn);
 
     // Theme Toggle
-    let isDark = false;
     const themeBtn = h(
       'button',
       {
         type: 'button',
         onclick: () => {
-          isDark = !isDark;
-          board.setTheme(isDark ? 'dark' : 'light');
-          themeBtn.textContent = isDark ? '🌙 Tema: Gelap' : '☀️ Tema: Terang';
+          const next = board.theme.mode === 'light' ? 'dark' : 'light';
+          board.setTheme(next);
+          state.set('theme', next === 'light' ? null : next);
         },
       },
-      '☀️ Tema: Terang',
+      board.theme.mode === 'dark' ? '🌙 Tema: Gelap' : '☀️ Tema: Terang',
     );
+    const offTheme = board.on('theme', (theme) => {
+      themeBtn.textContent = theme.mode === 'dark' ? '🌙 Tema: Gelap' : '☀️ Tema: Terang';
+    });
 
     // Board background (BOARD-1007)
-    const backgroundLabels = { dots: '⋯ Latar: Titik', grid: '▦ Latar: Grid', none: '▢ Latar: Polos' } as const;
-    const backgroundOrder = ['dots', 'grid', 'none'] as const;
     const backgroundBtn = h(
       'button',
       {
         type: 'button',
         onclick: () => {
-          const next = backgroundOrder[(backgroundOrder.indexOf(view.background) + 1) % backgroundOrder.length]!;
+          const next =
+            backgroundOrder[(backgroundOrder.indexOf(view.background) + 1) % backgroundOrder.length]!;
           view.background = next;
           backgroundBtn.textContent = backgroundLabels[next];
+          state.set('bg', next === 'dots' ? null : next);
         },
       },
       backgroundLabels[view.background],
@@ -308,13 +350,15 @@ export default defineScenario({
       section('Tool Aktif', toolContainer),
       section('Navigasi & Zoom', navRow),
       section('Riwayat', historyRow),
-      section('Tampilan', h('div', { class: 'row wrap' }, themeBtn, backgroundBtn)),
+      section('Tampilan', h('div', { class: 'row wrap' }, uiBtn, themeBtn, backgroundBtn)),
       section('Aksi', h('div', { class: 'row wrap' }, resetSampleBtn, clearBtn)),
       section(
         'Petunjuk Interaksi',
         h(
           'ul',
           { class: 'muted', style: 'padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13px;' },
+          h('li', {}, 'Bilah UI mengambang (@kujam/ui): toolbar bawah tengah, kontrol riwayat (kiri), dan zoom (kanan).'),
+          h('li', {}, 'Pilih warna sticky atau kuas pena langsung dari tombol toolbar.'),
           h('li', {}, 'Klik elemen untuk memilih dan menggeser.'),
           h('li', {}, 'Shift + Drag sudut handle untuk mengunci rasio aspek.'),
           h('li', {}, 'Klik 2x pada sticky, teks, atau bentuk untuk mengedit teks secara inline.'),
@@ -354,12 +398,15 @@ export default defineScenario({
 
     return () => {
       offTool();
+      offTheme();
       offChange();
       offCamera();
       offSelection();
       textEditor.detach();
+      ui?.unmount();
       view.unmount();
       board.dispose();
     };
   },
 });
+
