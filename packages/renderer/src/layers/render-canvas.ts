@@ -12,6 +12,7 @@ import type {
   ElementRecord,
 } from '@kujam/core';
 import { compareIndex, computeElementAABB } from '@kujam/core';
+import { BackgroundPainter, type BoardBackground } from './background.js';
 
 /**
  * Statistics for the last rendered canvas frame (BOARD-802).
@@ -190,6 +191,11 @@ export class CanvasRenderer {
     fullRedraw: false,
   });
 
+  private readonly backgroundPainter = new BackgroundPainter();
+
+  /** Background pattern painted under the elements (BOARD-1007). */
+  background: BoardBackground = 'dots';
+
   constructor(private readonly board: Board) {}
 
   /** Marks the entire viewport dirty (e.g. camera move, zoom, page change, resize). */
@@ -296,6 +302,14 @@ export class CanvasRenderer {
       // Full redraw with viewport culling
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      this.backgroundPainter.paint(
+        ctx,
+        { x: 0, y: 0, w: canvas.width, h: canvas.height },
+        camera,
+        pixelRatio,
+        this.board.theme.canvas,
+        this.background,
+      );
 
       const visible = [...this.board.query({ inBounds: viewportBounds })];
       visible.sort((a, b) => comparePaintOrder(this.board.getDocument(), a, b));
@@ -330,6 +344,14 @@ export class CanvasRenderer {
         ctx.rect(screenMinX, screenMinY, w, h);
         ctx.clip();
         ctx.clearRect(screenMinX, screenMinY, w, h);
+        this.backgroundPainter.paint(
+          ctx,
+          { x: screenMinX, y: screenMinY, w, h },
+          camera,
+          pixelRatio,
+          this.board.theme.canvas,
+          this.background,
+        );
 
         const elements = [...this.board.query({ inBounds: dirty })];
         elements.sort((a, b) => comparePaintOrder(this.board.getDocument(), a, b));

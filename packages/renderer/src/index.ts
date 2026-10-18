@@ -8,6 +8,7 @@ export {
   mountRenderer,
   clampPixelRatio,
   SAFARI_MAX_CANVAS_PIXELS,
+  type BoardBackground,
   type BoardView,
   type EditorBounds,
   type OverlayRenderStats,
@@ -15,6 +16,7 @@ export {
   type RendererOptions,
   type RenderStats,
 } from './mount.js';
+export { MIN_GRID_SCREEN_SPACING } from './layers/background.js';
 export {
   OverlayRenderer,
   BRUSH_FILL_COLOR,

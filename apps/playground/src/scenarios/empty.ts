@@ -261,6 +261,22 @@ export default defineScenario({
       '☀️ Tema: Terang',
     );
 
+    // Board background (BOARD-1007)
+    const backgroundLabels = { dots: '⋯ Latar: Titik', grid: '▦ Latar: Grid', none: '▢ Latar: Polos' } as const;
+    const backgroundOrder = ['dots', 'grid', 'none'] as const;
+    const backgroundBtn = h(
+      'button',
+      {
+        type: 'button',
+        onclick: () => {
+          const next = backgroundOrder[(backgroundOrder.indexOf(view.background) + 1) % backgroundOrder.length]!;
+          view.background = next;
+          backgroundBtn.textContent = backgroundLabels[next];
+        },
+      },
+      backgroundLabels[view.background],
+    );
+
     // Reset / Seed Buttons
     const resetSampleBtn = h(
       'button',
@@ -292,7 +308,7 @@ export default defineScenario({
       section('Tool Aktif', toolContainer),
       section('Navigasi & Zoom', navRow),
       section('Riwayat', historyRow),
-      section('Tampilan', themeBtn),
+      section('Tampilan', h('div', { class: 'row wrap' }, themeBtn, backgroundBtn)),
       section('Aksi', h('div', { class: 'row wrap' }, resetSampleBtn, clearBtn)),
       section(
         'Petunjuk Interaksi',

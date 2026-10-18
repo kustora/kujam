@@ -15,10 +15,12 @@ import { HtmlLayer, type EditorBounds } from './layers/html-layer.js';
 import { attachInput } from './input/input.js';
 import { CanvasRenderer, type RenderStats } from './layers/render-canvas.js';
 import { OverlayRenderer, type OverlayRenderStats } from './layers/overlay.js';
+import { assertBackground, type BoardBackground } from './layers/background.js';
 
 export type { RenderStats } from './layers/render-canvas.js';
 export type { OverlayRenderStats } from './layers/overlay.js';
 export type { EditorBounds } from './layers/html-layer.js';
+export type { BoardBackground } from './layers/background.js';
 
 /**
  * Options for {@link mountRenderer}.
@@ -42,6 +44,11 @@ export interface RendererOptions {
    * When provided, updates `board.setTheme(theme)`.
    */
   readonly theme?: ThemeMode | ThemeDefinition;
+  /**
+   * Board background pattern: `none`, `dots`, or `grid` (BOARD-1007). Defaults to `dots`, with
+   * the theme's `canvas.gridDot` color and `canvas.gridSpacing`.
+   */
+  readonly background?: BoardBackground;
 }
 
 /**
@@ -105,6 +112,12 @@ export interface BoardView {
   readonly theme: Readonly<ThemeDefinition>;
   /** Changes the active whiteboard theme (BOARD-1006). */
   setTheme(theme: ThemeMode | ThemeDefinition): void;
+  /**
+   * Board background pattern (BOARD-1007). Assigning a new value repaints the view.
+   *
+   * @throws `RangeError` when assigned a value other than `none`, `dots`, or `grid`.
+   */
+  background: BoardBackground;
   /**
    * Removes the DOM layers and releases the `ResizeObserver`, board listeners, and any pending
    * animation frame. Safe to call more than once. Also runs automatically when the board is
@@ -229,6 +242,9 @@ export function mountRenderer(
   let targetPixelRatio = resolvePixelRatio(options, win);
   let effectivePixelRatio = targetPixelRatio;
 
+  const initialBackground =
+    options.background === undefined ? 'dots' : assertBackground(options.background);
+
   if (options.theme !== undefined) {
     board.setTheme(options.theme);
   }
@@ -283,6 +299,7 @@ export function mountRenderer(
 
   let debug = Boolean(options.debug);
   const canvasRenderer = new CanvasRenderer(board);
+  canvasRenderer.background = initialBackground;
 
   function updateEffectivePixelRatio(): void {
     effectivePixelRatio = clampPixelRatio(size.width, size.height, targetPixelRatio);
@@ -442,6 +459,16 @@ export function mountRenderer(
     },
     setTheme(theme: ThemeMode | ThemeDefinition): void {
       board.setTheme(theme);
+    },
+    get background() {
+      return canvasRenderer.background;
+    },
+    set background(value: BoardBackground) {
+      const next = assertBackground(value);
+      if (next === canvasRenderer.background) return;
+      canvasRenderer.background = next;
+      canvasRenderer.markAllDirty();
+      scheduleRender();
     },
     mountEditor: (editor, bounds) => htmlLayer.mountEditor(editor, bounds),
     requestRender,
