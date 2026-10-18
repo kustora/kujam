@@ -1,6 +1,6 @@
 # Mulai cepat: JS/TS biasa
 
-Contoh ini memasang papan Canvas Jam tanpa framework: papan dengan elemen dan tool bawaan, toolbar kecil, dan simpan otomatis ke IndexedDB. Target: papan jalan di browser kurang dari 10 menit.
+Contoh ini memasang papan Canvas Jam tanpa framework: papan dengan elemen dan tool bawaan, toolbar dari `@kujam/ui`, dan simpan otomatis ke IndexedDB. Target: papan jalan di browser kurang dari 10 menit.
 
 ## Jalankan contoh ini
 
@@ -16,7 +16,7 @@ Buka alamat yang dicetak Vite (biasanya `http://localhost:5173`). Pilih **Sticky
 ### 1. Pasang package
 
 ```bash
-npm install @kujam/core @kujam/renderer @kujam/shapes @kujam/storage-indexeddb
+npm install @kujam/core @kujam/renderer @kujam/shapes @kujam/storage-indexeddb @kujam/ui
 ```
 
 ### 2. Siapkan elemen berukuran
@@ -52,9 +52,15 @@ await storage.ready; // dokumen tersimpan sudah dimuat
 
 Setiap perubahan disimpan otomatis setelah jeda singkat. Pantau status dengan `storage.on('save:success' | 'save:error', ...)`. Di Safari mode privat, adapter jatuh ke memori dan memberi peringatan sekali.
 
-### 5. Hubungkan tombol sendiri
+### 5. Tambahkan toolbar
 
-Semua kontrol memakai API publik `board`:
+```ts
+import { mountDefaultUi } from '@kujam/ui';
+
+const ui = mountDefaultUi({ board, container: document.getElementById('board')! });
+```
+
+Toolbar melayang di bawah tengah, mengikuti tema papan, dan bisa dipakai penuh dengan keyboard (Tab ke toolbar, panah kiri/kanan, panah atas untuk pilihan bentuk). Butuh tombol sendiri? Semua kontrol memakai API publik `board`:
 
 ```ts
 board.setTool('sticky');
@@ -65,11 +71,10 @@ board.on('tool', (e) => console.log('tool aktif:', e.id));
 board.on('history', (e) => console.log('bisa undo:', e.canUndo));
 ```
 
-Lihat `src/main.ts` untuk toolbar lengkap dengan status tombol aktif, undo/redo, dan zoom.
-
 ### 6. Bersihkan
 
 ```ts
+ui.unmount(); // lepas toolbar
 view.unmount(); // lepas DOM dan listener renderer
 board.dispose(); // simpan terakhir lalu lepas semua listener
 ```

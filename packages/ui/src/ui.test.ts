@@ -1,0 +1,337 @@
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it } from 'vitest';
+import {
+  createBoard,
+  defineCommand,
+  definePlugin,
+  defineTool,
+  type Board,
+  type BoardOptions,
+} from '@kujam/core';
+import {
+  buildToolbarItems,
+  defineUiElements,
+  mountDefaultUi,
+  UI_TAGS,
+  type KujamUiElement,
+} from './index.js';
+import { createIcon } from './icons.js';
+
+const tool = (id: string) => defineTool({ id, initial: 'idle', states: { idle: {} } });
+
+const builtInTools = definePlugin({
+  id: 'built-in-tools',
+  tools: ['select', 'hand', 'sticky', 'draw', 'rectangle', 'ellipse', 'text', 'eraser', 'geo'].map(
+    tool,
+  ),
+  keybindings: {
+    v: 'tool:select',
+    h: 'tool:hand',
+    s: 'tool:sticky',
+    p: 'tool:draw',
+    r: 'tool:rectangle',
+    o: 'tool:ellipse',
+    t: 'tool:text',
+    e: 'tool:eraser',
+  },
+});
+
+let boards: Board[] = [];
+
+afterEach(() => {
+  for (const board of boards) if (!board.disposed) board.dispose();
+  boards = [];
+  document.body.innerHTML = '';
+});
+
+function newBoard(options: BoardOptions = {}): Board {
+  const board = createBoard({ plugins: [builtInTools], ...options });
+  board.setTool('select');
+  boards.push(board);
+  return board;
+}
+
+function mountToolbar(board: Board): KujamUiElement {
+  defineUiElements();
+  const el = document.createElement(UI_TAGS.toolbar);
+  el.board = board;
+  document.body.append(el);
+  return el;
+}
+
+function buttons(el: KujamUiElement): HTMLButtonElement[] {
+  return [...el.shadowRoot!.querySelectorAll<HTMLButtonElement>('button.tool')];
+}
+
+function button(el: KujamUiElement, item: string): HTMLButtonElement {
+  return el.shadowRoot!.querySelector<HTMLButtonElement>(`button[data-item="${item}"]`)!;
+}
+
+function key(target: Element, k: string, init: KeyboardEventInit = {}): void {
+  target.dispatchEvent(
+    new KeyboardEvent('keydown', { key: k, bubbles: true, composed: true, ...init }),
+  );
+}
+
+describe('BOARD-1402: buildToolbarItems', () => {
+  it('lists registered built-in tools in DESIGN.md order with shortcuts', () => {
+    const items = buildToolbarItems(newBoard());
+    expect(items.map((i) => i.id)).toEqual([
+      'select',
+      'hand',
+      'sticky',
+      'draw',
+      'shape',
+      'text',
+      'eraser',
+    ]);
+    expect(items[0]).toMatchObject({ label: 'Pilih', shortcut: 'V', toolId: 'select' });
+    const shape = items.find((i) => i.id === 'shape')!;
+    expect(shape.options!.map((o) => [o.toolId, o.shortcut])).toEqual([
+      ['rectangle', 'R'],
+      ['ellipse', 'O'],
+    ]);
+  });
+
+  it('uses the board locale', () => {
+    const items = buildToolbarItems(newBoard({ locale: 'en' }));
+    expect(items.map((i) => i.label)).toContain('Select');
+  });
+
+  it('skips tools that are not registered and collapses a single shape variant', () => {
+    const board = createBoard({
+      plugins: [definePlugin({ id: 'few', tools: [tool('select'), tool('rectangle')] })],
+    });
+    boards.push(board);
+    const items = buildToolbarItems(board);
+    expect(items.map((i) => i.id)).toEqual(['select', 'rectangle']);
+    expect(items[1]!.options).toBeUndefined();
+  });
+
+  it('adds plugin toolbar items after the built-ins, sorted, and drops unusable ones', () => {
+    const plugin = definePlugin({
+      id: 'extra',
+      tools: [tool('stamp'), tool('laser')],
+      commands: [defineCommand({ id: 'extra.insert', label: 'extra.insert', run: () => {} })],
+      keybindings: { k: 'extra.insert' },
+      toolbarItems: [
+        { id: 'laser', label: 'Laser', toolId: 'laser', group: 'b' },
+        { id: 'insert', label: 'Sisipkan', commandId: 'extra.insert', group: 'a', order: 2 },
+        { id: 'stamp', label: 'Stempel', toolId: 'stamp', group: 'a', order: 1 },
+        { id: 'missing-tool', label: 'X', toolId: 'nope' },
+        { id: 'missing-command', label: 'Y', commandId: 'nope' },
+        { id: 'dup', label: 'Pilih lagi', toolId: 'select' },
+      ],
+    });
+    const items = buildToolbarItems(newBoard({ plugins: [builtInTools, plugin] }));
+    const extra = items.filter((i) => i.section === 'plugins');
+    expect(extra.map((i) => i.id)).toEqual(['stamp', 'insert', 'laser']);
+    expect(extra[1]).toMatchObject({ commandId: 'extra.insert', shortcut: 'K', toolId: undefined });
+  });
+});
+
+describe('BOARD-1401: elements', () => {
+  it('defines the elements once and needs a window', () => {
+    defineUiElements();
+    defineUiElements();
+    expect(customElements.get(UI_TAGS.toolbar)).toBeDefined();
+    expect(() => defineUiElements({} as Window)).toThrow();
+  });
+
+  it('follows the board theme', () => {
+    const board = newBoard();
+    const el = mountToolbar(board);
+    expect(el.dataset.theme).toBe('light');
+    board.setTheme('dark');
+    expect(el.dataset.theme).toBe('dark');
+  });
+
+  it('listens only while connected and moves to a new board', () => {
+    const a = newBoard();
+    const el = mountToolbar(a);
+    el.remove();
+    expect(el.shadowRoot!.childElementCount).toBe(0);
+    a.setTool('hand');
+    document.body.append(el);
+    expect(button(el, 'hand').getAttribute('aria-pressed')).toBe('true');
+
+    const b = newBoard();
+    el.board = b;
+    a.setTool('select');
+    expect(button(el, 'hand').getAttribute('aria-pressed')).toBe('false');
+    b.setTool('text');
+    expect(button(el, 'text').getAttribute('aria-pressed')).toBe('true');
+
+    el.board = null;
+    expect(el.shadowRoot!.childElementCount).toBe(0);
+  });
+
+  it('clears itself when the board is disposed', () => {
+    const board = newBoard();
+    const el = mountToolbar(board);
+    board.dispose();
+    expect(el.shadowRoot!.childElementCount).toBe(0);
+  });
+});
+
+describe('BOARD-1402: toolbar', () => {
+  it('renders an accessible toolbar with pressed state, labels, and tooltips', () => {
+    const board = newBoard();
+    const el = mountToolbar(board);
+    const bar = el.shadowRoot!.querySelector('[role="toolbar"]')!;
+    expect(bar.getAttribute('aria-label')).toBe('Alat');
+    expect(button(el, 'select').getAttribute('aria-label')).toBe('Pilih (V)');
+    expect(button(el, 'select').getAttribute('aria-pressed')).toBe('true');
+    expect(button(el, 'select').querySelector('svg')).not.toBeNull();
+    const tip = button(el, 'select').nextElementSibling!;
+    expect(tip.getAttribute('aria-hidden')).toBe('true');
+    expect(tip.textContent).toBe('PilihV');
+
+    button(el, 'draw').click();
+    expect(board.tool).toBe('draw');
+    expect(button(el, 'draw').getAttribute('aria-pressed')).toBe('true');
+    expect(button(el, 'select').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('is one tab stop with roving focus', () => {
+    const board = newBoard();
+    const el = mountToolbar(board);
+    const all = buttons(el);
+    expect(all.filter((b) => b.tabIndex === 0)).toEqual([button(el, 'select')]);
+
+    button(el, 'select').focus();
+    key(button(el, 'select'), 'ArrowRight');
+    expect(el.shadowRoot!.activeElement).toBe(button(el, 'hand'));
+    expect(button(el, 'hand').tabIndex).toBe(0);
+    expect(button(el, 'select').tabIndex).toBe(-1);
+
+    key(button(el, 'hand'), 'End');
+    expect(el.shadowRoot!.activeElement).toBe(all.at(-1));
+    key(all.at(-1)!, 'ArrowRight');
+    expect(el.shadowRoot!.activeElement).toBe(all[0]);
+    key(all[0]!, 'ArrowLeft');
+    expect(el.shadowRoot!.activeElement).toBe(all.at(-1));
+    key(all.at(-1)!, 'Home');
+    expect(el.shadowRoot!.activeElement).toBe(all[0]);
+  });
+
+  it('activates the last chosen shape and opens the variant menu when already active', () => {
+    const board = newBoard();
+    const el = mountToolbar(board);
+    const shape = button(el, 'shape');
+    const menu = el.shadowRoot!.querySelector<HTMLElement>('[role="menu"]')!;
+    expect(shape.getAttribute('aria-haspopup')).toBe('menu');
+    expect(shape.getAttribute('aria-label')).toBe('Bentuk: Kotak (R)');
+
+    shape.click();
+    expect(board.tool).toBe('rectangle');
+    expect(menu.hidden).toBe(true);
+
+    shape.click();
+    expect(menu.hidden).toBe(false);
+    expect(shape.getAttribute('aria-expanded')).toBe('true');
+    const options = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
+    expect(options.map((o) => o.getAttribute('aria-checked'))).toEqual(['true', 'false']);
+    expect(el.shadowRoot!.activeElement).toBe(options[0]);
+
+    key(options[0]!, 'ArrowDown');
+    expect(el.shadowRoot!.activeElement).toBe(options[1]);
+    options[1]!.click();
+    expect(board.tool).toBe('ellipse');
+    expect(menu.hidden).toBe(true);
+    expect(el.shadowRoot!.activeElement).toBe(shape);
+    expect(shape.getAttribute('aria-label')).toBe('Bentuk: Elips (O)');
+
+    // The choice is remembered after switching away.
+    button(el, 'select').click();
+    shape.click();
+    expect(board.tool).toBe('ellipse');
+  });
+
+  it('opens the menu with ArrowUp and closes it with Escape or a click outside', () => {
+    const board = newBoard();
+    const el = mountToolbar(board);
+    const shape = button(el, 'shape');
+    const menu = el.shadowRoot!.querySelector<HTMLElement>('[role="menu"]')!;
+
+    shape.focus();
+    key(shape, 'ArrowUp');
+    expect(menu.hidden).toBe(false);
+    key(el.shadowRoot!.activeElement!, 'Escape');
+    expect(menu.hidden).toBe(true);
+    expect(el.shadowRoot!.activeElement).toBe(shape);
+
+    key(shape, 'ArrowUp');
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true, composed: true }));
+    expect(menu.hidden).toBe(true);
+  });
+
+  it('runs plugin commands and disables them when unavailable', () => {
+    let enabled = false;
+    const runs: string[] = [];
+    const plugin = definePlugin({
+      id: 'extra',
+      commands: [
+        defineCommand({
+          id: 'extra.go',
+          label: 'extra.go',
+          isEnabled: () => enabled,
+          run: () => void runs.push('go'),
+        }),
+      ],
+      toolbarItems: [{ id: 'go', label: 'Jalan', commandId: 'extra.go' }],
+    });
+    const board = newBoard({ plugins: [builtInTools, plugin] });
+    const el = mountToolbar(board);
+    expect(el.shadowRoot!.querySelector('[role="separator"]')).not.toBeNull();
+    const go = button(el, 'go');
+    expect(go.disabled).toBe(true);
+    expect(go.hasAttribute('aria-pressed')).toBe(false);
+    expect(go.textContent).toContain('J');
+
+    enabled = true;
+    board.select([]);
+    board.clearSelection();
+    board.setTool('hand');
+    expect(go.disabled).toBe(false);
+    go.click();
+    expect(runs).toEqual(['go']);
+  });
+});
+
+describe('BOARD-1401: icons', () => {
+  it('builds built-in icons and rejects unknown names', () => {
+    expect(createIcon(document, 'select')!.getAttribute('stroke')).toBe('currentColor');
+    expect(createIcon(document, 'nope')).toBeNull();
+    expect(createIcon(document, undefined)).toBeNull();
+  });
+
+  it('keeps only drawing elements and attributes from plugin markup', () => {
+    const svg = createIcon(
+      document,
+      `<svg viewBox="0 0 24 24" onload="alert(1)"><script>alert(1)</script>` +
+        `<path d="M1 1h4" onclick="alert(2)" style="x"/><a href="javascript:alert(3)"><rect x="1"/></a>` +
+        `<circle cx="5" fill="url(http://evil)"/><foreignObject><div/></foreignObject></svg>`,
+    )!;
+    expect(svg.outerHTML).not.toMatch(/script|onload|onclick|javascript|foreignObject|url\(|style/);
+    expect(svg.querySelector('path')!.getAttribute('d')).toBe('M1 1h4');
+    expect(svg.querySelector('circle')!.hasAttribute('fill')).toBe(false);
+    expect(svg.getAttribute('aria-hidden')).toBe('true');
+  });
+});
+
+describe('BOARD-1402: mountDefaultUi', () => {
+  it('floats the toolbar at the bottom center of the container and removes it', () => {
+    const board = newBoard();
+    const container = document.body.appendChild(document.createElement('div'));
+    const ui = mountDefaultUi({ board, container });
+    expect(container.style.position).toBe('relative');
+    expect(ui.toolbar.parentElement).toBe(container);
+    expect(ui.toolbar.style.bottom).toBe('20px');
+    expect(ui.toolbar.board).toBe(board);
+
+    ui.unmount();
+    ui.unmount();
+    expect(container.contains(ui.toolbar)).toBe(false);
+  });
+});

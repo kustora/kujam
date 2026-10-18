@@ -14,7 +14,8 @@
     "@kujam/core": "workspace:*",
     "@kujam/renderer": "workspace:*",
     "@kujam/shapes": "workspace:*",
-    "@kujam/storage-indexeddb": "workspace:*"
+    "@kujam/storage-indexeddb": "workspace:*",
+    "@kujam/ui": "workspace:*"
   },
   "devDependencies": {
     "vite": "^6.2.0"
