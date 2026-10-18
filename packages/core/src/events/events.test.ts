@@ -186,3 +186,18 @@ describe('tanpa state global (BOARD-207)', () => {
     expect(fn).not.toHaveBeenCalled();
   });
 });
+
+describe('board.reportError (BOARD-207, BOARD-810)', () => {
+  it('memancarkan event error dengan kode, pesan, dan cause', () => {
+    const board = createBoard();
+    const errors: any[] = [];
+    board.on('error', (e) => errors.push(e));
+
+    board.reportError('render-error', 'Gagal render elemen test', { id: 'el-1' });
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0].code).toBe('render-error');
+    expect(errors[0].message).toBe('Gagal render elemen test');
+    expect(errors[0].cause).toEqual({ id: 'el-1' });
+  });
+});

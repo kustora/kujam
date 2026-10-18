@@ -371,3 +371,99 @@ describe('BOARD-804: Text Editor Host', () => {
     expect(editorEl.parentElement).toBeNull();
   });
 });
+
+describe('BOARD-810: Error Isolation in HTML Layer', () => {
+  it('catches render.html errors, displays error placeholder, and isolates other elements', () => {
+    let shouldThrowMount = true;
+    let shouldThrowUpdate = false;
+
+    const buggyHtmlElement = defineElement({
+      type: 'buggy-card',
+      version: 1,
+      props: schema({ title: string() }),
+      geometry: (el) => rect(el.w, el.h),
+      render: {
+        html: (host, el) => {
+          if (shouldThrowMount) throw new Error('Boom during html mount!');
+          host.textContent = el.props.title;
+          return {
+            update: (nextEl) => {
+              if (shouldThrowUpdate) throw new Error('Boom during html update!');
+              host.textContent = nextEl.props.title;
+            },
+            destroy: () => {},
+          };
+        },
+      },
+    });
+
+    const plugin = definePlugin({
+      id: 'test-buggy-plugin',
+      elements: [htmlCardElement, buggyHtmlElement],
+    });
+
+    const container = document.body.appendChild(document.createElement('div'));
+    vi.spyOn(container, 'clientWidth', 'get').mockReturnValue(800);
+    vi.spyOn(container, 'clientHeight', 'get').mockReturnValue(600);
+
+    const board = createBoard({ plugins: [plugin] });
+    boards.push(board);
+    const view = mountRenderer(board, container);
+    views.push(view);
+
+    const observer = FakeResizeObserver.instances.at(-1);
+    if (observer) observer.resize(800, 600);
+
+    const errors: any[] = [];
+    board.on('error', (e) => errors.push(e));
+
+    // Create good card and buggy card
+    board.create({ id: 'good-card', type: 'html-card', x: 10, y: 10, w: 100, h: 50, props: { title: 'Good' } });
+    board.create({ id: 'buggy-card', type: 'buggy-card', x: 200, y: 10, w: 100, h: 50, props: { title: 'Buggy' } });
+
+    flushFrames();
+
+    // 1. Good card mounts correctly
+    const elementsHost = view.layers.htmlCamera.children[0] as HTMLElement;
+    const goodHost = elementsHost.querySelector('[data-kujam-element-id="good-card"]');
+    expect(goodHost).not.toBeNull();
+    expect(goodHost?.textContent).toBe('Good');
+
+    // 2. Buggy card mounts with error placeholder
+    const buggyHost = elementsHost.querySelector('[data-kujam-element-id="buggy-card"]');
+    expect(buggyHost).not.toBeNull();
+    expect(buggyHost?.classList.contains('kujam-render-error')).toBe(true);
+    expect(buggyHost?.textContent).toContain('⚠️ buggy-card');
+
+    // 3. Error event emitted once with render-error
+    expect(errors).toHaveLength(1);
+    expect(errors[0].code).toBe('render-error');
+    expect(errors[0].cause.elementId).toBe('buggy-card');
+
+    // 4. Repeated render does not re-emit error
+    view.requestRender();
+    flushFrames();
+    expect(errors).toHaveLength(1);
+
+    // 5. Fixing the mount error on update remounts successfully
+    shouldThrowMount = false;
+    shouldThrowUpdate = false;
+    board.update('buggy-card', { props: { title: 'Fixed Mount' } });
+    flushFrames();
+
+    const remountedHost = elementsHost.querySelector('[data-kujam-element-id="buggy-card"]');
+    expect(remountedHost?.textContent).toBe('Fixed Mount');
+    expect(remountedHost?.classList.contains('kujam-render-error')).toBe(false);
+    expect(errors).toHaveLength(1);
+
+    // 6. When a subsequent update throws, update error is isolated and reported
+    shouldThrowUpdate = true;
+    board.update('buggy-card', { props: { title: 'Broken Update' } });
+    flushFrames();
+
+    expect(errors).toHaveLength(2);
+    expect(errors[1].code).toBe('render-error');
+    expect(remountedHost?.classList.contains('kujam-render-error')).toBe(true);
+    expect(remountedHost?.textContent).toContain('⚠️ buggy-card');
+  });
+});

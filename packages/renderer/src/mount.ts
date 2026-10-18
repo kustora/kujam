@@ -419,6 +419,7 @@ export function mountRenderer(
     }),
     board.on('change', (event) => {
       canvasRenderer.markChange(event);
+      htmlLayer.onChange(event);
       a11yTree.onChange(event);
       scheduleRender();
     }),

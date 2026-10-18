@@ -99,6 +99,7 @@ export interface ActionEvent {
  *   `DocumentTooNewReason` (BOARD-703).
  * - `page-not-found`: `board.create` or `board.update` was given a `pageId` that is not an existing
  *   page; `cause` is `{ pageId }` (BOARD-208).
+ * - `render-error`: an element's canvas or HTML render callback threw an unhandled error (BOARD-810).
  *
  * @beta
  */
@@ -109,7 +110,8 @@ export type BoardErrorCode =
   | 'forbidden'
   | 'limit-exceeded'
   | 'document-too-new'
-  | 'page-not-found';
+  | 'page-not-found'
+  | 'render-error';
 
 /**
  * Payload of the `error` event.

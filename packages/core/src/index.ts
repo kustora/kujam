@@ -699,6 +699,15 @@ export interface Board {
    * with code `listener-error`.
    */
   on<K extends keyof BoardEventMap>(type: K, listener: Listener<BoardEventMap[K]>): Unsubscribe;
+  /**
+   * Reports a runtime error through the board's `error` event (BOARD-207, BOARD-810).
+   *
+   * @param code - Error code (see {@link BoardErrorCode}).
+   * @param message - Diagnostic message in Indonesian.
+   * @param cause - Error instance or contextual metadata.
+   * @beta
+   */
+  reportError(code: BoardErrorCode, message: string, cause?: unknown): void;
   /** Creates a new record ID using the `createId` option (nanoid by default). */
   createId(): string;
   /**
@@ -1761,6 +1770,10 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     on(type, listener) {
       if (disposed) return () => {};
       return events.on(type, listener);
+    },
+    reportError(code: BoardErrorCode, message: string, cause?: unknown): void {
+      assertUsable();
+      emitError(code, message, cause);
     },
     createId(): string {
       const id = generateId();

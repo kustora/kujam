@@ -470,3 +470,68 @@ describe('BOARD-802: Helper bounds functions', () => {
     expect(merged).toContainEqual(c);
   });
 });
+
+describe('BOARD-810: Error Isolation in Canvas Renderer', () => {
+  it('catches render.canvas error, renders error placeholder, and reports error once per element', () => {
+    let shouldThrow = true;
+    const explodingElement = defineElement({
+      type: 'exploding-box',
+      version: 1,
+      props: schema({ label: string() }),
+      geometry: (el) => rect(el.w, el.h),
+      render: {
+        canvas: () => {
+          if (shouldThrow) throw new Error('Boom in canvas render!');
+        },
+      },
+    });
+    const plugin = definePlugin({ id: 'test-exploding', elements: [explodingElement, boxElement] });
+
+    const container = document.body.appendChild(document.createElement('div'));
+    vi.spyOn(container, 'clientWidth', 'get').mockReturnValue(800);
+    vi.spyOn(container, 'clientHeight', 'get').mockReturnValue(600);
+
+    const board = createBoard({ plugins: [plugin] });
+    boards.push(board);
+    const view = mountRenderer(board, container);
+    views.push(view);
+
+    const resizeObserver = FakeResizeObserver.instances.at(-1);
+    if (resizeObserver) {
+      resizeObserver.resize(800, 600);
+    }
+
+    const errors: any[] = [];
+    board.on('error', (e) => errors.push(e));
+
+    // Create one normal box and one exploding box
+    board.create({ id: 'good-1', type: 'test-box', x: 10, y: 10, w: 50, h: 50, props: { label: 'Good' } });
+    board.create({ id: 'bad-1', type: 'exploding-box', x: 100, y: 100, w: 100, h: 100, props: { label: 'Bad' } });
+
+    flushFrames();
+
+    // 1. Good element was rendered successfully (does not abort the frame)
+    expect(drawnLog).toContain('good-1');
+
+    // 2. Error event was emitted with code 'render-error'
+    expect(errors).toHaveLength(1);
+    expect(errors[0].code).toBe('render-error');
+    expect(errors[0].cause.elementId).toBe('bad-1');
+    expect(errors[0].message).toContain('Boom in canvas render!');
+
+    // 3. Error placeholder text was rendered
+    expect(fillTextCalls.some((text) => text.includes('⚠️ exploding-box'))).toBe(true);
+
+    // 4. In subsequent frame, error event is NOT emitted again (does not flood every frame)
+    view.requestRender();
+    flushFrames();
+    expect(errors).toHaveLength(1);
+
+    // 5. Updating the element resets error state and retries rendering
+    shouldThrow = false;
+    board.update('bad-1', { props: { label: 'Fixed' } });
+    flushFrames();
+    // After fixing, it renders without error
+    expect(errors).toHaveLength(1);
+  });
+});

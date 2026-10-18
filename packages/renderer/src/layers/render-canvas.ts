@@ -182,6 +182,45 @@ export function drawUnknownPlaceholder(
   ctx.fillText(el.type, pad, pad, Math.max(0, w - pad * 2));
 }
 
+/** Warning red tint that signals a failed element render (BOARD-810). */
+const ERROR_FILL = 'rgba(239, 68, 68, 0.12)';
+const ERROR_STROKE = 'rgba(239, 68, 68, 0.8)';
+const ERROR_TEXT = '#ef4444';
+
+/**
+ * Draws an element that failed to render as a red dashed box labelled with the error
+ * (BOARD-810), in element-local coordinates.
+ *
+ * @internal
+ */
+export function drawErrorPlaceholder(
+  ctx: CanvasRenderingContext2D,
+  el: ElementRecord,
+  fontFamily: string,
+  zoom: number,
+): void {
+  const w = Math.max(24, el.w || 24);
+  const h = Math.max(24, el.h || 24);
+  const lineWidth = 1 / Math.max(0.01, zoom);
+  ctx.fillStyle = ERROR_FILL;
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = ERROR_STROKE;
+  ctx.lineWidth = lineWidth;
+  if (typeof ctx.setLineDash === 'function') ctx.setLineDash([4 * lineWidth, 4 * lineWidth]);
+  ctx.strokeRect(0, 0, w, h);
+  if (typeof ctx.setLineDash === 'function') ctx.setLineDash([]);
+
+  // Label in a constant 12 screen pixels, only when it fits.
+  const fontSize = 12 * lineWidth;
+  const pad = 6 * lineWidth;
+  if (w < fontSize * 2 || h < fontSize + pad * 2) return;
+  ctx.fillStyle = ERROR_TEXT;
+  ctx.font = `${fontSize}px ${fontFamily}`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(`⚠️ ${el.type}`, pad, pad, Math.max(0, w - pad * 2));
+}
+
 /**
  * Draws a single element with local translation, rotation, opacity, and LOD settings.
  */
@@ -190,6 +229,7 @@ function drawSingleElement(
   el: ElementRecord,
   board: Board,
   camera: CameraState,
+  erroredElements: Set<string>,
 ): void {
   const def = board.elements.get(el.type);
   // Registered types without a canvas renderer draw nothing (for example HTML-only elements);
@@ -211,9 +251,23 @@ function drawSingleElement(
     ctx.globalAlpha *= Math.max(0, Math.min(1, el.opacity));
   }
   try {
-    // Called as a method so plugin renderers keep their `this`.
-    if (def && render) def.render!.canvas!(ctx, el, undefined, lod, board.elementContext);
-    else drawUnknownPlaceholder(ctx, el, board.theme.typography.fontFamily, camera.zoom);
+    if (erroredElements.has(el.id)) {
+      drawErrorPlaceholder(ctx, el, board.theme.typography.fontFamily, camera.zoom);
+    } else if (def && render) {
+      try {
+        // Called as a method so plugin renderers keep their `this`.
+        def.render!.canvas!(ctx, el, undefined, lod, board.elementContext);
+      } catch (error) {
+        erroredElements.add(el.id);
+        const message = `Kesalahan saat merender elemen "${el.id}" (${el.type}): ${error instanceof Error ? error.message : String(error)}`;
+        board.reportError('render-error', message, { elementId: el.id, type: el.type, error });
+        drawErrorPlaceholder(ctx, el, board.theme.typography.fontFamily, camera.zoom);
+      }
+    } else {
+      drawUnknownPlaceholder(ctx, el, board.theme.typography.fontFamily, camera.zoom);
+    }
+  } catch {
+    // Fail-safe to guarantee context restore even if placeholder drawing fails
   } finally {
     ctx.restore();
   }
@@ -228,6 +282,7 @@ export class CanvasRenderer {
   private dirtyAll = true;
   private dirtyRects: BoxBounds[] = [];
   private frameCount = 0;
+  private readonly erroredElements = new Set<string>();
   private lastStats: RenderStats = Object.freeze({
     frameCount: 0,
     drawnElements: 0,
@@ -252,6 +307,13 @@ export class CanvasRenderer {
    * Records dirty regions from a document transaction change event.
    */
   markChange(event: ChangeEvent): void {
+    for (const update of Object.values(event.updated)) {
+      this.erroredElements.delete(update.after.id);
+    }
+    for (const rec of Object.values(event.removed)) {
+      this.erroredElements.delete(rec.id);
+    }
+
     if (this.dirtyAll) return;
 
     const currentPage = this.board.pages.current;
@@ -360,7 +422,7 @@ export class CanvasRenderer {
 
       ctx.setTransform(scale, 0, 0, scale, -camera.x * scale, -camera.y * scale);
       for (const el of visible) {
-        drawSingleElement(ctx, el, this.board, camera);
+        drawSingleElement(ctx, el, this.board, camera, this.erroredElements);
         drawnIds.add(el.id);
       }
     } else {
@@ -402,7 +464,7 @@ export class CanvasRenderer {
 
         ctx.setTransform(scale, 0, 0, scale, -camera.x * scale, -camera.y * scale);
         for (const el of elements) {
-          drawSingleElement(ctx, el, this.board, camera);
+          drawSingleElement(ctx, el, this.board, camera, this.erroredElements);
           drawnIds.add(el.id);
         }
         ctx.restore();

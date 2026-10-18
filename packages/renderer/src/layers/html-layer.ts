@@ -2,7 +2,7 @@
  * HTML layer management, single camera transform, and viewport virtualization (BOARD-804).
  */
 
-import type { Board, BoxBounds, ElementHtmlView, ElementRecord } from '@kujam/core';
+import type { Board, BoxBounds, ChangeEvent, ElementHtmlView, ElementRecord } from '@kujam/core';
 import { comparePaintOrder } from './render-canvas.js';
 
 declare module '@kujam/core' {
@@ -18,6 +18,7 @@ interface ActiveHtmlEntry {
   host: HTMLElement;
   view: ElementHtmlView<unknown, unknown>;
   element: ElementRecord;
+  errored?: boolean;
 }
 
 /**
@@ -47,6 +48,7 @@ export class HtmlLayer {
   readonly elementsHost: HTMLDivElement;
   readonly editorHost: HTMLDivElement;
   private readonly mountedViews = new Map<string, ActiveHtmlEntry>();
+  private readonly erroredElements = new Set<string>();
 
   constructor(
     private readonly board: Board,
@@ -150,22 +152,56 @@ export class HtmlLayer {
       const existing = this.mountedViews.get(el.id);
 
       if (existing) {
-        // Element already mounted: update host styles if needed and call view.update
-        this.updateHostStyle(existing.host, el);
-        existing.element = el;
-        existing.view.update(el, undefined);
-      } else {
-        // Element entering viewport: mount new HTML view
-        const def = this.board.elements.get(el.type);
-        if (!def?.render?.html) continue;
+        if (existing.errored) {
+          if (!this.erroredElements.has(el.id)) {
+            // Error was cleared by an element change: remove placeholder and remount
+            existing.host.remove();
+            this.mountedViews.delete(el.id);
+          } else {
+            // Still in error: keep placeholder and update position
+            this.updateHostStyle(existing.host, el);
+            continue;
+          }
+        } else {
+          // Element already mounted: update host styles if needed and call view.update
+          this.updateHostStyle(existing.host, el);
+          existing.element = el;
+          try {
+            existing.view.update(el, undefined);
+          } catch (error) {
+            this.erroredElements.add(el.id);
+            existing.errored = true;
+            const message = `Kesalahan saat memperbarui elemen HTML "${el.id}" (${el.type}): ${error instanceof Error ? error.message : String(error)}`;
+            this.board.reportError('render-error', message, { elementId: el.id, type: el.type, error });
+            this.renderErrorPlaceholder(existing.host, el);
+          }
+          continue;
+        }
+      }
 
-        const host = this.elementsHost.ownerDocument.createElement('div');
-        host.dataset.kujamElementId = el.id;
-        host.dataset.kujamElementType = el.type;
-        host.style.position = 'absolute';
-        this.updateHostStyle(host, el);
-        host.style.pointerEvents = 'auto';
+      // Element entering viewport or being remounted after an error was resolved
+      const def = this.board.elements.get(el.type);
+      if (!def?.render?.html) continue;
 
+      const host = this.elementsHost.ownerDocument.createElement('div');
+      host.dataset.kujamElementId = el.id;
+      host.dataset.kujamElementType = el.type;
+      host.style.position = 'absolute';
+      this.updateHostStyle(host, el);
+      host.style.pointerEvents = 'auto';
+
+      if (this.erroredElements.has(el.id)) {
+        this.renderErrorPlaceholder(host, el);
+        const view: ElementHtmlView<unknown, unknown> = {
+          update: () => {},
+          destroy: () => {},
+        };
+        this.elementsHost.appendChild(host);
+        this.mountedViews.set(el.id, { host, view, element: el, errored: true });
+        continue;
+      }
+
+      try {
         const view = def.render.html(
           host,
           el as never,
@@ -174,7 +210,18 @@ export class HtmlLayer {
         ) as ElementHtmlView<unknown, unknown>;
 
         this.elementsHost.appendChild(host);
-        this.mountedViews.set(el.id, { host, view, element: el });
+        this.mountedViews.set(el.id, { host, view, element: el, errored: false });
+      } catch (error) {
+        this.erroredElements.add(el.id);
+        const message = `Kesalahan saat memasang elemen HTML "${el.id}" (${el.type}): ${error instanceof Error ? error.message : String(error)}`;
+        this.board.reportError('render-error', message, { elementId: el.id, type: el.type, error });
+        this.renderErrorPlaceholder(host, el);
+        const view: ElementHtmlView<unknown, unknown> = {
+          update: () => {},
+          destroy: () => {},
+        };
+        this.elementsHost.appendChild(host);
+        this.mountedViews.set(el.id, { host, view, element: el, errored: true });
       }
     }
 
@@ -189,11 +236,43 @@ export class HtmlLayer {
     // Unmount and destroy elements that left the viewport or were deleted
     for (const [id, entry] of this.mountedViews.entries()) {
       if (!visibleIds.has(id)) {
-        entry.view.destroy();
+        try {
+          entry.view.destroy();
+        } catch {
+          // Ignore destroy errors during unmount cleanup
+        }
         entry.host.remove();
         this.mountedViews.delete(id);
       }
     }
+  }
+
+  /**
+   * Cleans up error state when elements are changed or removed.
+   */
+  onChange(event: ChangeEvent): void {
+    for (const update of Object.values(event.updated)) {
+      this.erroredElements.delete(update.after.id);
+    }
+    for (const rec of Object.values(event.removed)) {
+      this.erroredElements.delete(rec.id);
+    }
+  }
+
+  private renderErrorPlaceholder(host: HTMLElement, el: ElementRecord): void {
+    host.replaceChildren();
+    host.className = 'kujam-render-error';
+    host.style.border = '1px dashed #ef4444';
+    host.style.backgroundColor = 'rgba(239, 68, 68, 0.12)';
+    host.style.color = '#ef4444';
+    host.style.display = 'flex';
+    host.style.alignItems = 'center';
+    host.style.justifyContent = 'center';
+    host.style.fontFamily = this.board.theme.typography.fontFamily;
+    host.style.fontSize = '12px';
+    host.style.boxSizing = 'border-box';
+    host.style.padding = '4px';
+    host.textContent = `⚠️ ${el.type}`;
   }
 
   private updateHostStyle(host: HTMLElement, el: ElementRecord): void {

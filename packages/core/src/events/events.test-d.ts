@@ -62,6 +62,7 @@ export type Tests = [
       | 'limit-exceeded'
       | 'document-too-new'
       | 'page-not-found'
+      | 'render-error'
     >
   >,
   Expect<Equal<ReturnType<Board['undo']>, boolean>>,
