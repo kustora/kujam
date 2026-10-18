@@ -13,6 +13,7 @@
 import type { Board, ThemeDefinition, ThemeMode, ViewportSize } from '@kujam/core';
 import { HtmlLayer, type EditorBounds } from './layers/html-layer.js';
 import { attachInput } from './input/input.js';
+import { attachClipboard } from './input/clipboard.js';
 import { CanvasRenderer, type RenderStats } from './layers/render-canvas.js';
 import { OverlayRenderer, type OverlayRenderStats } from './layers/overlay.js';
 import { assertBackground, type BoardBackground } from './layers/background.js';
@@ -49,6 +50,12 @@ export interface RendererOptions {
    * the theme's `canvas.gridDot` color and `canvas.gridSpacing`.
    */
   readonly background?: BoardBackground;
+  /**
+   * Called when pasted board content is rejected (BOARD-906): a `ContentError` for a read-only
+   * board, the element limit, or a permission hook, or an `InvalidDocumentError` /
+   * `MigrationError` for invalid content. The board is unchanged.
+   */
+  readonly onClipboardError?: (error: unknown) => void;
 }
 
 /**
@@ -293,6 +300,7 @@ export function mountRenderer(
       }
     },
   });
+  const detachClipboard = attachClipboard(board, root, { onError: options.onClipboardError });
   let size: Readonly<ViewportSize> = Object.freeze({ width: 0, height: 0 });
   let mounted = true;
   let frame: number | null = null;
@@ -421,6 +429,7 @@ export function mountRenderer(
     for (const off of unsubscribers) off();
     unsubscribers.length = 0;
     detachInput();
+    detachClipboard();
     htmlLayer.dispose();
     root.remove();
   }

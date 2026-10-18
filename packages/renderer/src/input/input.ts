@@ -176,6 +176,12 @@ export function attachInput(
       options?.onHover?.(null);
     }
 
+    // `preventDefault` below also suppresses the focus change of `mousedown`, so focus the view
+    // here: keyboard shortcuts and clipboard events (BOARD-906) only reach a focused view.
+    if (!root.contains(root.ownerDocument.activeElement) && typeof root.focus === 'function') {
+      root.focus({ preventScroll: true });
+    }
+
     const kind = pointerKind(e.pointerType);
     const screen = toScreen(e.clientX, e.clientY);
     const point = board.camera.screenToBoard(screen);

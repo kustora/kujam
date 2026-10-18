@@ -12,8 +12,10 @@
 import {
   compareIndex,
   computeElementAABB,
+  ContentError,
   deepClone,
-  indicesBetween,
+  extractContent,
+  insertContent,
   InvalidDocumentError,
   type AssetRecord,
   type BindingRecord,
@@ -103,16 +105,6 @@ function isElement(rec: BoardRecord | undefined): rec is ElementRecord {
   return rec?.kind === 'element';
 }
 
-/** Collects every string inside `value` (props of any shape), to find referenced asset IDs. */
-function collectStrings(value: unknown, out: Set<string>, depth = 0): void {
-  if (depth > 32) return;
-  if (typeof value === 'string') out.add(value);
-  else if (Array.isArray(value)) for (const item of value) collectStrings(item, out, depth + 1);
-  else if (value !== null && typeof value === 'object') {
-    for (const item of Object.values(value)) collectStrings(item, out, depth + 1);
-  }
-}
-
 /**
  * Exports the board as a JSON-safe {@link BoardDocument} (BOARD-1701): the whole document, or only
  * the elements in `options.ids` with everything they need (see {@link ExportJSONOptions.ids}).
@@ -128,43 +120,7 @@ export function exportJSON(board: Board, options: ExportJSONOptions = {}): Board
   if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string')) {
     throw new TypeError('Opsi ids pada exportJSON wajib berupa array ID string.');
   }
-
-  const children = new Map<string, string[]>();
-  for (const rec of Object.values(doc.records)) {
-    if (isElement(rec) && rec.parentId !== null) {
-      const list = children.get(rec.parentId) ?? [];
-      list.push(rec.id);
-      children.set(rec.parentId, list);
-    }
-  }
-
-  const included = new Set<string>();
-  const queue = ids.filter((id) => Object.hasOwn(doc.records, id) && isElement(doc.records[id]));
-  while (queue.length > 0) {
-    const id = queue.pop()!;
-    if (included.has(id)) continue;
-    included.add(id);
-    queue.push(...(children.get(id) ?? []));
-  }
-
-  const records: Record<string, BoardRecord> = {};
-  const referenced = new Set<string>();
-  for (const id of included) {
-    const el = doc.records[id] as ElementRecord;
-    // A parent that is not exported would dangle; the element becomes a root element.
-    records[id] =
-      el.parentId !== null && !included.has(el.parentId) ? { ...el, parentId: null } : el;
-    referenced.add(el.pageId);
-    collectStrings(el.props, referenced);
-  }
-  for (const rec of Object.values(doc.records)) {
-    if (rec.kind === 'binding' && included.has(rec.fromId) && included.has(rec.toId)) {
-      records[rec.id] = rec;
-    } else if ((rec.kind === 'page' || rec.kind === 'asset') && referenced.has(rec.id)) {
-      records[rec.id] = rec;
-    }
-  }
-  return deepClone({ ...doc, records }) as BoardDocument;
+  return extractContent(board, ids);
 }
 
 function parseInput(json: unknown): BoardDocument {
@@ -247,71 +203,55 @@ export function importJSON(
   );
   const keepIds = existingElements.length === 0 && !collides;
 
-  const idMap = new Map<string, string>();
-  for (const rec of [...sourceElements, ...sourceBindings]) {
-    idMap.set(rec.id, keepIds ? rec.id : board.createId());
+  if (!keepIds) {
+    // Like a paste: new IDs on the current page, shared with the clipboard (BOARD-906).
+    try {
+      const result = insertContent(board, prepared.document, { at, label: 'import' });
+      return {
+        ids: result.ids,
+        idMap: result.idMap,
+        keptIds: false,
+        rejected: [...prepared.rejected, ...result.rejected],
+      };
+    } catch (error) {
+      if (error instanceof ContentError) {
+        throw new ImportError(error.code, error.message, error.reason);
+      }
+      throw error;
+    }
   }
-  for (const asset of sourceAssets) idMap.set(asset.id, asset.id);
+
+  const idMap = new Map<string, string>();
+  for (const rec of [...sourceElements, ...sourceBindings, ...sourceAssets])
+    idMap.set(rec.id, rec.id);
 
   const pagesToAdd: PageRecord[] = [];
   const pageIds = new Set(existing.filter((r) => r.kind === 'page').map((r) => r.id));
-  if (keepIds) {
-    for (const page of sourcePages) {
-      idMap.set(page.id, page.id);
-      if (!pageIds.has(page.id)) {
-        pagesToAdd.push(page);
-        pageIds.add(page.id);
-      }
+  for (const page of sourcePages) {
+    idMap.set(page.id, page.id);
+    if (!pageIds.has(page.id)) {
+      pagesToAdd.push(page);
+      pageIds.add(page.id);
     }
   }
   const targetPage = board.pages.current;
 
-  let indexes: string[] | null = null;
-  if (!keepIds) {
-    let top: string | null = null;
-    for (const el of existingElements) {
-      if (el.pageId === targetPage && (top === null || compareIndex(el.index, top) > 0)) {
-        top = el.index;
-      }
-    }
-    indexes = indicesBetween(top, null, sourceElements.length);
-  }
-
   let dx = 0;
   let dy = 0;
   if (at !== undefined && sourceElements.length > 0) {
-    let minX = Infinity;
-    let minY = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    for (const el of sourceElements) {
-      const box = computeElementAABB(el);
-      minX = Math.min(minX, box.minX);
-      minY = Math.min(minY, box.minY);
-      maxX = Math.max(maxX, box.maxX);
-      maxY = Math.max(maxY, box.maxY);
-    }
-    dx = at.x - (minX + maxX) / 2;
-    dy = at.y - (minY + maxY) / 2;
+    const bounds = contentBounds(sourceElements);
+    dx = at.x - (bounds.minX + bounds.maxX) / 2;
+    dy = at.y - (bounds.minY + bounds.maxY) / 2;
   }
 
-  const elements: ElementRecord[] = sourceElements.map((el, i) => ({
+  const elements: ElementRecord[] = sourceElements.map((el) => ({
     ...el,
-    id: idMap.get(el.id)!,
-    pageId: keepIds && pageIds.has(el.pageId) ? el.pageId : targetPage,
-    parentId: el.parentId !== null && idMap.has(el.parentId) ? idMap.get(el.parentId)! : null,
-    index: indexes ? indexes[i]! : el.index,
+    pageId: pageIds.has(el.pageId) ? el.pageId : targetPage,
+    parentId: el.parentId !== null && idMap.has(el.parentId) ? el.parentId : null,
     x: el.x + dx,
     y: el.y + dy,
   }));
-  const bindings: BindingRecord[] = sourceBindings
-    .filter((b) => idMap.has(b.fromId) && idMap.has(b.toId))
-    .map((b) => ({
-      ...b,
-      id: idMap.get(b.id)!,
-      fromId: idMap.get(b.fromId)!,
-      toId: idMap.get(b.toId)!,
-    }));
+  const bindings = sourceBindings.filter((b) => idMap.has(b.fromId) && idMap.has(b.toId));
   const assets = sourceAssets.filter((a) => !Object.hasOwn(current.records, a.id));
 
   for (const el of elements) {
@@ -333,7 +273,27 @@ export function importJSON(
   return {
     ids: elements.map((el) => el.id),
     idMap,
-    keptIds: keepIds,
+    keptIds: true,
     rejected: prepared.rejected,
   };
+}
+
+function contentBounds(elements: readonly ElementRecord[]): {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+} {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const el of elements) {
+    const box = computeElementAABB(el);
+    minX = Math.min(minX, box.minX);
+    minY = Math.min(minY, box.minY);
+    maxX = Math.max(maxX, box.maxX);
+    maxY = Math.max(maxY, box.maxY);
+  }
+  return { minX, minY, maxX, maxY };
 }

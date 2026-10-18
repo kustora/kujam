@@ -143,6 +143,45 @@ function getElementDirtyBounds(board: Board, element: ElementRecord): BoxBounds 
   };
 }
 
+/** Neutral grey that reads on both light and dark boards (BOARD-209). */
+const PLACEHOLDER_FILL = 'rgba(128, 128, 128, 0.12)';
+const PLACEHOLDER_STROKE = 'rgba(128, 128, 128, 0.7)';
+const PLACEHOLDER_TEXT = 'rgba(128, 128, 128, 0.95)';
+
+/**
+ * Draws an element whose type is not registered as a grey box labelled with the type name
+ * (BOARD-209), in element-local coordinates.
+ *
+ * @internal
+ */
+export function drawUnknownPlaceholder(
+  ctx: CanvasRenderingContext2D,
+  el: ElementRecord,
+  fontFamily: string,
+  zoom: number,
+): void {
+  const w = Math.max(0, el.w);
+  const h = Math.max(0, el.h);
+  const lineWidth = 1 / Math.max(0.01, zoom);
+  ctx.fillStyle = PLACEHOLDER_FILL;
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = PLACEHOLDER_STROKE;
+  ctx.lineWidth = lineWidth;
+  if (typeof ctx.setLineDash === 'function') ctx.setLineDash([4 * lineWidth, 4 * lineWidth]);
+  ctx.strokeRect(0, 0, w, h);
+  if (typeof ctx.setLineDash === 'function') ctx.setLineDash([]);
+
+  // Label in a constant 12 screen pixels, only when it fits.
+  const fontSize = 12 * lineWidth;
+  const pad = 6 * lineWidth;
+  if (w < fontSize * 2 || h < fontSize + pad * 2) return;
+  ctx.fillStyle = PLACEHOLDER_TEXT;
+  ctx.font = `${fontSize}px ${fontFamily}`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(el.type, pad, pad, Math.max(0, w - pad * 2));
+}
+
 /**
  * Draws a single element with local translation, rotation, opacity, and LOD settings.
  */
@@ -153,11 +192,14 @@ function drawSingleElement(
   camera: CameraState,
 ): void {
   const def = board.elements.get(el.type);
-  if (!def?.render?.canvas) return;
+  // Registered types without a canvas renderer draw nothing (for example HTML-only elements);
+  // unregistered types get a placeholder (BOARD-209).
+  const render = def ? def.render?.canvas : undefined;
+  if (def && !render) return;
 
   const lod: ElementLodState = {
     zoom: camera.zoom,
-    compact: Boolean(def.lod && camera.zoom < def.lod.compactBelowZoom),
+    compact: Boolean(def?.lod && camera.zoom < def.lod.compactBelowZoom),
   };
 
   ctx.save();
@@ -169,7 +211,9 @@ function drawSingleElement(
     ctx.globalAlpha *= Math.max(0, Math.min(1, el.opacity));
   }
   try {
-    def.render.canvas(ctx, el, undefined, lod, board.elementContext);
+    // Called as a method so plugin renderers keep their `this`.
+    if (def && render) def.render!.canvas!(ctx, el, undefined, lod, board.elementContext);
+    else drawUnknownPlaceholder(ctx, el, board.theme.typography.fontFamily, camera.zoom);
   } finally {
     ctx.restore();
   }

@@ -183,6 +183,18 @@ export {
 } from './elements/brushes.js';
 export { createId, DEFAULT_ID_LENGTH, type IdGenerator } from './utils/ids.js';
 export { compareIndex, indexAbove, indexBelow, indexBetween, indicesBetween } from './document/indexing.js';
+export {
+  CLIPBOARD_MIME_TYPE,
+  ContentError,
+  extractContent,
+  insertContent,
+  parseClipboard,
+  serializeClipboard,
+  type ClipboardPayload,
+  type ContentErrorCode,
+  type InsertContentOptions,
+  type InsertContentResult,
+} from './clipboard/clipboard.js';
 export type {
   ActionEvent,
   BoardErrorCode,
