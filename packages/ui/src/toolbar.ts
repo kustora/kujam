@@ -11,6 +11,7 @@ import type { Board } from '@kujam/core';
 import { createElementClass, type UiWindow } from './base.js';
 import { createIcon } from './icons.js';
 import { t, type UiStringKey } from './i18n.js';
+import { CONTROL_CSS, createMenu, labelButton, shortcutFor, type PopupMenu } from './controls.js';
 
 /**
  * A variant inside a toolbar item's popover, for example one shape.
@@ -73,12 +74,6 @@ const BUILT_INS: readonly BuiltIn[] = [
   { id: 'text', label: 'tool.text', icon: 'text' },
   { id: 'eraser', label: 'tool.eraser', icon: 'eraser' },
 ];
-
-/** First shortcut bound to `target`, formatted for the platform. */
-function shortcutFor(board: Board, target: string): string | undefined {
-  const binding = board.keybindings.forTarget(target)[0];
-  return binding ? board.keybindings.format(binding.shortcut) : undefined;
-}
 
 /**
  * Toolbar items for a board (BOARD-1402): registered built-in tools, then plugin `toolbarItems`
@@ -165,11 +160,6 @@ export function buildToolbarItems(board: Board): ToolbarItem[] {
   return items;
 }
 
-/** Accessible name: label plus shortcut, as DESIGN.md asks for tool buttons. */
-function accessibleName(label: string, shortcut: string | undefined): string {
-  return shortcut ? `${label} (${shortcut})` : label;
-}
-
 const CSS = `
   :host {
     display: inline-block;
@@ -235,83 +225,21 @@ const CSS = `
     margin: 0 4px;
     background: var(--kujam-ui-border-strong);
   }
-  .tip {
-    position: absolute;
-    bottom: calc(100% + 10px);
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 4px 8px;
-    border-radius: var(--kujam-ui-radius-md);
-    background: var(--kujam-ui-surface-inverse);
-    color: var(--kujam-ui-on-inverse);
-    white-space: nowrap;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity var(--kujam-ui-motion);
-  }
-  .tip kbd {
-    margin-left: 6px;
-    font: inherit;
-    opacity: 0.7;
-  }
-  .tool:hover + .tip,
-  .tool:focus-visible + .tip {
-    opacity: 1;
-  }
-  .item.open .tip {
-    opacity: 0;
-  }
-  .menu {
-    position: absolute;
-    bottom: calc(100% + 10px);
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    flex-direction: column;
-    min-width: 160px;
-    padding: 4px;
-    border-radius: var(--kujam-ui-radius-lg);
-    background: var(--kujam-ui-surface);
-    border: 1px solid var(--kujam-ui-border);
-    box-shadow: var(--kujam-ui-shadow-pop);
-  }
-  .menu[hidden] {
-    display: none;
-  }
-  .option {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    height: 32px;
-    padding: 0 8px;
-    border: 0;
-    border-radius: var(--kujam-ui-radius-md);
-    background: transparent;
-    text-align: left;
-    cursor: pointer;
-  }
-  .option:hover,
-  .option:focus-visible {
-    background: var(--kujam-ui-surface-hover);
-  }
-  .option[aria-checked='true'] {
-    color: var(--kujam-ui-focus-ring);
-  }
-  .option kbd {
-    margin-left: auto;
-    font: inherit;
-    color: var(--kujam-ui-ink-muted);
-  }
+  ${CONTROL_CSS}
 `;
+
+interface RenderedItem {
+  readonly item: ToolbarItem;
+  readonly button: HTMLButtonElement;
+  readonly menu: PopupMenu | null;
+}
 
 /** Renders the toolbar for a board; returns the cleanup. */
 function renderToolbar(root: ShadowRoot, board: Board, host: HTMLElement): () => void {
   const doc = host.ownerDocument;
-  const items = buildToolbarItems(board);
   /** Last chosen variant per popover item. */
   const choice = new Map<string, ToolbarOption>();
-  const buttons: { item: ToolbarItem; button: HTMLButtonElement; wrap: HTMLElement }[] = [];
-  let openMenu: { wrap: HTMLElement; button: HTMLButtonElement; menu: HTMLElement } | null = null;
+  const rendered: RenderedItem[] = [];
 
   const bar = doc.createElement('div');
   bar.className = 'bar';
@@ -330,114 +258,21 @@ function renderToolbar(root: ShadowRoot, board: Board, host: HTMLElement): () =>
     return span;
   }
 
-  function tooltip(label: string, shortcut: string | undefined): HTMLElement {
-    const tip = doc.createElement('span');
-    tip.className = 'tip';
-    // The accessible name already carries the label and shortcut.
-    tip.setAttribute('aria-hidden', 'true');
-    tip.textContent = label;
-    if (shortcut) {
-      const kbd = doc.createElement('kbd');
-      kbd.textContent = shortcut;
-      tip.append(kbd);
-    }
-    return tip;
-  }
-
   function currentVariant(item: ToolbarItem): ToolbarOption {
     const options = item.options!;
     return options.find((o) => o.toolId === board.tool) ?? choice.get(item.id) ?? options[0]!;
   }
 
-  function closeMenu(focusButton = false): void {
-    if (!openMenu) return;
-    const { wrap, button, menu } = openMenu;
-    openMenu = null;
-    menu.hidden = true;
-    wrap.classList.remove('open');
-    button.setAttribute('aria-expanded', 'false');
-    if (focusButton) button.focus();
+  function openMenu(): PopupMenu | undefined {
+    return rendered.find((r) => r.menu?.isOpen)?.menu ?? undefined;
   }
 
-  function openMenuFor(
-    item: ToolbarItem,
-    wrap: HTMLElement,
-    button: HTMLButtonElement,
-    menu: HTMLElement,
-  ): void {
-    closeMenu();
-    openMenu = { wrap, button, menu };
-    menu.hidden = false;
-    wrap.classList.add('open');
-    button.setAttribute('aria-expanded', 'true');
-    const current = currentVariant(item);
-    const options = [...menu.querySelectorAll<HTMLButtonElement>('.option')];
-    (options.find((o) => o.dataset.toolId === current.toolId) ?? options[0])?.focus();
+  function closeMenus(): void {
+    for (const r of rendered) r.menu?.close();
   }
 
-  function buildMenu(item: ToolbarItem, wrap: HTMLElement, button: HTMLButtonElement): HTMLElement {
-    const menu = doc.createElement('div');
-    menu.className = 'menu';
-    menu.hidden = true;
-    menu.id = `kujam-menu-${item.id}`;
-    menu.setAttribute('role', 'menu');
-    menu.setAttribute('aria-label', item.label);
-    button.setAttribute('aria-controls', menu.id);
-
-    for (const option of item.options!) {
-      const el = doc.createElement('button');
-      el.type = 'button';
-      el.className = 'option';
-      el.tabIndex = -1;
-      el.dataset.toolId = option.toolId;
-      el.setAttribute('role', 'menuitemradio');
-      el.setAttribute('aria-label', accessibleName(option.label, option.shortcut));
-      el.append(iconOrLetter(option.icon, option.label));
-      const text = doc.createElement('span');
-      text.textContent = option.label;
-      el.append(text);
-      if (option.shortcut) {
-        const kbd = doc.createElement('kbd');
-        kbd.setAttribute('aria-hidden', 'true');
-        kbd.textContent = option.shortcut;
-        el.append(kbd);
-      }
-      el.addEventListener('click', () => {
-        choice.set(item.id, option);
-        board.setTool(option.toolId);
-        closeMenu(true);
-      });
-      menu.append(el);
-    }
-
-    menu.addEventListener('keydown', (e) => {
-      const options = [...menu.querySelectorAll<HTMLButtonElement>('.option')];
-      const index = options.indexOf(e.target as HTMLButtonElement);
-      let next = -1;
-      if (e.key === 'ArrowDown') next = (index + 1) % options.length;
-      else if (e.key === 'ArrowUp') next = (index - 1 + options.length) % options.length;
-      else if (e.key === 'Home') next = 0;
-      else if (e.key === 'End') next = options.length - 1;
-      else if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        closeMenu(true);
-        return;
-      } else if (e.key === 'Tab') {
-        closeMenu();
-        return;
-      }
-      if (next >= 0) {
-        e.preventDefault();
-        options[next]!.focus();
-      }
-    });
-    wrap.append(menu);
-    return menu;
-  }
-
-  for (const item of items) {
-    if (item.section === 'plugins' && buttons.every((b) => b.item.section !== 'plugins')) {
+  for (const item of buildToolbarItems(board)) {
+    if (item.section === 'plugins' && rendered.every((r) => r.item.section !== 'plugins')) {
       const sep = doc.createElement('div');
       sep.className = 'sep';
       sep.setAttribute('role', 'separator');
@@ -452,21 +287,30 @@ function renderToolbar(root: ShadowRoot, board: Board, host: HTMLElement): () =>
     button.tabIndex = -1;
     button.dataset.item = item.id;
     wrap.append(button);
+    bar.append(wrap);
 
+    let menu: PopupMenu | null = null;
     if (item.options) {
-      button.setAttribute('aria-haspopup', 'menu');
-      button.setAttribute('aria-expanded', 'false');
-      const menu = buildMenu(item, wrap, button);
+      const popup = createMenu(doc, {
+        id: `kujam-menu-${item.id}`,
+        label: item.label,
+        anchor: button,
+        wrap,
+        radio: true,
+      });
+      menu = popup;
       button.addEventListener('click', () => {
-        if (openMenu?.menu === menu) closeMenu();
-        else if (item.options!.some((o) => o.toolId === board.tool))
-          openMenuFor(item, wrap, button, menu);
-        else board.setTool(currentVariant(item).toolId);
+        if (popup.isOpen) popup.close();
+        else if (item.options!.some((o) => o.toolId === board.tool)) {
+          closeMenus();
+          popup.open();
+        } else board.setTool(currentVariant(item).toolId);
       });
       button.addEventListener('keydown', (e) => {
         if (e.key === 'ArrowUp' || (e.key === 'ArrowDown' && e.altKey)) {
           e.preventDefault();
-          openMenuFor(item, wrap, button, menu);
+          closeMenus();
+          popup.open();
         }
       });
     } else {
@@ -475,13 +319,12 @@ function renderToolbar(root: ShadowRoot, board: Board, host: HTMLElement): () =>
         else if (item.commandId) board.run(item.commandId);
       });
     }
-    bar.append(wrap);
-    buttons.push({ item, button, wrap });
+    rendered.push({ item, button, menu });
   }
 
-  /** Updates icons, pressed and disabled states, and the roving tab stop. */
+  /** Updates icons, labels, pressed and disabled states, menus, and the roving tab stop. */
   function sync(): void {
-    for (const { item, button, wrap } of buttons) {
+    for (const { item, button, menu } of rendered) {
       let label = item.label;
       let shortcut = item.shortcut;
       let icon = item.icon;
@@ -490,8 +333,20 @@ function renderToolbar(root: ShadowRoot, board: Board, host: HTMLElement): () =>
         icon = variant.icon;
         shortcut = variant.shortcut;
         label = `${item.label}: ${variant.label}`;
-        for (const option of wrap.querySelectorAll<HTMLButtonElement>('.option')) {
-          option.setAttribute('aria-checked', String(option.dataset.toolId === variant.toolId));
+        if (!menu!.isOpen) {
+          menu!.setEntries(
+            item.options.map((option) => ({
+              id: option.toolId,
+              label: option.label,
+              shortcut: option.shortcut,
+              icon: iconOrLetter(option.icon, option.label),
+              checked: option.toolId === variant.toolId,
+              select: () => {
+                choice.set(item.id, option);
+                board.setTool(option.toolId);
+              },
+            })),
+          );
         }
       }
       if (button.dataset.icon !== icon || !button.firstChild) {
@@ -504,13 +359,7 @@ function renderToolbar(root: ShadowRoot, board: Board, host: HTMLElement): () =>
           button.append(caret);
         }
       }
-      const name = accessibleName(label, shortcut);
-      if (button.getAttribute('aria-label') !== name) {
-        button.setAttribute('aria-label', name);
-        const oldTip = button.nextElementSibling;
-        if (oldTip?.classList.contains('tip')) oldTip.remove();
-        button.after(tooltip(label, shortcut));
-      }
+      labelButton(button, label, shortcut);
 
       if (item.commandId) {
         button.disabled = !board.commands.isEnabled(item.commandId);
@@ -523,44 +372,40 @@ function renderToolbar(root: ShadowRoot, board: Board, host: HTMLElement): () =>
       }
     }
     // One tab stop: keep the focused button, else the active tool, else the first button.
-    const focused = buttons.find((b) => b.button.tabIndex === 0 && !b.button.disabled);
-    const active = buttons.find((b) => b.button.getAttribute('aria-pressed') === 'true');
-    const stop = focused ?? active ?? buttons.find((b) => !b.button.disabled);
-    for (const b of buttons) b.button.tabIndex = b === stop ? 0 : -1;
+    const focused = rendered.find((r) => r.button.tabIndex === 0 && !r.button.disabled);
+    const active = rendered.find((r) => r.button.getAttribute('aria-pressed') === 'true');
+    const stop = focused ?? active ?? rendered.find((r) => !r.button.disabled);
+    for (const r of rendered) r.button.tabIndex = r === stop ? 0 : -1;
   }
 
   bar.addEventListener('keydown', (e) => {
-    if (openMenu?.menu.contains(e.target as Node)) return;
-    const enabled = buttons.filter((b) => !b.button.disabled);
-    const index = enabled.findIndex((b) => b.button === e.target);
+    if (openMenu()?.element.contains(e.target as Node)) return;
+    const enabled = rendered.filter((r) => !r.button.disabled);
+    const index = enabled.findIndex((r) => r.button === e.target);
     if (index < 0) return;
     let next = -1;
     if (e.key === 'ArrowRight') next = (index + 1) % enabled.length;
     else if (e.key === 'ArrowLeft') next = (index - 1 + enabled.length) % enabled.length;
     else if (e.key === 'Home') next = 0;
     else if (e.key === 'End') next = enabled.length - 1;
-    else if (e.key === 'Escape' && openMenu) {
-      closeMenu(true);
-      return;
-    }
     if (next < 0) return;
     e.preventDefault();
-    closeMenu();
-    for (const b of buttons) b.button.tabIndex = -1;
+    closeMenus();
+    for (const r of rendered) r.button.tabIndex = -1;
     enabled[next]!.button.tabIndex = 0;
     enabled[next]!.button.focus();
   });
 
   // Close an open menu on a pointer down anywhere outside the toolbar.
   const onPointerDown = (e: Event): void => {
-    if (openMenu && !e.composedPath().includes(host)) closeMenu();
+    if (openMenu() && !e.composedPath().includes(host)) closeMenus();
   };
   doc.addEventListener('pointerdown', onPointerDown, true);
 
   sync();
   const offs = [board.on('tool', sync)];
   // Command availability can depend on the selection and the document; tools only on the tool.
-  if (buttons.some((b) => b.item.commandId)) {
+  if (rendered.some((r) => r.item.commandId)) {
     offs.push(board.on('selection', sync), board.on('change', sync));
   }
   return () => {

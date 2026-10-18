@@ -7,10 +7,12 @@
 import type { Board } from '@kujam/core';
 import type { KujamUiElement, UiWindow } from './base.js';
 import { createToolbarClass } from './toolbar.js';
+import { createHistoryControlClass, createZoomControlClass } from './zoom.js';
 
 export type { KujamUiElement } from './base.js';
 export { buildToolbarItems, type ToolbarItem, type ToolbarOption } from './toolbar.js';
 export { UI_ICON_NAMES } from './icons.js';
+export { nextZoomStep, ZOOM_STEPS } from './zoom.js';
 export { uiToken, type UiTokenName } from './theme.js';
 
 /**
@@ -18,7 +20,11 @@ export { uiToken, type UiTokenName } from './theme.js';
  *
  * @public
  */
-export const UI_TAGS = Object.freeze({ toolbar: 'kujam-toolbar' } as const);
+export const UI_TAGS = Object.freeze({
+  toolbar: 'kujam-toolbar',
+  zoom: 'kujam-zoom-control',
+  history: 'kujam-history-control',
+} as const);
 
 /**
  * Registers the UI custom elements in a window's `customElements` (BOARD-1401). Safe to call
@@ -34,8 +40,13 @@ export function defineUiElements(win?: Window): void {
   if (!target?.customElements || !target.HTMLElement) {
     throw new Error('defineUiElements membutuhkan window dengan customElements.');
   }
-  if (!target.customElements.get(UI_TAGS.toolbar)) {
-    target.customElements.define(UI_TAGS.toolbar, createToolbarClass(target));
+  const factories = {
+    [UI_TAGS.toolbar]: createToolbarClass,
+    [UI_TAGS.zoom]: createZoomControlClass,
+    [UI_TAGS.history]: createHistoryControlClass,
+  };
+  for (const [tag, create] of Object.entries(factories)) {
+    if (!target.customElements.get(tag)) target.customElements.define(tag, create(target));
   }
 }
 
@@ -59,14 +70,19 @@ export interface MountUiOptions {
  * @public
  */
 export interface MountedUi {
-  /** The main toolbar element. */
+  /** The main toolbar element, at the bottom center. */
   readonly toolbar: KujamUiElement;
+  /** The zoom control, at the bottom right (BOARD-1404). */
+  readonly zoom: KujamUiElement;
+  /** The undo and redo control, at the bottom left (BOARD-1404). */
+  readonly history: KujamUiElement;
   /** Removes the UI elements. Safe to call more than once. */
   unmount(): void;
 }
 
 /**
- * Mounts the default UI over a board: the main toolbar at the bottom center (BOARD-1402).
+ * Mounts the default UI over a board: the main toolbar at the bottom center (BOARD-1402), the
+ * zoom control at the bottom right, and undo and redo at the bottom left (BOARD-1404).
  *
  * @example
  * ```ts
@@ -89,22 +105,26 @@ export function mountDefaultUi(options: MountUiOptions): MountedUi {
     container.style.position = 'relative';
   }
 
-  const toolbar = doc.createElement(UI_TAGS.toolbar) as KujamUiElement;
-  toolbar.board = board;
-  Object.assign(toolbar.style, {
-    position: 'absolute',
-    left: '50%',
-    bottom: '20px',
-    transform: 'translateX(-50%)',
-    zIndex: '30',
-  });
-  container.append(toolbar);
+  const place = (tag: string, style: Partial<CSSStyleDeclaration>): KujamUiElement => {
+    const el = doc.createElement(tag) as KujamUiElement;
+    el.board = board;
+    Object.assign(el.style, { position: 'absolute', bottom: '20px', zIndex: '30' }, style);
+    container.append(el);
+    return el;
+  };
+  const toolbar = place(UI_TAGS.toolbar, { left: '50%', transform: 'translateX(-50%)' });
+  const zoom = place(UI_TAGS.zoom, { right: '20px' });
+  const history = place(UI_TAGS.history, { left: '20px' });
 
   return {
     toolbar,
+    zoom,
+    history,
     unmount() {
-      toolbar.board = null;
-      toolbar.remove();
+      for (const el of [toolbar, zoom, history]) {
+        el.board = null;
+        el.remove();
+      }
     },
   };
 }
@@ -112,5 +132,7 @@ export function mountDefaultUi(options: MountUiOptions): MountedUi {
 declare global {
   interface HTMLElementTagNameMap {
     'kujam-toolbar': KujamUiElement;
+    'kujam-zoom-control': KujamUiElement;
+    'kujam-history-control': KujamUiElement;
   }
 }

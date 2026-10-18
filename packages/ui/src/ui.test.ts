@@ -3,8 +3,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   createBoard,
   defineCommand,
+  defineElement,
   definePlugin,
   defineTool,
+  object,
   type Board,
   type BoardOptions,
 } from '@kujam/core';
@@ -12,6 +14,7 @@ import {
   buildToolbarItems,
   defineUiElements,
   mountDefaultUi,
+  nextZoomStep,
   UI_TAGS,
   type KujamUiElement,
 } from './index.js';
@@ -51,9 +54,9 @@ function newBoard(options: BoardOptions = {}): Board {
   return board;
 }
 
-function mountToolbar(board: Board): KujamUiElement {
+function mountToolbar(board: Board, tag: string = UI_TAGS.toolbar): KujamUiElement {
   defineUiElements();
-  const el = document.createElement(UI_TAGS.toolbar);
+  const el = document.createElement(tag) as KujamUiElement;
   el.board = board;
   document.body.append(el);
   return el;
@@ -329,9 +332,131 @@ describe('BOARD-1402: mountDefaultUi', () => {
     expect(ui.toolbar.parentElement).toBe(container);
     expect(ui.toolbar.style.bottom).toBe('20px');
     expect(ui.toolbar.board).toBe(board);
+    expect(ui.zoom.style.right).toBe('20px');
+    expect(ui.history.style.left).toBe('20px');
+    expect(ui.zoom.board).toBe(board);
 
     ui.unmount();
     ui.unmount();
     expect(container.contains(ui.toolbar)).toBe(false);
+    expect(container.childElementCount).toBe(0);
+  });
+});
+
+describe('BOARD-1404: zoom control', () => {
+  const range = { min: 0.1, max: 4 };
+
+  it('steps through zoom levels within the range', () => {
+    expect(nextZoomStep(1, 1, range)).toBe(1.25);
+    expect(nextZoomStep(1, -1, range)).toBe(0.75);
+    expect(nextZoomStep(1.1, 1, range)).toBe(1.25);
+    expect(nextZoomStep(1.1, -1, range)).toBe(1);
+    expect(nextZoomStep(1.0000001, 1, range)).toBe(1.25);
+    expect(nextZoomStep(4, 1, range)).toBe(4);
+    expect(nextZoomStep(0.1, -1, range)).toBe(0.1);
+    expect(nextZoomStep(3.5, 1, { min: 0.1, max: 3.6 })).toBe(3.6);
+    expect(nextZoomStep(0.12, -1, { min: 0.11, max: 4 })).toBe(0.11);
+  });
+
+  it('zooms with the buttons, shows the percentage, and disables at the limits', () => {
+    const board = newBoard();
+    board.camera.setViewport({ width: 800, height: 600 });
+    const el = mountToolbar(board, UI_TAGS.zoom);
+    const zoomIn = el.shadowRoot!.querySelector<HTMLButtonElement>('[data-control="zoom-in"]')!;
+    const zoomOut = el.shadowRoot!.querySelector<HTMLButtonElement>('[data-control="zoom-out"]')!;
+    const level = el.shadowRoot!.querySelector<HTMLButtonElement>('[data-control="zoom-level"]')!;
+    expect(el.shadowRoot!.querySelector('[role="group"]')!.getAttribute('aria-label')).toBe('Zoom');
+    expect(level.textContent).toBe('100%');
+    expect(level.getAttribute('aria-label')).toBe('Zoom 100%');
+    expect(zoomIn.getAttribute('aria-label')).toBe('Perbesar');
+
+    zoomIn.click();
+    expect(board.camera.get().zoom).toBe(1.25);
+    expect(level.textContent).toBe('125%');
+
+    board.camera.zoomTo(4);
+    expect(zoomIn.disabled).toBe(true);
+    expect(zoomOut.disabled).toBe(false);
+    board.camera.zoomTo(0.1);
+    expect(zoomOut.disabled).toBe(true);
+    zoomIn.click();
+    expect(board.camera.get().zoom).toBe(0.25);
+  });
+
+  it('opens a menu with 50%, 100%, 200%, and zoom to fit', () => {
+    const box = defineElement({ type: 'box', version: 1, props: object({}), defaults: {} });
+    const board = newBoard({
+      plugins: [builtInTools, definePlugin({ id: 'box', elements: [box] })],
+    });
+    board.camera.setViewport({ width: 800, height: 600 });
+    const el = mountToolbar(board, UI_TAGS.zoom);
+    const level = el.shadowRoot!.querySelector<HTMLButtonElement>('[data-control="zoom-level"]')!;
+    const menu = el.shadowRoot!.querySelector<HTMLElement>('[role="menu"]')!;
+    const item = (name: string) =>
+      [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((b) =>
+        b.textContent!.startsWith(name),
+      )!;
+
+    level.click();
+    expect(menu.hidden).toBe(false);
+    expect([...menu.querySelectorAll('[role="menuitem"]')].map((b) => b.textContent)).toEqual([
+      '50%',
+      '100%',
+      '200%',
+      'Pas ke layar',
+    ]);
+    // Nothing to fit on an empty page.
+    expect(item('Pas ke layar').disabled).toBe(true);
+    item('200%').click();
+    expect(board.camera.get().zoom).toBe(2);
+    expect(menu.hidden).toBe(true);
+    expect(el.shadowRoot!.activeElement).toBe(level);
+
+    board.create({ type: 'box', x: 0, y: 0, w: 4000, h: 3000 });
+    level.focus();
+    key(level, 'ArrowUp');
+    expect(menu.hidden).toBe(false);
+    expect(item('Pas ke layar').disabled).toBe(false);
+    item('Pas ke layar').click();
+    expect(board.camera.get().zoom).toBeLessThan(0.25);
+
+    level.click();
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true, composed: true }));
+    expect(menu.hidden).toBe(true);
+  });
+});
+
+describe('BOARD-1404: history control', () => {
+  it('undoes and redoes, disabled when there is nothing to do', () => {
+    const box = defineElement({ type: 'box', version: 1, props: object({}), defaults: {} });
+    const board = newBoard({
+      plugins: [builtInTools, definePlugin({ id: 'box', elements: [box] })],
+    });
+    const el = mountToolbar(board, UI_TAGS.history);
+    const undo = el.shadowRoot!.querySelector<HTMLButtonElement>('[data-control="undo"]')!;
+    const redo = el.shadowRoot!.querySelector<HTMLButtonElement>('[data-control="redo"]')!;
+    expect(undo.getAttribute('aria-label')).toBe('Urungkan');
+    expect(undo.disabled).toBe(true);
+    expect(redo.disabled).toBe(true);
+
+    board.create({ type: 'box', x: 0, y: 0 });
+    expect(undo.disabled).toBe(false);
+    undo.click();
+    expect(board.query()).toHaveLength(0);
+    expect(undo.disabled).toBe(true);
+    expect(redo.disabled).toBe(false);
+    redo.click();
+    expect(board.query()).toHaveLength(1);
+  });
+
+  it('shows the undo shortcut when one is bound', () => {
+    const board = newBoard();
+    board.commands.register(
+      defineCommand({ id: 'history.undo', label: 'history.undo', run: (b) => b.undo() }),
+    );
+    board.keybindings.set('Mod+Z', 'history.undo');
+    const el = mountToolbar(board, UI_TAGS.history);
+    const undo = el.shadowRoot!.querySelector<HTMLButtonElement>('[data-control="undo"]')!;
+    expect(undo.getAttribute('aria-label')).toMatch(/^Urungkan \((⌘Z|Ctrl\+Z)\)$/);
   });
 });

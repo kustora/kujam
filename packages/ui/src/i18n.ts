@@ -18,6 +18,15 @@ const STRINGS = {
   'tool.ellipse': { id: 'Elips', en: 'Ellipse' },
   'tool.text': { id: 'Teks', en: 'Text' },
   'tool.eraser': { id: 'Penghapus', en: 'Eraser' },
+  zoom: { id: 'Zoom', en: 'Zoom' },
+  zoomIn: { id: 'Perbesar', en: 'Zoom in' },
+  zoomOut: { id: 'Perkecil', en: 'Zoom out' },
+  zoomOptions: { id: 'Pilihan zoom', en: 'Zoom options' },
+  zoomLevel: { id: 'Zoom {percent}', en: 'Zoom {percent}' },
+  zoomToFit: { id: 'Pas ke layar', en: 'Zoom to fit' },
+  history: { id: 'Riwayat', en: 'History' },
+  undo: { id: 'Urungkan', en: 'Undo' },
+  redo: { id: 'Ulangi', en: 'Redo' },
 } as const satisfies Record<string, Text>;
 
 /**

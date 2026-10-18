@@ -60,7 +60,7 @@ import { mountDefaultUi } from '@kujam/ui';
 const ui = mountDefaultUi({ board, container: document.getElementById('board')! });
 ```
 
-Toolbar melayang di bawah tengah, mengikuti tema papan, dan bisa dipakai penuh dengan keyboard (Tab ke toolbar, panah kiri/kanan, panah atas untuk pilihan bentuk). Butuh tombol sendiri? Semua kontrol memakai API publik `board`:
+Toolbar tool melayang di bawah tengah, kontrol zoom di kanan bawah, dan urungkan/ulangi di kiri bawah. Semuanya mengikuti tema papan dan bisa dipakai penuh dengan keyboard (Tab ke toolbar, panah kiri/kanan, panah atas untuk pilihan bentuk). Butuh tombol sendiri? Semua kontrol memakai API publik `board`:
 
 ```ts
 board.setTool('sticky');
