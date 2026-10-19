@@ -31,16 +31,16 @@ import type { ConnectorProps } from '../elements/connector.js';
 import { buildDuplicate } from './duplicate.js';
 import { handlePinch, handleWheel } from './navigation.js';
 
-/** Screen distance a press must travel before it becomes a drag. */
+/** Screen distance a press must travel before it becomes a drag. @public */
 export const DRAG_THRESHOLD_PX = 4;
-/** Screen distance within which a resize or rotate handle is grabbed. */
+/** Screen distance within which a resize or rotate handle is grabbed. @public */
 export const HANDLE_TOLERANCE_PX = 8;
-/** Screen distance of the rotate handle above the top edge of the selection frame. */
+/** Screen distance of the rotate handle above the top edge of the selection frame. @public */
 export const ROTATE_HANDLE_OFFSET_PX = 24;
-/** Hit-test tolerance for clicking elements, in screen pixels. */
+/** Hit-test tolerance for clicking elements, in screen pixels. @public */
 export const HIT_TOLERANCE_PX = 4;
 
-/** Handle identifier for select tool interactions. */
+/** Handle identifier for select tool interactions. @public */
 export type SelectHandle = ResizeHandle | 'rotate' | 'connector-start' | 'connector-end';
 
 /**

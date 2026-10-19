@@ -24,13 +24,18 @@
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx,vue,js,mjs,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,vue,js,mjs,json,md}\"",
+    "api:check": "node tooling/api-report.mjs --check",
+    "api:update": "node tooling/api-report.mjs --update",
     "changeset": "changeset",
+    "changeset:check": "node tooling/check-changeset.mjs",
     "version-packages": "changeset version",
+    "release": "changeset publish",
     "clean": "turbo run clean && rm -rf node_modules/.cache .turbo coverage"
   },
   "devDependencies": {
     "@changesets/cli": "^2.28.1",
     "@eslint/js": "^9.21.0",
+    "@microsoft/api-extractor": "^7.59.4",
     "@playwright/test": "1.64.1",
     "@types/node": "^22.13.5",
     "@vitest/coverage-v8": "^3.0.7",

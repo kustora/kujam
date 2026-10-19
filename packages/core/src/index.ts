@@ -107,6 +107,7 @@ import {
 
 export * from './types.js';
 export { deepClone } from './utils/clone.js';
+export { deprecate, isDevelopmentMode, resetDeprecationWarnings } from './utils/deprecate.js';
 export {
   InvalidDocumentError,
   validateDocument,

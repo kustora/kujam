@@ -15,16 +15,27 @@ import {
 } from '@kujam/core';
 import { getStroke } from 'perfect-freehand';
 
+/** Default selection outline stroke color (`#2F6FDB`). @public */
 export const SELECTION_COLOR = '#2F6FDB';
+/** Default selection outline stroke width in screen pixels. @public */
 export const SELECTION_LINE_WIDTH = 2;
+/** Resize handle square side length in screen pixels. @public */
 export const HANDLE_SIZE_PX = 8;
+/** Rotation handle circle radius in screen pixels. @public */
 export const ROTATE_HANDLE_RADIUS_PX = 4;
+/** Vertical offset of the rotation handle above the selection box in screen pixels. @public */
 export const ROTATE_HANDLE_OFFSET_PX = 24;
+/** Connector endpoint handle radius in screen pixels. @public */
 export const CONNECTOR_HANDLE_RADIUS_PX = 5;
+/** Alignment snap guide line color. @public */
 export const SNAP_GUIDE_COLOR = '#e02874';
+/** Marquee selection box fill color. @public */
 export const BRUSH_FILL_COLOR = 'rgba(47, 111, 219, 0.08)';
+/** Marquee selection box stroke color. @public */
 export const BRUSH_STROKE_COLOR = 'rgba(47, 111, 219, 0.8)';
+/** Hovered element outline stroke color. @public */
 export const HOVER_STROKE_COLOR = 'rgba(47, 111, 219, 0.5)';
+/** Default palette for remote collaborator cursors and selections. @public */
 export const DEFAULT_COLLAB_COLORS = [
   '#2F6FDB',
   '#6B4FA0',
@@ -33,6 +44,7 @@ export const DEFAULT_COLLAB_COLORS = [
   '#9B3D7F',
 ] as const;
 
+/** Remote collaborator cursor state rendered on the overlay canvas. @public */
 export interface RemoteCursor {
   readonly id: string;
   readonly x: number;
@@ -41,6 +53,7 @@ export interface RemoteCursor {
   readonly name?: string;
 }
 
+/** In-progress freehand stroke rendered on the overlay layer before commit. @public */
 export interface ActiveStrokeOverlay {
   readonly points: readonly (readonly number[])[];
   readonly color: string;
@@ -48,6 +61,7 @@ export interface ActiveStrokeOverlay {
   readonly brush?: string;
 }
 
+/** Anchor snap indicator rendered while dragging a connector endpoint. @public */
 export interface ConnectorSnapOverlay {
   readonly elementId: string;
   readonly anchor: { readonly x: number; readonly y: number };
@@ -55,6 +69,7 @@ export interface ConnectorSnapOverlay {
   readonly candidates?: readonly { readonly x: number; readonly y: number }[];
 }
 
+/** Live path preview rendered on the overlay canvas while drawing a connector. @public */
 export interface ConnectorPreviewOverlay {
   readonly points: readonly { readonly x: number; readonly y: number }[];
   readonly style?: 'straight' | 'elbow' | 'curved';
@@ -69,6 +84,7 @@ export interface ConnectorPreviewOverlay {
   readonly dash?: 'solid' | 'dashed' | 'dotted';
 }
 
+/** Diagnostic metrics captured during an overlay layer render pass. @public */
 export interface OverlayRenderStats {
   rendered: boolean;
   selectedCount: number;

@@ -18,10 +18,14 @@ import {
 } from '../elements/stroke-utils.js';
 import { handlePinch, handleWheel } from './navigation.js';
 
+/** Eraser operating mode (`stroke` cuts polylines; `area` deletes intersected elements). @public */
 export type EraserMode = 'stroke' | 'area';
+/** Element filter targeted by the eraser tool. @public */
 export type EraserTargets = 'stroke' | 'all' | 'draw';
+/** State names for {@link createEraserTool}. @public */
 export type EraserToolState = 'idle' | 'erasing';
 
+/** Runtime tool data for {@link createEraserTool}. @public */
 export interface EraserToolData {
   mode: EraserMode;
   targets: EraserTargets;
@@ -30,6 +34,7 @@ export interface EraserToolData {
   erasedIds: Set<string>;
 }
 
+/** Configuration options for {@link createEraserTool}. @public */
 export interface EraserToolOptions {
   readonly id?: string;
   readonly mode?: EraserMode;

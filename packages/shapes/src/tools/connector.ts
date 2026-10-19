@@ -33,10 +33,10 @@ import { connectorElement, type ConnectorProps } from '../elements/connector.js'
 import { GEO_STROKE_WIDTHS, rememberedProps } from '../styles.js';
 import { handlePinch, handleWheel } from './navigation.js';
 
-/** Default length when creating a connector by clicking or pressing Enter. */
+/** Default length when creating a connector by clicking or pressing Enter. @public */
 export const DEFAULT_CONNECTOR_LENGTH = 160;
 
-/** State names for {@link connectorTool}. */
+/** State names for {@link connectorTool}. @public */
 export type ConnectorToolState = 'idle' | 'dragging';
 
 /**

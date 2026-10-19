@@ -12,7 +12,7 @@ import {
   type Point,
 } from '@kujam/core';
 
-/** Dash style for connectors and shapes. */
+/** Dash style for connectors and shapes. @public */
 export type ConnectorDash = 'solid' | 'dashed' | 'dotted';
 
 /**
@@ -62,7 +62,7 @@ export const CARDINAL_ANCHORS: Readonly<Record<AnchorSide, Readonly<Point>>> = O
   left: Object.freeze({ x: 0, y: 0.5 }),
 });
 
-/** Ordered list of the four cardinal anchor sides. */
+/** Ordered list of the four cardinal anchor sides. @public */
 export const CARDINAL_SIDES: readonly AnchorSide[] = Object.freeze([
   'top',
   'right',
@@ -70,10 +70,10 @@ export const CARDINAL_SIDES: readonly AnchorSide[] = Object.freeze([
   'left',
 ]);
 
-/** Default screen-pixel tolerance when snapping a connector endpoint to a shape anchor. */
+/** Default screen-pixel tolerance when snapping a connector endpoint to a shape anchor. @public */
 export const SNAP_ANCHOR_TOLERANCE_PX = 16;
 
-/** Default clearance in board units around obstacle boxes for orthogonal elbow routing. */
+/** Default clearance in board units around obstacle boxes for orthogonal elbow routing. @public */
 export const DEFAULT_ELBOW_CLEARANCE = 16;
 
 /**
@@ -315,6 +315,8 @@ function polylineIntersectsAnyBox(points: readonly Point[], boxes: readonly BoxB
 
 /**
  * Removes zero-length segments and merges collinear consecutive segments in an orthogonal polyline.
+ *
+ * @public
  */
 export function simplifyOrthogonalPoints(raw: readonly Point[]): Point[] {
   if (raw.length <= 2) return raw.map((p) => ({ x: p.x, y: p.y }));

@@ -163,7 +163,11 @@ function createLayer<K extends 'div' | 'canvas'>(
   return el;
 }
 
-/** Maximum canvas backing store area in pixels before Safari iOS drops or crashes the canvas (ADR-003, BOARD-803). */
+/**
+ * Maximum canvas backing store area in pixels before Safari iOS drops or crashes the canvas (ADR-003, BOARD-803).
+ *
+ * @public
+ */
 export const SAFARI_MAX_CANVAS_PIXELS = 16_777_216;
 
 /**

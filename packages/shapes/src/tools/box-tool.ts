@@ -26,6 +26,7 @@ export interface BoxToolData {
   dragged: boolean;
 }
 
+/** Options for {@link createBoxTool}. @public */
 export interface BoxToolOptions<P = Record<string, unknown>> {
   readonly id: string;
   readonly type: string;

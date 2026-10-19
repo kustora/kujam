@@ -18,6 +18,7 @@ import { chunkPoints, simplifyPoints } from '../elements/stroke-utils.js';
 import { rememberedProps } from '../styles.js';
 import { handlePinch, handleWheel } from './navigation.js';
 
+/** In-progress stroke state rendered on the overlay layer while drawing. @public */
 export interface ActiveStroke {
   readonly points: readonly (readonly number[])[];
   readonly color: string;
@@ -25,8 +26,10 @@ export interface ActiveStroke {
   readonly brush: string;
 }
 
+/** State names for {@link createDrawTool}. @public */
 export type DrawToolState = 'idle' | 'drawing';
 
+/** Runtime tool data for {@link createDrawTool}. @public */
 export interface DrawToolData {
   points: number[][];
   activeStroke: ActiveStroke | null;
@@ -39,6 +42,8 @@ export interface DrawToolData {
 /**
  * Options of {@link createDrawTool}. `color`, `thickness`, and `brush` are the starting style; the
  * style remembered for the tool in `board.toolStyles` wins over them (BOARD-1108).
+ *
+ * @public
  */
 export interface DrawToolOptions {
   readonly id?: string;
