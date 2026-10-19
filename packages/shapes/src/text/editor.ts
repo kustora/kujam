@@ -321,13 +321,13 @@ export function attachTextEditor(
       return;
     }
 
-    const isGeo = record.type === 'geo';
-    const textPropName = isGeo ? 'label' : 'text';
+    const isLabelProp = record.type === 'geo' || record.type === 'connector';
+    const textPropName = isLabelProp ? 'label' : 'text';
     const currentDelta =
       ((record.props as Record<string, unknown>)[textPropName] as RichText) ?? [{ insert: '\n' }];
     const newDelta = domToRichText(editor);
 
-    // If text is empty (BOARD-1003 criterion: empty text deletes text elements, but keeps sticky notes and geo shapes)
+    // If text is empty (BOARD-1003 criterion: empty text deletes text elements, but keeps sticky notes, geo shapes, and connectors)
     if (isRichTextEmpty(newDelta)) {
       if (record.type === 'text') {
         board.delete(elId, { label: 'delete-empty-text' });
@@ -353,7 +353,14 @@ export function attachTextEditor(
 
     const record = board.getDocument().records[elementId];
     if (!record || record.kind !== 'element') return;
-    if (record.type !== 'sticky' && record.type !== 'text' && record.type !== 'geo') return;
+    if (
+      record.type !== 'sticky' &&
+      record.type !== 'text' &&
+      record.type !== 'geo' &&
+      record.type !== 'connector'
+    ) {
+      return;
+    }
 
     activeElementId = elementId;
     options?.onEditStart?.(elementId);
@@ -368,6 +375,7 @@ export function attachTextEditor(
     const fontFamily = theme.typography.fontFamily;
     const isSticky = record.type === 'sticky';
     const isGeo = record.type === 'geo';
+    const isConnector = record.type === 'connector';
 
     // Style editor to visually blend over canvas element
     editor.style.boxSizing = 'border-box';
@@ -388,12 +396,16 @@ export function attachTextEditor(
       editor.style.padding = '16px';
       editor.style.fontSize = '20px';
       editor.style.textAlign = 'left';
-    } else if (isGeo) {
+    } else if (isGeo || isConnector) {
       editor.style.backgroundColor = 'transparent';
-      const colorKey = ((record.props as { textColor?: ColorKey }).textColor ?? 'black') as ColorKey;
+      const colorKey = (
+        isGeo
+          ? ((record.props as { textColor?: ColorKey }).textColor ?? 'black')
+          : ((record.props as { color?: ColorKey }).color ?? 'black')
+      ) as ColorKey;
       editor.style.color = theme.colors[colorKey] ?? COLOR_VALUES[colorKey] ?? '#17191E';
-      editor.style.padding = '12px';
-      editor.style.fontSize = '16px';
+      editor.style.padding = isConnector ? '4px 8px' : '12px';
+      editor.style.fontSize = isConnector ? '14px' : '16px';
       editor.style.textAlign = 'center';
       editor.style.display = 'flex';
       editor.style.flexDirection = 'column';
@@ -410,9 +422,10 @@ export function attachTextEditor(
       editor.style.textAlign = align === 'end' ? 'right' : align === 'center' ? 'center' : 'left';
     }
 
-    const initialText: RichText = isGeo
-      ? ((record.props as { label?: RichText }).label ?? [{ insert: '\n' }])
-      : ((record.props as { text?: RichText }).text ?? [{ insert: '\n' }]);
+    const initialText: RichText =
+      isGeo || isConnector
+        ? ((record.props as { label?: RichText }).label ?? [{ insert: '\n' }])
+        : ((record.props as { text?: RichText }).text ?? [{ insert: '\n' }]);
     richTextToDom(initialText, editor);
 
     // Stop keydown propagation so board doesn't interpret text as shortcuts
@@ -501,13 +514,22 @@ export function attachTextEditor(
       commitAndClose();
     });
 
-    unmountEditorFn = host.mountEditor(editor, {
-      x: record.x,
-      y: record.y,
-      w: record.w,
-      h: record.h,
-      rotation: record.rotation,
-    });
+    const editorBounds = isConnector
+      ? {
+          x: record.x + record.w / 2 - Math.max(120, record.w) / 2,
+          y: record.y + record.h / 2 - Math.max(36, record.h) / 2,
+          w: Math.max(120, record.w),
+          h: Math.max(36, record.h),
+          rotation: record.rotation,
+        }
+      : {
+          x: record.x,
+          y: record.y,
+          w: record.w,
+          h: record.h,
+          rotation: record.rotation,
+        };
+    unmountEditorFn = host.mountEditor(editor, editorBounds);
 
     // Focus editor and select all text
     setTimeout(() => {

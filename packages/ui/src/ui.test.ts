@@ -32,9 +32,18 @@ const tool = (id: string) => defineTool({ id, initial: 'idle', states: { idle: {
 
 const builtInTools = definePlugin({
   id: 'built-in-tools',
-  tools: ['select', 'hand', 'sticky', 'draw', 'rectangle', 'ellipse', 'text', 'eraser', 'geo'].map(
-    tool,
-  ),
+  tools: [
+    'select',
+    'hand',
+    'sticky',
+    'draw',
+    'rectangle',
+    'ellipse',
+    'connector',
+    'text',
+    'eraser',
+    'geo',
+  ].map(tool),
   keybindings: {
     v: 'tool:select',
     h: 'tool:hand',
@@ -42,6 +51,7 @@ const builtInTools = definePlugin({
     p: 'tool:draw',
     r: 'tool:rectangle',
     o: 'tool:ellipse',
+    l: 'tool:connector',
     t: 'tool:text',
     e: 'tool:eraser',
   },
@@ -93,6 +103,7 @@ describe('BOARD-1402: buildToolbarItems', () => {
       'sticky',
       'draw',
       'shape',
+      'connector',
       'text',
       'eraser',
     ]);
@@ -102,6 +113,8 @@ describe('BOARD-1402: buildToolbarItems', () => {
       ['rectangle', 'R'],
       ['ellipse', 'O'],
     ]);
+    const connector = items.find((i) => i.id === 'connector')!;
+    expect(connector).toMatchObject({ label: 'Konektor', shortcut: 'L', toolId: 'connector' });
   });
 
   it('uses the board locale', () => {
@@ -739,6 +752,126 @@ describe('BOARD-1403: contextual selection toolbar', () => {
     blueOption.click();
 
     expect(board.getElement(rec.id)?.props.color).toBe('blue');
+  });
+
+  it('renders connectorStyle, startArrow, and endArrow action groups cleanly (BOARD-1101)', () => {
+    const connectorPlugin = definePlugin({
+      id: 'test-connector-plugin',
+      elements: [
+        defineElement({
+          type: 'connector',
+          version: 1,
+          props: object({
+            connectorStyle: enumOf(['straight', 'elbow', 'curved']),
+            startArrow: enumOf(['none', 'arrow', 'triangle', 'dot']),
+            endArrow: enumOf(['none', 'arrow', 'triangle', 'dot']),
+          }),
+          defaults: {
+            connectorStyle: 'straight',
+            startArrow: 'none',
+            endArrow: 'arrow',
+          },
+          actions: (el, _data, ctx) => [
+            {
+              id: 'style.connectorStyle.straight',
+              label: 'Gaya konektor: Lurus',
+              group: 'style.connectorStyle',
+              isActive: () => el.props.connectorStyle === 'straight',
+              run: () => ctx.updateProps({ connectorStyle: 'straight' }),
+            },
+            {
+              id: 'style.connectorStyle.elbow',
+              label: 'Gaya konektor: Siku',
+              group: 'style.connectorStyle',
+              isActive: () => el.props.connectorStyle === 'elbow',
+              run: () => ctx.updateProps({ connectorStyle: 'elbow' }),
+            },
+            {
+              id: 'style.startArrow.none',
+              label: 'Panah awal: Tanpa panah',
+              group: 'style.startArrow',
+              isActive: () => el.props.startArrow === 'none',
+              run: () => ctx.updateProps({ startArrow: 'none' }),
+            },
+            {
+              id: 'style.startArrow.dot',
+              label: 'Panah awal: Titik',
+              group: 'style.startArrow',
+              isActive: () => el.props.startArrow === 'dot',
+              run: () => ctx.updateProps({ startArrow: 'dot' }),
+            },
+            {
+              id: 'style.endArrow.arrow',
+              label: 'Panah akhir: Panah',
+              group: 'style.endArrow',
+              isActive: () => el.props.endArrow === 'arrow',
+              run: () => ctx.updateProps({ endArrow: 'arrow' }),
+            },
+            {
+              id: 'style.endArrow.triangle',
+              label: 'Panah akhir: Segitiga',
+              group: 'style.endArrow',
+              isActive: () => el.props.endArrow === 'triangle',
+              run: () => ctx.updateProps({ endArrow: 'triangle' }),
+            },
+          ],
+        }),
+      ],
+    });
+
+    const board = newBoard({ plugins: [builtInTools, defaultCommands, connectorPlugin] });
+    const conn = board.create({
+      type: 'connector',
+      x: 100,
+      y: 100,
+      w: 200,
+      h: 80,
+      props: { connectorStyle: 'straight', startArrow: 'none', endArrow: 'arrow' },
+    })!;
+    board.select(conn.id);
+
+    const el = mountToolbar(board, UI_TAGS.selection);
+    const styleBtn = el.shadowRoot!.querySelector<HTMLButtonElement>(
+      '[data-action="style.connectorStyle"]',
+    )!;
+    expect(styleBtn).not.toBeNull();
+    expect(styleBtn.getAttribute('aria-label')).toBe('Gaya konektor');
+    expect(styleBtn.textContent).toContain('Lurus');
+
+    styleBtn.click();
+    const styleMenu = el.shadowRoot!.querySelector<HTMLElement>('#kujam-selection-connectorStyle')!;
+    expect(styleMenu.hidden).toBe(false);
+    const elbowOpt = styleMenu.querySelector<HTMLButtonElement>(
+      '[data-id="style.connectorStyle.elbow"]',
+    )!;
+    elbowOpt.click();
+    expect(board.getElement(conn.id)?.props.connectorStyle).toBe('elbow');
+
+    const startArrowBtn = el.shadowRoot!.querySelector<HTMLButtonElement>(
+      '[data-action="style.startArrow"]',
+    )!;
+    expect(startArrowBtn).not.toBeNull();
+    expect(startArrowBtn.getAttribute('aria-label')).toBe('Panah awal');
+    startArrowBtn.click();
+    const startArrowMenu = el.shadowRoot!.querySelector<HTMLElement>('#kujam-selection-startArrow')!;
+    const dotOpt = startArrowMenu.querySelector<HTMLButtonElement>(
+      '[data-id="style.startArrow.dot"]',
+    )!;
+    dotOpt.click();
+    expect(board.getElement(conn.id)?.props.startArrow).toBe('dot');
+
+    const endArrowBtn = el.shadowRoot!.querySelector<HTMLButtonElement>(
+      '[data-action="style.endArrow"]',
+    )!;
+    expect(endArrowBtn).not.toBeNull();
+    expect(endArrowBtn.getAttribute('aria-label')).toBe('Panah akhir');
+    endArrowBtn.click();
+    const endArrowMenu = el.shadowRoot!.querySelector<HTMLElement>('#kujam-selection-endArrow')!;
+    const triOpt = endArrowMenu.querySelector<HTMLButtonElement>(
+      '[data-id="style.endArrow.triangle"]',
+    )!;
+    triOpt.click();
+    expect(board.getElement(conn.id)?.props.endArrow).toBe('triangle');
   });
 
   it('renders standard element commands: lock/unlock, duplicate, and delete', () => {

@@ -4,6 +4,9 @@ import {
   createBoard,
   defineElement,
   definePlugin,
+  nullable,
+  number,
+  object,
   rect,
   schema,
   string,
@@ -11,6 +14,7 @@ import {
   type SnapGuide,
 } from '@kujam/core';
 import {
+  CONNECTOR_HANDLE_RADIUS_PX,
   mountRenderer,
   OverlayRenderer,
   ROTATE_HANDLE_RADIUS_PX,
@@ -63,9 +67,30 @@ const boxElement = defineElement({
   },
 });
 
+const connectorElement = defineElement({
+  type: 'connector',
+  version: 1,
+  props: schema({
+    start: object({ x: number(), y: number() }),
+    end: object({ x: number(), y: number() }),
+    startBindingId: nullable(string()),
+    endBindingId: nullable(string()),
+  }),
+  defaults: {
+    start: { x: 0, y: 0 },
+    end: { x: 100, y: 100 },
+    startBindingId: null,
+    endBindingId: null,
+  },
+  geometry: (el) => rect(el.w, el.h),
+  render: {
+    canvas: () => {},
+  },
+});
+
 const testPlugin = definePlugin({
   id: 'test-elements',
-  elements: [boxElement],
+  elements: [boxElement, connectorElement],
 });
 
 function createMockContext() {
@@ -90,6 +115,7 @@ function createMockContext() {
     moveTo: vi.fn((...args: unknown[]) => calls.push(`moveTo(${args.join(',')})`)),
     lineTo: vi.fn((...args: unknown[]) => calls.push(`lineTo(${args.join(',')})`)),
     quadraticCurveTo: vi.fn((...args: unknown[]) => calls.push(`quadraticCurveTo(${args.join(',')})`)),
+    bezierCurveTo: vi.fn((...args: unknown[]) => calls.push(`bezierCurveTo(${args.join(',')})`)),
     arc: vi.fn((...args: unknown[]) => calls.push(`arc(${args.join(',')})`)),
     rect: vi.fn((...args: unknown[]) => calls.push(`rect(${args.join(',')})`)),
     clip: vi.fn(() => calls.push('clip')),
@@ -340,6 +366,155 @@ describe('BOARD-805: Overlay Renderer', () => {
       expect(ctx.fill).toHaveBeenCalled();
       const strokeFill = ctx.fills.find((f) => f.type === 'fill');
       expect(strokeFill).toBeDefined();
+    });
+
+    it('draws circular endpoint handles and bound inner dots for a selected connector (BOARD-1101)', () => {
+      const board = createBoard({ plugins: [testPlugin] });
+      boards.push(board);
+      board.camera.setViewport({ width: 800, height: 600 });
+      board.create({
+        id: 'conn1',
+        type: 'connector',
+        x: 100,
+        y: 120,
+        w: 200,
+        h: 80,
+        props: {
+          start: { x: 0, y: 0 },
+          end: { x: 200, y: 80 },
+          startBindingId: 'bind-start',
+          endBindingId: null,
+        },
+      });
+      board.select(['conn1']);
+
+      const overlayRenderer = new OverlayRenderer(board);
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 600;
+      const ctx = createMockContext();
+
+      const stats = overlayRenderer.render(canvas, ctx as unknown as CanvasRenderingContext2D, 1);
+      expect(stats.rendered).toBe(true);
+      expect(stats.selectedCount).toBe(1);
+
+      // Should NOT draw rectangular 8-handle resize box
+      expect(ctx.strokeRect).not.toHaveBeenCalled();
+      expect(ctx.fillRect).not.toHaveBeenCalled();
+
+      // Should draw highlight line from (100, 120) to (300, 200)
+      expect(ctx.moveTo).toHaveBeenCalledWith(100, 120);
+      expect(ctx.lineTo).toHaveBeenCalledWith(300, 200);
+
+      // Should draw 2 endpoint circles (radius 5px) and 1 bound inner dot (radius 2.5px) at start
+      expect(ctx.arc).toHaveBeenCalledWith(100, 120, CONNECTOR_HANDLE_RADIUS_PX, 0, Math.PI * 2);
+      expect(ctx.arc).toHaveBeenCalledWith(300, 200, CONNECTOR_HANDLE_RADIUS_PX, 0, Math.PI * 2);
+      expect(ctx.arc).toHaveBeenCalledWith(100, 120, 2.5, 0, Math.PI * 2);
+      expect(ctx.arc).not.toHaveBeenCalledWith(300, 200, 2.5, 0, Math.PI * 2);
+    });
+
+    it('draws connectorSnap candidate anchors and snapped point with halo (BOARD-1101d)', () => {
+      const board = createBoard({ plugins: [testPlugin] });
+      boards.push(board);
+      board.camera.setViewport({ width: 800, height: 600 });
+
+      Object.defineProperty(board, 'toolData', {
+        value: {
+          connectorSnap: {
+            elementId: 'box1',
+            anchor: { x: 1, y: 0.5 },
+            point: { x: 250, y: 150 },
+            candidates: [
+              { x: 150, y: 100 },
+              { x: 250, y: 150 },
+              { x: 150, y: 200 },
+              { x: 50, y: 150 },
+            ],
+          },
+        },
+        configurable: true,
+      });
+
+      const overlayRenderer = new OverlayRenderer(board);
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 600;
+      const ctx = createMockContext();
+
+      const stats = overlayRenderer.render(canvas, ctx as unknown as CanvasRenderingContext2D, 1);
+      expect(stats.rendered).toBe(true);
+
+      // Candidate circles (radius 4px)
+      expect(ctx.arc).toHaveBeenCalledWith(150, 100, 4, 0, Math.PI * 2);
+      expect(ctx.arc).toHaveBeenCalledWith(50, 150, 4, 0, Math.PI * 2);
+
+      // Snapped point halo (radius 11px) and inner dot (radius 6px)
+      expect(ctx.arc).toHaveBeenCalledWith(250, 150, 11, 0, Math.PI * 2);
+      expect(ctx.arc).toHaveBeenCalledWith(250, 150, 6, 0, Math.PI * 2);
+    });
+
+    it('draws connectorPreview polyline and bezier curve from toolData (BOARD-1101)', () => {
+      const board = createBoard({ plugins: [testPlugin] });
+      boards.push(board);
+      board.camera.setViewport({ width: 800, height: 600 });
+
+      Object.defineProperty(board, 'toolData', {
+        value: {
+          connectorPreview: {
+            points: [
+              { x: 100, y: 100 },
+              { x: 200, y: 100 },
+              { x: 200, y: 250 },
+            ],
+            style: 'elbow',
+            dash: 'dashed',
+          },
+        },
+        configurable: true,
+      });
+
+      const overlayRenderer = new OverlayRenderer(board);
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 600;
+      const ctx = createMockContext();
+
+      const stats = overlayRenderer.render(canvas, ctx as unknown as CanvasRenderingContext2D, 1);
+      expect(stats.rendered).toBe(true);
+      expect(ctx.moveTo).toHaveBeenCalledWith(100, 100);
+      expect(ctx.lineTo).toHaveBeenCalledWith(200, 100);
+      expect(ctx.lineTo).toHaveBeenCalledWith(200, 250);
+      expect(ctx.setLineDash).toHaveBeenCalledWith([8, 6]);
+
+      // Test curved bezier preview
+      const ctxBezier = createMockContext();
+      Object.defineProperty(board, 'toolData', {
+        value: {
+          connectorPreview: {
+            points: [
+              { x: 100, y: 100 },
+              { x: 300, y: 200 },
+            ],
+            style: 'curved',
+            bezier: [
+              { x: 100, y: 100 },
+              { x: 200, y: 100 },
+              { x: 200, y: 200 },
+              { x: 300, y: 200 },
+            ],
+          },
+        },
+        configurable: true,
+      });
+
+      const statsBezier = overlayRenderer.render(
+        canvas,
+        ctxBezier as unknown as CanvasRenderingContext2D,
+        1,
+      );
+      expect(statsBezier.rendered).toBe(true);
+      expect(ctxBezier.moveTo).toHaveBeenCalledWith(100, 100);
+      expect(ctxBezier.bezierCurveTo).toHaveBeenCalledWith(200, 100, 200, 200, 300, 200);
     });
   });
 

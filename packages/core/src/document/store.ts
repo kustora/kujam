@@ -13,7 +13,7 @@
  */
 
 import { deepClone, deepEqual, deepFreeze, setOwn } from '../utils/clone.js';
-import type { BoardDocument, BoardRecord } from '../types.js';
+import type { BindingRecord, BoardDocument, BoardRecord } from '../types.js';
 import { InvalidDocumentError, validateRecordShape } from './validate.js';
 
 /**
@@ -150,6 +150,13 @@ export interface StoreOptions {
   /** Read on every transaction, since a board can become read-only after loading (BOARD-703). */
   isReadOnly: () => boolean;
   onChange: (event: ChangeEvent) => void;
+  /** Optional hook run inside a transaction right before commit to synchronize reactive records (e.g. bindings). */
+  beforeCommit?: (
+    tx: Transaction,
+    pending: ReadonlyMap<string, BoardRecord | undefined>,
+    records: ReadonlyMap<string, BoardRecord>,
+    bindings: ReadonlyMap<string, BindingRecord>,
+  ) => void;
 }
 
 /** @internal */
@@ -206,7 +213,7 @@ function resolveMergeKey(mergeKey: unknown): string | undefined {
  * @internal
  */
 export function createRecordStore(initial: BoardDocument, options: StoreOptions): RecordStore {
-  const { freeze, isReadOnly, onChange } = options;
+  const { freeze, isReadOnly, onChange, beforeCommit } = options;
   const seal = <T>(value: T): T => (freeze ? deepFreeze(value) : value);
   const sealShallow = <T extends object>(value: T): T => (freeze ? Object.freeze(value) : value);
 
@@ -215,10 +222,15 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
   // costs in proportion to the number of changed records, not the document size.
   let snapshot: BoardDocument | null = seal(initial);
   let records = new Map<string, BoardRecord>(Object.entries(snapshot.records));
+  let bindings = new Map<string, BindingRecord>();
+  for (const [id, rec] of records) {
+    if (rec.kind === 'binding') bindings.set(id, rec);
+  }
   let schemaVersion = snapshot.schemaVersion;
   let meta = snapshot.meta;
   let pluginVersions = snapshot.pluginVersions;
   let active: ActiveTransaction | null = null;
+  let inBeforeCommit = false;
   let disposed = false;
 
   function assertUsable(): void {
@@ -226,6 +238,18 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
   }
 
   function getDocument(): BoardDocument {
+    if (inBeforeCommit && active && active.pending.size > 0) {
+      const out: Record<string, BoardRecord> = {};
+      for (const [id, rec] of records) {
+        if (!active.pending.has(id)) setOwn(out, id, rec);
+      }
+      for (const [id, rec] of active.pending) {
+        if (rec !== undefined) setOwn(out, id, rec);
+      }
+      const doc: BoardDocument = { schemaVersion, meta, records: sealShallow(out) };
+      if (pluginVersions !== undefined) doc.pluginVersions = pluginVersions;
+      return sealShallow(doc);
+    }
     if (!snapshot) {
       const out: Record<string, BoardRecord> = {};
       for (const [id, rec] of records) setOwn(out, id, rec);
@@ -323,8 +347,14 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
     if (writes.length === 0) return null;
 
     for (const [id, rec] of writes) {
-      if (rec === undefined) records.delete(id);
-      else records.set(id, rec);
+      if (rec === undefined) {
+        records.delete(id);
+        bindings.delete(id);
+      } else {
+        records.set(id, rec);
+        if (rec.kind === 'binding') bindings.set(id, rec);
+        else bindings.delete(id);
+      }
     }
     snapshot = null;
     return buildEvent(state.origin, state.label, added, updated, removed, state.mergeKey);
@@ -351,6 +381,9 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
   return {
     getDocument,
     getRecord(id) {
+      if (inBeforeCommit && active && active.pending.has(id)) {
+        return active.pending.get(id);
+      }
       return records.get(id);
     },
     inTransaction() {
@@ -373,6 +406,14 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
       try {
         result = fn(state.tx);
         if (isThenable(result)) throw asyncError();
+        if (beforeCommit && origin !== 'undo' && origin !== 'redo' && state.pending.size > 0) {
+          inBeforeCommit = true;
+          try {
+            beforeCommit(state.tx, state.pending, records, bindings);
+          } finally {
+            inBeforeCommit = false;
+          }
+        }
       } finally {
         // Full rollback when fn throws: pending changes are discarded without touching state.
         active = null;
@@ -389,15 +430,18 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
       const updated: Record<string, RecordUpdate> = {};
       const removed: Record<string, BoardRecord> = {};
       const next = new Map<string, BoardRecord>();
+      const nextBindings = new Map<string, BindingRecord>();
 
       for (const [id, incoming] of Object.entries(doc.records)) {
         const before = records.get(id);
         if (before !== undefined && deepEqual(before, incoming)) {
           next.set(id, before);
+          if (before.kind === 'binding') nextBindings.set(id, before);
           continue;
         }
         const after = seal(incoming);
         next.set(id, after);
+        if (after.kind === 'binding') nextBindings.set(id, after);
         if (before === undefined) setOwn(added, id, after);
         else setOwn(updated, id, sealShallow({ before, after }));
       }
@@ -406,6 +450,7 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
       }
 
       records = next;
+      bindings = nextBindings;
       schemaVersion = doc.schemaVersion;
       meta = seal(doc.meta);
       pluginVersions = doc.pluginVersions === undefined ? undefined : seal(doc.pluginVersions);

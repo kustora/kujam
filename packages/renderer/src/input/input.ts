@@ -324,6 +324,9 @@ export function attachInput(
           currentHoverId = nextHover;
           options?.onHover?.(nextHover);
         }
+        if (board.tool === 'connector') {
+          dispatch(createPointerEvent('pointer-move', e, screen, point, pointerKind(e.pointerType)));
+        }
       }
       return;
     }

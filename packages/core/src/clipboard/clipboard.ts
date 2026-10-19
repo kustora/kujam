@@ -168,11 +168,30 @@ export function extractContent(board: Board, ids: readonly string[]): BoardDocum
     referenced.add(el.pageId);
     collectStrings(el.props, referenced);
   }
+  const includedBindings = new Set<string>();
   for (const rec of Object.values(doc.records)) {
     if (rec.kind === 'binding' && included.has(rec.fromId) && included.has(rec.toId)) {
       records[rec.id] = rec;
+      includedBindings.add(rec.id);
     } else if ((rec.kind === 'page' || rec.kind === 'asset') && referenced.has(rec.id)) {
       records[rec.id] = rec;
+    }
+  }
+  for (const id of included) {
+    const el = records[id] as ElementRecord;
+    const startBId = el.props.startBindingId;
+    const endBId = el.props.endBindingId;
+    const clearStart = typeof startBId === 'string' && !includedBindings.has(startBId);
+    const clearEnd = typeof endBId === 'string' && !includedBindings.has(endBId);
+    if (clearStart || clearEnd) {
+      records[id] = {
+        ...el,
+        props: {
+          ...el.props,
+          ...(clearStart ? { startBindingId: null } : {}),
+          ...(clearEnd ? { endBindingId: null } : {}),
+        },
+      };
     }
   }
   return deepClone({ ...doc, records }) as BoardDocument;
@@ -269,15 +288,48 @@ export function insertContent(
     dy = at.y - (minY + maxY) / 2;
   }
 
-  const elements: ElementRecord[] = sourceElements.map((el, i) => ({
-    ...el,
-    id: idMap.get(el.id)!,
-    pageId: targetPage,
-    parentId: el.parentId !== null && idMap.has(el.parentId) ? idMap.get(el.parentId)! : null,
-    index: indexes[i]!,
-    x: el.x + dx,
-    y: el.y + dy,
-  }));
+  const validBindingIds = new Set(
+    sourceBindings.filter((b) => idMap.has(b.fromId) && idMap.has(b.toId)).map((b) => b.id),
+  );
+
+  const elements: ElementRecord[] = sourceElements.map((el, i) => {
+    const hasStartBId = Object.hasOwn(el.props, 'startBindingId');
+    const hasEndBId = Object.hasOwn(el.props, 'endBindingId');
+    const startBId = el.props.startBindingId;
+    const endBId = el.props.endBindingId;
+    const props =
+      hasStartBId || hasEndBId
+        ? {
+            ...el.props,
+            ...(hasStartBId
+              ? {
+                  startBindingId:
+                    typeof startBId === 'string' && validBindingIds.has(startBId)
+                      ? (idMap.get(startBId) ?? null)
+                      : null,
+                }
+              : {}),
+            ...(hasEndBId
+              ? {
+                  endBindingId:
+                    typeof endBId === 'string' && validBindingIds.has(endBId)
+                      ? (idMap.get(endBId) ?? null)
+                      : null,
+                }
+              : {}),
+          }
+        : el.props;
+    return {
+      ...el,
+      id: idMap.get(el.id)!,
+      pageId: targetPage,
+      parentId: el.parentId !== null && idMap.has(el.parentId) ? idMap.get(el.parentId)! : null,
+      index: indexes[i]!,
+      x: el.x + dx,
+      y: el.y + dy,
+      props,
+    };
+  });
   const bindings: BindingRecord[] = sourceBindings
     .filter((b) => idMap.has(b.fromId) && idMap.has(b.toId))
     .map((b) => ({

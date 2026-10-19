@@ -167,6 +167,12 @@ const BUILT_INS: readonly BuiltIn[] = [
       { toolId: 'ellipse', label: 'tool.ellipse' },
     ],
   },
+  {
+    id: 'connector',
+    label: 'tool.connector',
+    icon: 'connector',
+    styles: (board) => [colorStyle(board, 'connector', 'colors')],
+  },
   { id: 'text', label: 'tool.text', icon: 'text' },
   { id: 'eraser', label: 'tool.eraser', icon: 'eraser' },
 ];

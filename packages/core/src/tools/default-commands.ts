@@ -185,7 +185,18 @@ function copyTree(
   parentId: string | null,
   index: string | undefined,
   offset: Point,
+  idMap: Map<string, string>,
 ): string | undefined {
+  const hasStartBId = Object.hasOwn(el.props, 'startBindingId');
+  const hasEndBId = Object.hasOwn(el.props, 'endBindingId');
+  const props =
+    hasStartBId || hasEndBId
+      ? {
+          ...el.props,
+          ...(hasStartBId ? { startBindingId: null } : {}),
+          ...(hasEndBId ? { endBindingId: null } : {}),
+        }
+      : el.props;
   const copy = board.create({
     type: el.type,
     pageId: el.pageId,
@@ -197,13 +208,14 @@ function copyTree(
     w: el.w,
     h: el.h,
     opacity: el.opacity,
-    props: el.props,
+    props,
     meta: el.meta,
   });
   if (!copy) return undefined;
+  idMap.set(el.id, copy.id);
   // Children keep their own order under the new parent, so their indexes can be reused.
   for (const child of board.query({ pageId: el.pageId, parentId: el.id })) {
-    copyTree(board, child, copy.id, child.index, offset);
+    copyTree(board, child, copy.id, child.index, offset, idMap);
   }
   return copy.id;
 }
@@ -214,9 +226,52 @@ function duplicate(board: Board, offset: Point): void {
   const roots = selected
     .filter((el) => !hasAncestorIn(board, el, ids))
     .sort((a, b) => compareIndex(a.index, b.index));
-  const copies = board.history.batch('element.duplicate', () =>
-    roots.map((el) => copyTree(board, el, el.parentId, undefined, offset)),
-  );
+  const doc = board.getDocument();
+  const idMap = new Map<string, string>();
+  const copies = board.history.batch('element.duplicate', () => {
+    const out = roots.map((el) => copyTree(board, el, el.parentId, undefined, offset, idMap));
+    const bindingIdMap = new Map<string, string>();
+    board.transact((tx) => {
+      for (const rec of Object.values(doc.records)) {
+        if (rec.kind === 'binding' && idMap.has(rec.fromId) && idMap.has(rec.toId)) {
+          const newBId = board.createId();
+          bindingIdMap.set(rec.id, newBId);
+          tx.put({
+            id: newBId,
+            kind: 'binding',
+            fromId: idMap.get(rec.fromId)!,
+            toId: idMap.get(rec.toId)!,
+            anchor: rec.anchor,
+          });
+        }
+      }
+      if (bindingIdMap.size > 0) {
+        for (const [origId, copyId] of idMap) {
+          const origEl = doc.records[origId];
+          const copyEl = tx.get(copyId);
+          if (!origEl || origEl.kind !== 'element' || !copyEl || copyEl.kind !== 'element') continue;
+          const origStart = origEl.props.startBindingId;
+          const origEnd = origEl.props.endBindingId;
+          const nextStart =
+            typeof origStart === 'string' ? (bindingIdMap.get(origStart) ?? null) : null;
+          const nextEnd = typeof origEnd === 'string' ? (bindingIdMap.get(origEnd) ?? null) : null;
+          if (nextStart !== null || nextEnd !== null) {
+            tx.put({
+              ...copyEl,
+              props: {
+                ...copyEl.props,
+                ...(Object.hasOwn(origEl.props, 'startBindingId')
+                  ? { startBindingId: nextStart }
+                  : {}),
+                ...(Object.hasOwn(origEl.props, 'endBindingId') ? { endBindingId: nextEnd } : {}),
+              },
+            });
+          }
+        }
+      }
+    });
+    return out;
+  });
   board.select(copies.filter((id): id is string => id !== undefined));
 }
 

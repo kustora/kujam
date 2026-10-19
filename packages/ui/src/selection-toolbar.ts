@@ -590,6 +590,129 @@ export function createSelectionToolbarClass(win: UiWindow) {
             continue;
           }
 
+          // Connector path style: style.connectorStyle (or connectorStyle)
+          if (groupKey === 'style.connectorStyle' || groupKey === 'connectorStyle') {
+            const groupLabel = t('style.connectorStyle', board.locale);
+            const { wrap, button } = createControlWrap(groupKey);
+            const activeAction = groupActions.find((a) => a.isActive?.());
+            const styleKey = activeAction ? activeAction.id.split('.').pop()! : 'straight';
+            const styleLabelKey: UiStringKey =
+              styleKey === 'elbow'
+                ? 'style.connectorStyle.elbow'
+                : styleKey === 'curved'
+                  ? 'style.connectorStyle.curved'
+                  : 'style.connectorStyle.straight';
+
+            const labelEl = doc.createElement('span');
+            labelEl.className = 'btn-label';
+            labelEl.textContent = t(styleLabelKey, board.locale);
+            button.append(labelEl);
+
+            const caret = doc.createElement('span');
+            caret.className = 'caret';
+            button.append(caret);
+            labelButton(button, groupLabel, undefined);
+
+            const popup = createMenu(doc, {
+              id: `kujam-selection-connectorStyle`,
+              label: groupLabel,
+              anchor: button,
+              wrap,
+              radio: true,
+            });
+
+            const entries: MenuEntry[] = groupActions.map((action) => {
+              const key = action.id.split('.').pop()!;
+              const labelKey: UiStringKey =
+                key === 'elbow'
+                  ? 'style.connectorStyle.elbow'
+                  : key === 'curved'
+                    ? 'style.connectorStyle.curved'
+                    : 'style.connectorStyle.straight';
+              return {
+                id: action.id,
+                label: t(labelKey, board.locale),
+                checked: action.isActive?.(),
+                disabled: action.isEnabled ? !action.isEnabled() : false,
+                select: () => action.run(),
+              };
+            });
+            popup.setEntries(entries);
+
+            button.addEventListener('click', () => {
+              if (popup.isOpen) popup.close();
+              else {
+                closeMenus();
+                popup.open();
+              }
+            });
+
+            rendered.push({ id: groupKey, button, menu: popup });
+            continue;
+          }
+
+          // Connector arrowheads: style.startArrow / startArrow and style.endArrow / endArrow
+          if (
+            groupKey === 'style.startArrow' ||
+            groupKey === 'startArrow' ||
+            groupKey === 'style.endArrow' ||
+            groupKey === 'endArrow'
+          ) {
+            const isStart = groupKey === 'style.startArrow' || groupKey === 'startArrow';
+            const groupLabel = t(isStart ? 'style.startArrow' : 'style.endArrow', board.locale);
+            const { wrap, button } = createControlWrap(groupKey);
+            const activeAction = groupActions.find((a) => a.isActive?.());
+            const arrowKey = activeAction
+              ? activeAction.id.split('.').pop()!
+              : isStart
+                ? 'none'
+                : 'arrow';
+
+            const labelEl = doc.createElement('span');
+            labelEl.className = 'btn-label';
+            labelEl.textContent = tOr(`style.arrow.${arrowKey}`, board.locale, arrowKey);
+            button.append(labelEl);
+
+            const caret = doc.createElement('span');
+            caret.className = 'caret';
+            button.append(caret);
+            labelButton(button, groupLabel, undefined);
+
+            const popup = createMenu(doc, {
+              id: `kujam-selection-${isStart ? 'startArrow' : 'endArrow'}`,
+              label: groupLabel,
+              anchor: button,
+              wrap,
+              radio: true,
+            });
+
+            const entries: MenuEntry[] = groupActions.map((action) => {
+              const key = action.id.split('.').pop()!;
+              const fallback = action.label.includes(':')
+                ? action.label.split(':').slice(1).join(':').trim()
+                : action.label;
+              return {
+                id: action.id,
+                label: tOr(`style.arrow.${key}`, board.locale, fallback),
+                checked: action.isActive?.(),
+                disabled: action.isEnabled ? !action.isEnabled() : false,
+                select: () => action.run(),
+              };
+            });
+            popup.setEntries(entries);
+
+            button.addEventListener('click', () => {
+              if (popup.isOpen) popup.close();
+              else {
+                closeMenus();
+                popup.open();
+              }
+            });
+
+            rendered.push({ id: groupKey, button, menu: popup });
+            continue;
+          }
+
           // Generic style or element action group
           if (groupActions.length > 1) {
             const groupLabel = groupActions[0]?.label.split(':')[0] ?? groupKey;

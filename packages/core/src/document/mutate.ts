@@ -464,6 +464,25 @@ export function deleteElementRecords(
   ctx.transact(
     (tx) => {
       for (const id of deletedList) {
+        const rec = doc.records[id];
+        if (rec && rec.kind === 'binding' && !toDelete.has(rec.fromId)) {
+          const currentFrom = tx.get(rec.fromId);
+          if (currentFrom && currentFrom.kind === 'element') {
+            const props = currentFrom.props;
+            const startMatch = props.startBindingId === id;
+            const endMatch = props.endBindingId === id;
+            if (startMatch || endMatch) {
+              tx.put({
+                ...currentFrom,
+                props: {
+                  ...props,
+                  ...(startMatch ? { startBindingId: null } : {}),
+                  ...(endMatch ? { endBindingId: null } : {}),
+                },
+              });
+            }
+          }
+        }
         tx.remove(id);
       }
     },

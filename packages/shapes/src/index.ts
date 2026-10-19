@@ -10,10 +10,12 @@
 
 import { definePlugin } from '@kujam/core';
 import { DEFAULT_BRUSHES } from './brushes.js';
+import { connectorElement, registerConnectorBoard } from './elements/connector.js';
 import { drawElement } from './elements/draw.js';
 import { geoElement } from './elements/geo.js';
 import { stickyElement } from './elements/sticky.js';
 import { textElement } from './elements/text.js';
+import { connectorTool } from './tools/connector.js';
 import { drawTool } from './tools/draw.js';
 import { eraserTool } from './tools/eraser.js';
 import { ellipseTool, geoTool, rectangleTool } from './tools/geo.js';
@@ -34,6 +36,39 @@ export {
 } from './elements/stroke-utils.js';
 export { textElement } from './elements/text.js';
 export { geoElement, geoGeometry, GEO_KINDS, type GeoKind } from './elements/geo.js';
+export {
+  connectorElement,
+  connectorPropsSchema,
+  computeConnectorGeometry,
+  computeElementConnectorRoute,
+  registerConnectorBoard,
+  renderConnectorCanvas,
+  resolveConnectorRouteOptions,
+  type ConnectorProps,
+} from './elements/connector.js';
+export {
+  ARROWHEAD_STYLES,
+  CARDINAL_ANCHORS,
+  CARDINAL_SIDES,
+  CONNECTOR_STYLES,
+  DEFAULT_ELBOW_CLEARANCE,
+  SNAP_ANCHOR_TOLERANCE_PX,
+  computeConnectorRoute,
+  drawArrowhead,
+  findSnapAnchor,
+  normalizeConnectorBounds,
+  resolveAnchorSide,
+  resolveAnchorWorldPoint,
+  simplifyOrthogonalPoints,
+  type AnchorSide,
+  type ArrowheadStyle,
+  type ConnectorDash,
+  type ConnectorPreview,
+  type ConnectorRouteOptions,
+  type ConnectorRouteResult,
+  type ConnectorSnapTarget,
+  type ConnectorStyle,
+} from './elements/connector-routing.js';
 export { DRAW_THICKNESSES, GEO_STROKE_WIDTHS } from './styles.js';
 export {
   DRAG_THRESHOLD_PX,
@@ -41,6 +76,7 @@ export {
   HIT_TOLERANCE_PX,
   ROTATE_HANDLE_OFFSET_PX,
   selectTool,
+  type SelectHandle,
   type SelectToolData,
 } from './tools/select.js';
 export { handTool, type HandToolData } from './tools/hand.js';
@@ -48,6 +84,12 @@ export { createBoxTool, type BoxToolOptions } from './tools/box-tool.js';
 export { stickyTool } from './tools/sticky.js';
 export { textTool } from './tools/text.js';
 export { createGeoTool, geoTool, rectangleTool, ellipseTool } from './tools/geo.js';
+export {
+  connectorTool,
+  DEFAULT_CONNECTOR_LENGTH,
+  type ConnectorToolData,
+  type ConnectorToolState,
+} from './tools/connector.js';
 export {
   createDrawTool,
   drawTool,
@@ -121,22 +163,28 @@ export {
 } from './text/editor.js';
 
 /**
- * Built-in elements plugin for release 0.1 (`sticky`, `draw`, `text`, `geo`) with the `pen` and
- * `highlighter` brushes used by `draw` (BOARD-603), ready to install via
+ * Built-in elements plugin (`sticky`, `draw`, `text`, `geo`, `connector`) with the `pen` and
+ * `highlighter` brushes used by `draw` (BOARD-603, BOARD-1101), ready to install via
  * `createBoard({ plugins: [defaultElements, defaultTools] })` or `createElementRegistry(defaultElements)`.
- * Connectors, frames, images, and groups follow in 0.2 (BOARD-1101, BOARD-1105, BOARD-1103, BOARD-1104).
  *
  * @public
  */
 export const defaultElements = definePlugin({
   id: 'default-elements',
-  elements: Object.freeze([stickyElement, drawElement, textElement, geoElement] as const),
+  elements: Object.freeze([
+    stickyElement,
+    drawElement,
+    textElement,
+    geoElement,
+    connectorElement,
+  ] as const),
   brushes: DEFAULT_BRUSHES,
+  setup: (board) => registerConnectorBoard(board),
 });
 
 /**
  * Built-in tools plugin, ready to install via `createBoard({ plugins: [defaultElements, defaultTools] })`.
- * Contains navigation, selection, and creation tools (BOARD-502, BOARD-913) with standard shortcuts.
+ * Contains navigation, selection, and creation tools (BOARD-502, BOARD-913, BOARD-1101) with standard shortcuts.
  *
  * @public
  */
@@ -151,6 +199,7 @@ export const defaultTools = definePlugin({
     geoTool,
     rectangleTool,
     ellipseTool,
+    connectorTool,
     eraserTool,
   ] as const),
   keybindings: {
@@ -161,8 +210,10 @@ export const defaultTools = definePlugin({
     t: 'tool:text',
     r: 'tool:rectangle',
     o: 'tool:ellipse',
+    l: 'tool:connector',
     e: 'tool:eraser',
   },
+  setup: (board) => registerConnectorBoard(board),
 });
 
 /**
@@ -171,7 +222,7 @@ export const defaultTools = definePlugin({
  *
  * @public
  */
-export const DEFAULT_ELEMENT_TYPES = ['sticky', 'draw', 'text', 'geo'] as const;
+export const DEFAULT_ELEMENT_TYPES = ['sticky', 'draw', 'text', 'geo', 'connector'] as const;
 
 /**
  * String type for built-in elements.

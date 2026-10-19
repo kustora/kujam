@@ -243,37 +243,165 @@ function seedAllElements(board: Board): void {
   })?.id;
 
   // 5. Connectors / Bindings between elements
-  board.transact((tx) => {
+  if (board.elements.has('connector')) {
     if (idRect && idDiamond) {
-      tx.put({
-        id: board.createId(),
-        kind: 'binding',
-        fromId: idRect,
-        toId: idDiamond,
-        anchor: { x: 0.5, y: 1 },
+      const startBindingId = board.createId();
+      const endBindingId = board.createId();
+      const conn = board.create({
+        type: 'connector',
+        x: 855,
+        y: 230,
+        w: 5,
+        h: 40,
+        props: {
+          start: { x: 5, y: 0 },
+          end: { x: 0, y: 40 },
+          startBindingId,
+          endBindingId,
+          connectorStyle: 'straight',
+          startArrow: 'none',
+          endArrow: 'arrow',
+          color: 'blue',
+          strokeWidth: 2,
+          dash: 'solid',
+        },
       });
+      if (conn) {
+        board.transact((tx) => {
+          tx.put({
+            id: startBindingId,
+            kind: 'binding',
+            fromId: conn.id,
+            toId: idRect,
+            anchor: { x: 0.5, y: 1 },
+          });
+          tx.put({
+            id: endBindingId,
+            kind: 'binding',
+            fromId: conn.id,
+            toId: idDiamond,
+            anchor: { x: 0.5, y: 0 },
+          });
+        });
+      }
     }
 
     if (idDiamond && idArrow) {
-      tx.put({
-        id: board.createId(),
-        kind: 'binding',
-        fromId: idDiamond,
-        toId: idArrow,
-        anchor: { x: 1, y: 0.5 },
+      const startBindingId = board.createId();
+      const endBindingId = board.createId();
+      const conn = board.create({
+        type: 'connector',
+        x: 940,
+        y: 345,
+        w: 50,
+        h: 175,
+        props: {
+          start: { x: 0, y: 0 },
+          end: { x: 50, y: 175 },
+          startBindingId,
+          endBindingId,
+          connectorStyle: 'elbow',
+          startArrow: 'dot',
+          endArrow: 'triangle',
+          color: 'orange',
+          strokeWidth: 2,
+          dash: 'solid',
+        },
       });
+      if (conn) {
+        board.transact((tx) => {
+          tx.put({
+            id: startBindingId,
+            kind: 'binding',
+            fromId: conn.id,
+            toId: idDiamond,
+            anchor: { x: 1, y: 0.5 },
+          });
+          tx.put({
+            id: endBindingId,
+            kind: 'binding',
+            fromId: conn.id,
+            toId: idArrow,
+            anchor: { x: 0, y: 0.5 },
+          });
+        });
+      }
     }
 
     if (idRounded && idArrow) {
-      tx.put({
-        id: board.createId(),
-        kind: 'binding',
-        fromId: idRounded,
-        toId: idArrow,
-        anchor: { x: 0.5, y: 1 },
+      const startBindingId = board.createId();
+      const endBindingId = board.createId();
+      const conn = board.create({
+        type: 'connector',
+        x: 1080,
+        y: 230,
+        w: 10,
+        h: 240,
+        props: {
+          start: { x: 0, y: 0 },
+          end: { x: 10, y: 240 },
+          startBindingId,
+          endBindingId,
+          connectorStyle: 'curved',
+          startArrow: 'none',
+          endArrow: 'arrow',
+          color: 'green',
+          strokeWidth: 2,
+          dash: 'dashed',
+        },
       });
+      if (conn) {
+        board.transact((tx) => {
+          tx.put({
+            id: startBindingId,
+            kind: 'binding',
+            fromId: conn.id,
+            toId: idRounded,
+            anchor: { x: 0.5, y: 1 },
+          });
+          tx.put({
+            id: endBindingId,
+            kind: 'binding',
+            fromId: conn.id,
+            toId: idArrow,
+            anchor: { x: 0.5, y: 0 },
+          });
+        });
+      }
     }
-  });
+  } else {
+    board.transact((tx) => {
+      if (idRect && idDiamond) {
+        tx.put({
+          id: board.createId(),
+          kind: 'binding',
+          fromId: idRect,
+          toId: idDiamond,
+          anchor: { x: 0.5, y: 1 },
+        });
+      }
+
+      if (idDiamond && idArrow) {
+        tx.put({
+          id: board.createId(),
+          kind: 'binding',
+          fromId: idDiamond,
+          toId: idArrow,
+          anchor: { x: 1, y: 0.5 },
+        });
+      }
+
+      if (idRounded && idArrow) {
+        tx.put({
+          id: board.createId(),
+          kind: 'binding',
+          fromId: idRounded,
+          toId: idArrow,
+          anchor: { x: 0.5, y: 1 },
+        });
+      }
+    });
+  }
 }
 
 export default defineScenario({
@@ -307,9 +435,10 @@ export default defineScenario({
       { id: 'hand', label: '✋ Tangan (H)' },
       { id: 'sticky', label: '📝 Sticky (S)' },
       { id: 'draw', label: '✏️ Pena (P)' },
-      { id: 'text', label: '🔤 Teks (T)' },
       { id: 'rectangle', label: '◻️ Kotak (R)' },
       { id: 'ellipse', label: '⬭ Elips (O)' },
+      { id: 'connector', label: '↗️ Konektor (L)' },
+      { id: 'text', label: '🔤 Teks (T)' },
       { id: 'eraser', label: '🧹 Hapus (E)' },
     ];
 

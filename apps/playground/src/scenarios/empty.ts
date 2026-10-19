@@ -72,7 +72,7 @@ function seedDemoElements(board: Board): void {
   });
 
   // Geometric shape: Diamond
-  board.create({
+  const diamond = board.create({
     type: 'geo',
     x: 540,
     y: 150,
@@ -91,7 +91,7 @@ function seedDemoElements(board: Board): void {
   });
 
   // Geometric shape: Rounded Rectangle
-  board.create({
+  const roundedRect = board.create({
     type: 'geo',
     x: 740,
     y: 150,
@@ -108,6 +108,49 @@ function seedDemoElements(board: Board): void {
       label: [{ insert: 'Proses\n', attributes: { bold: true } }],
     },
   });
+
+  // Bound connector between Diamond and Rounded Rectangle (BOARD-1101)
+  if (board.elements.has('connector') && diamond && roundedRect) {
+    const startBindingId = board.createId();
+    const endBindingId = board.createId();
+    const conn = board.create({
+      type: 'connector',
+      x: 700,
+      y: 220,
+      w: 40,
+      h: 10,
+      props: {
+        start: { x: 0, y: 10 },
+        end: { x: 40, y: 0 },
+        startBindingId,
+        endBindingId,
+        connectorStyle: 'elbow',
+        startArrow: 'none',
+        endArrow: 'arrow',
+        color: 'blue',
+        strokeWidth: 2,
+        dash: 'solid',
+      },
+    });
+    if (conn) {
+      board.transact((tx) => {
+        tx.put({
+          id: startBindingId,
+          kind: 'binding',
+          fromId: conn.id,
+          toId: diamond.id,
+          anchor: { x: 1, y: 0.5 },
+        });
+        tx.put({
+          id: endBindingId,
+          kind: 'binding',
+          fromId: conn.id,
+          toId: roundedRect.id,
+          anchor: { x: 0, y: 0.5 },
+        });
+      });
+    }
+  }
 
   // Geometric shape: Star
   board.create({
@@ -266,9 +309,10 @@ export default defineScenario({
       { id: 'hand', label: '✋ Tangan (H)' },
       { id: 'sticky', label: '📝 Sticky (S)' },
       { id: 'draw', label: '✏️ Pena (P)' },
-      { id: 'text', label: '🔤 Teks (T)' },
       { id: 'rectangle', label: '◻️ Kotak (R)' },
       { id: 'ellipse', label: '⬭ Elips (O)' },
+      { id: 'connector', label: '↗️ Konektor (L)' },
+      { id: 'text', label: '🔤 Teks (T)' },
       { id: 'eraser', label: '🧹 Hapus (E)' },
     ];
 
@@ -371,7 +415,7 @@ export default defineScenario({
           board.delete(recs.map((r) => r.id));
         },
       },
-      '🗑️ Kosongkan Papan',
+    '🗑️ Kosongkan Papan',
     );
 
     controls.append(
@@ -391,7 +435,7 @@ export default defineScenario({
           h('li', {}, 'Klik elemen untuk memilih dan menggeser.'),
           h('li', {}, 'Shift + Drag sudut handle untuk mengunci rasio aspek.'),
           h('li', {}, 'Klik 2x pada sticky, teks, atau bentuk untuk mengedit teks secara inline.'),
-          h('li', {}, 'Shortcut: V (Pilih), H (Tangan), S (Sticky), P (Pena), T (Teks), R (Kotak), O (Elips), E (Hapus).'),
+          h('li', {}, 'Shortcut: V (Pilih), H (Tangan), S (Sticky), P (Pena), R (Kotak), O (Elips), L (Konektor), T (Teks), E (Hapus).'),
         ),
       ),
     );

@@ -21,6 +21,7 @@ export {
   OverlayRenderer,
   BRUSH_FILL_COLOR,
   BRUSH_STROKE_COLOR,
+  CONNECTOR_HANDLE_RADIUS_PX,
   DEFAULT_COLLAB_COLORS,
   HANDLE_SIZE_PX,
   HOVER_STROKE_COLOR,
@@ -29,5 +30,7 @@ export {
   SELECTION_COLOR,
   SELECTION_LINE_WIDTH,
   SNAP_GUIDE_COLOR,
+  type ConnectorPreviewOverlay,
+  type ConnectorSnapOverlay,
   type RemoteCursor,
 } from './layers/overlay.js';

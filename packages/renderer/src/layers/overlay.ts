@@ -20,6 +20,7 @@ export const SELECTION_LINE_WIDTH = 2;
 export const HANDLE_SIZE_PX = 8;
 export const ROTATE_HANDLE_RADIUS_PX = 4;
 export const ROTATE_HANDLE_OFFSET_PX = 24;
+export const CONNECTOR_HANDLE_RADIUS_PX = 5;
 export const SNAP_GUIDE_COLOR = '#e02874';
 export const BRUSH_FILL_COLOR = 'rgba(47, 111, 219, 0.08)';
 export const BRUSH_STROKE_COLOR = 'rgba(47, 111, 219, 0.8)';
@@ -41,6 +42,27 @@ export interface ActiveStrokeOverlay {
   readonly brush?: string;
 }
 
+export interface ConnectorSnapOverlay {
+  readonly elementId: string;
+  readonly anchor: { readonly x: number; readonly y: number };
+  readonly point: { readonly x: number; readonly y: number };
+  readonly candidates?: readonly { readonly x: number; readonly y: number }[];
+}
+
+export interface ConnectorPreviewOverlay {
+  readonly points: readonly { readonly x: number; readonly y: number }[];
+  readonly style?: 'straight' | 'elbow' | 'curved';
+  readonly bezier?: readonly [
+    { readonly x: number; readonly y: number },
+    { readonly x: number; readonly y: number },
+    { readonly x: number; readonly y: number },
+    { readonly x: number; readonly y: number },
+  ];
+  readonly color?: string;
+  readonly strokeWidth?: number;
+  readonly dash?: 'solid' | 'dashed' | 'dotted';
+}
+
 export interface OverlayRenderStats {
   rendered: boolean;
   selectedCount: number;
@@ -54,6 +76,8 @@ interface ToolOverlayData {
   brush?: BoxBounds | null;
   guides?: readonly SnapGuide[];
   activeStroke?: ActiveStrokeOverlay | null;
+  connectorSnap?: ConnectorSnapOverlay | null;
+  connectorPreview?: ConnectorPreviewOverlay | null;
 }
 
 function renderStrokeOutline(
@@ -141,13 +165,21 @@ export class OverlayRenderer {
       }
     }
 
-    // 2. Gather tool data (selection brush, snap guides, active stroke)
+    // 2. Gather tool data (selection brush, snap guides, active stroke, connector snap/preview)
     const toolData = board.toolData as ToolOverlayData | null;
     const brush = toolData?.brush ?? null;
     const selectionBrush = isBoxBounds(brush) ? brush : null;
     const guides = toolData?.guides ?? [];
     const activeStroke = toolData?.activeStroke ?? null;
     const hasActiveStroke = Boolean(activeStroke && activeStroke.points && activeStroke.points.length > 0);
+    const connectorSnap = toolData?.connectorSnap ?? null;
+    const hasConnectorSnap = Boolean(connectorSnap && connectorSnap.point);
+    const connectorPreview = toolData?.connectorPreview ?? null;
+    const hasConnectorPreview = Boolean(
+      connectorPreview &&
+        ((connectorPreview.points && connectorPreview.points.length >= 2) ||
+          (connectorPreview.bezier && connectorPreview.bezier.length === 4)),
+    );
 
     // 3. Hovered element
     const hoveredEl =
@@ -165,7 +197,9 @@ export class OverlayRenderer {
       guides.length > 0 ||
       hoveredEl !== null ||
       this.cursors.length > 0 ||
-      hasActiveStroke;
+      hasActiveStroke ||
+      hasConnectorSnap ||
+      hasConnectorPreview;
 
     if (!hasContent) {
       return {
@@ -208,7 +242,56 @@ export class OverlayRenderer {
     }
 
     // --- B. Selection Frame and Handles ---
-    if (selectedElements.length > 0) {
+    if (selectedElements.length === 1 && selectedElements[0]!.type === 'connector') {
+      const el = selectedElements[0]!;
+      const props = el.props as {
+        readonly start?: { readonly x: number; readonly y: number };
+        readonly end?: { readonly x: number; readonly y: number };
+        readonly startBindingId?: string | null;
+        readonly endBindingId?: string | null;
+      };
+      const start = props.start ?? { x: 0, y: 0 };
+      const end = props.end ?? { x: el.w, y: el.h };
+      const startWorld = { x: el.x + start.x, y: el.y + start.y };
+      const endWorld = { x: el.x + end.x, y: el.y + end.y };
+      const sStart = camera.boardToScreen(startWorld);
+      const sEnd = camera.boardToScreen(endWorld);
+
+      ctx.save();
+      ctx.scale(pixelRatio, pixelRatio);
+
+      // Subtle highlight line between startWorld and endWorld
+      ctx.beginPath();
+      ctx.moveTo(sStart.x, sStart.y);
+      ctx.lineTo(sEnd.x, sEnd.y);
+      ctx.strokeStyle = selectionStroke;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Circular endpoint handles (radius 5px, white fill, 2px selectionStroke border)
+      const endpoints = [
+        { screen: sStart, bound: Boolean(props.startBindingId) },
+        { screen: sEnd, bound: Boolean(props.endBindingId) },
+      ];
+      for (const ep of endpoints) {
+        ctx.beginPath();
+        ctx.arc(ep.screen.x, ep.screen.y, CONNECTOR_HANDLE_RADIUS_PX, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.strokeStyle = selectionStroke;
+        ctx.lineWidth = selectionLineWidth;
+        ctx.stroke();
+
+        // Filled inner dot (radius 2.5px) when bound
+        if (ep.bound) {
+          ctx.beginPath();
+          ctx.arc(ep.screen.x, ep.screen.y, 2.5, 0, Math.PI * 2);
+          ctx.fillStyle = selectionStroke;
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    } else if (selectedElements.length > 0) {
       const frame = selectionFrame(selectedElements, { registry: board.elements });
       if (frame) {
         const center = camera.boardToScreen({
@@ -376,6 +459,78 @@ export class OverlayRenderer {
 
       const outline = getStroke(activeStroke.points as number[][], strokeOptions);
       renderStrokeOutline(ctx, outline);
+      ctx.restore();
+    }
+
+    // --- G. Active Connector Drag Preview (BOARD-1101) ---
+    if (hasConnectorPreview && connectorPreview) {
+      ctx.save();
+      ctx.scale(pixelRatio, pixelRatio);
+      ctx.strokeStyle = connectorPreview.color ?? selectionStroke;
+      ctx.lineWidth = (connectorPreview.strokeWidth ?? 2) * zoom;
+      const dash = connectorPreview.dash ?? 'solid';
+      if (dash === 'dashed') {
+        ctx.setLineDash([8 * zoom, 6 * zoom]);
+      } else if (dash === 'dotted') {
+        ctx.setLineDash([2 * zoom, 4 * zoom]);
+      } else {
+        ctx.setLineDash([]);
+      }
+      ctx.beginPath();
+      if (
+        connectorPreview.style === 'curved' &&
+        connectorPreview.bezier &&
+        connectorPreview.bezier.length === 4
+      ) {
+        const p0 = camera.boardToScreen(connectorPreview.bezier[0]);
+        const p1 = camera.boardToScreen(connectorPreview.bezier[1]);
+        const p2 = camera.boardToScreen(connectorPreview.bezier[2]);
+        const p3 = camera.boardToScreen(connectorPreview.bezier[3]);
+        ctx.moveTo(p0.x, p0.y);
+        ctx.bezierCurveTo(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y);
+      } else if (connectorPreview.points && connectorPreview.points.length >= 2) {
+        const first = camera.boardToScreen(connectorPreview.points[0]!);
+        ctx.moveTo(first.x, first.y);
+        for (let i = 1; i < connectorPreview.points.length; i++) {
+          const pt = camera.boardToScreen(connectorPreview.points[i]!);
+          ctx.lineTo(pt.x, pt.y);
+        }
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // --- H. Connector Anchor Snap Indicators (BOARD-1101d) ---
+    if (hasConnectorSnap && connectorSnap) {
+      ctx.save();
+      ctx.scale(pixelRatio, pixelRatio);
+
+      // Candidate anchor points on target element (radius 4px, white fill, selectionStroke border)
+      if (connectorSnap.candidates) {
+        for (const cand of connectorSnap.candidates) {
+          const sc = camera.boardToScreen(cand);
+          ctx.beginPath();
+          ctx.arc(sc.x, sc.y, 4, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+          ctx.strokeStyle = selectionStroke;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+      }
+
+      // Snapped point: outer halo (radius 11px) + emphasized circle (radius 6px)
+      const sp = camera.boardToScreen(connectorSnap.point);
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, 11, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(47, 111, 219, 0.25)';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = selectionStroke;
+      ctx.fill();
+
       ctx.restore();
     }
 

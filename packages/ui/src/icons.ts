@@ -35,6 +35,11 @@ const ICONS: Readonly<Record<string, readonly IconShape[]>> = {
   ],
   rectangle: [['rect', { x: '4', y: '5', width: '16', height: '14', rx: '1' }]],
   ellipse: [['ellipse', { cx: '12', cy: '12', rx: '9', ry: '7' }]],
+  connector: [
+    ['circle', { cx: '6', cy: '18', r: '3' }],
+    ['path', { d: 'M8.5 15.5L19 5' }],
+    ['path', { d: 'M13 5h6v6' }],
+  ],
   text: [
     ['path', { d: 'M5 6V4h14v2' }],
     ['path', { d: 'M12 4v16' }],

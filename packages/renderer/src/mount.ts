@@ -314,7 +314,7 @@ export function mountRenderer(
       }
     },
     onEvent() {
-      if (board.toolState !== 'idle') {
+      if (board.toolState !== 'idle' || board.tool === 'connector' || board.toolData !== null) {
         scheduleRender();
       }
     },

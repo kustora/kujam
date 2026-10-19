@@ -10,6 +10,7 @@ import {
   selectionFrame,
   snapTranslation,
   transformHandles,
+  type BindingRecord,
   type Board,
   type BoxBounds,
   type ElementRecord,
@@ -21,6 +22,12 @@ import {
   type ToolPointerEvent,
   type TransformResult,
 } from '@kujam/core';
+import {
+  findSnapAnchor,
+  normalizeConnectorBounds,
+  type ConnectorSnapTarget,
+} from '../elements/connector-routing.js';
+import type { ConnectorProps } from '../elements/connector.js';
 import { handlePinch, handleWheel } from './navigation.js';
 
 /** Screen distance a press must travel before it becomes a drag. */
@@ -31,6 +38,9 @@ export const HANDLE_TOLERANCE_PX = 8;
 export const ROTATE_HANDLE_OFFSET_PX = 24;
 /** Hit-test tolerance for clicking elements, in screen pixels. */
 export const HIT_TOLERANCE_PX = 4;
+
+/** Handle identifier for select tool interactions. */
+export type SelectHandle = ResizeHandle | 'rotate' | 'connector-start' | 'connector-end';
 
 /**
  * `ctx.data` of the select tool. The renderer reads it from `board.toolData` to draw feedback:
@@ -43,8 +53,12 @@ export interface SelectToolData {
   brush: BoxBounds | null;
   /** Snap guides while moving elements. */
   guides: readonly SnapGuide[];
-  /** Handle being dragged while resizing or rotating. */
-  handle: ResizeHandle | 'rotate' | null;
+  /** Handle being dragged while resizing, rotating, or reconnecting a connector endpoint. */
+  handle: SelectHandle | null;
+  /** Active snap target while dragging a connector endpoint. */
+  connectorSnap?: ConnectorSnapTarget;
+  /** Generated binding ID reused during a connector endpoint drag session. */
+  reconnectBindingId?: string;
   /** Board and screen position of the press that started the interaction. */
   start: Point;
   startScreen: Point;
@@ -58,7 +72,14 @@ export interface SelectToolData {
   wasSelected: boolean;
 }
 
-type State = 'idle' | 'pointing' | 'translating' | 'brushing' | 'resizing' | 'rotating';
+type State =
+  | 'idle'
+  | 'pointing'
+  | 'translating'
+  | 'brushing'
+  | 'resizing'
+  | 'rotating'
+  | 'reconnecting';
 type Ctx = ToolContext<State, SelectToolData>;
 
 function initialData(): SelectToolData {
@@ -82,9 +103,30 @@ function transformable(board: Board): Readonly<ElementRecord>[] {
     .filter((el): el is Readonly<ElementRecord> => !!el && !el.locked && board.can('update', el));
 }
 
-/** The resize or rotate handle under `screen`, closest first. */
-function handleAt(board: Board, screen: Point): ResizeHandle | 'rotate' | null {
-  const frame = selectionFrame(transformable(board), { registry: board.elements });
+/** The resize, rotate, or connector endpoint handle under `screen`, closest first. */
+function handleAt(board: Board, screen: Point): SelectHandle | null {
+  const items = transformable(board);
+  if (items.length === 1 && items[0]!.type === 'connector') {
+    const conn = items[0]! as ElementRecord<ConnectorProps>;
+    const startWorld: Point = {
+      x: conn.x + conn.props.start.x,
+      y: conn.y + conn.props.start.y,
+    };
+    const endWorld: Point = {
+      x: conn.x + conn.props.end.x,
+      y: conn.y + conn.props.end.y,
+    };
+    const sStart = board.camera.boardToScreen(startWorld);
+    const sEnd = board.camera.boardToScreen(endWorld);
+    const dStart = Math.hypot(sStart.x - screen.x, sStart.y - screen.y);
+    const dEnd = Math.hypot(sEnd.x - screen.x, sEnd.y - screen.y);
+    if (dStart <= HANDLE_TOLERANCE_PX || dEnd <= HANDLE_TOLERANCE_PX) {
+      return dStart <= dEnd ? 'connector-start' : 'connector-end';
+    }
+    return null;
+  }
+
+  const frame = selectionFrame(items, { registry: board.elements });
   if (!frame) return null;
   const zoom = board.camera.get().zoom;
   let best: ResizeHandle | 'rotate' | null = null;
@@ -98,6 +140,81 @@ function handleAt(board: Board, screen: Point): ResizeHandle | 'rotate' | null {
     }
   }
   return best;
+}
+
+function dragConnectorEndpoint(ctx: Ctx, e: ToolPointerEvent): void {
+  const { board, data } = ctx;
+  const orig = data.originals[0] as ElementRecord<ConnectorProps> | undefined;
+  if (!orig || orig.type !== 'connector') return;
+  const isStart = data.handle === 'connector-start';
+
+  const snap = findSnapAnchor(board, e.point, new Set([orig.id]));
+  if (snap) {
+    data.connectorSnap = snap;
+  } else {
+    delete data.connectorSnap;
+  }
+
+  const targetPoint = snap ? snap.worldPoint : e.point;
+  const origStartWorld: Point = {
+    x: orig.x + orig.props.start.x,
+    y: orig.y + orig.props.start.y,
+  };
+  const origEndWorld: Point = {
+    x: orig.x + orig.props.end.x,
+    y: orig.y + orig.props.end.y,
+  };
+  const startWorld = isStart ? targetPoint : origStartWorld;
+  const endWorld = isStart ? origEndWorld : targetPoint;
+  const oldBindingId = isStart ? orig.props.startBindingId : orig.props.endBindingId;
+
+  if (snap && !data.reconnectBindingId) {
+    data.reconnectBindingId = oldBindingId ?? board.createId();
+  }
+
+  ctx.change(
+    (tx) => {
+      let nextBindingId: string | null = null;
+      if (snap) {
+        nextBindingId = data.reconnectBindingId ?? oldBindingId ?? board.createId();
+        if (oldBindingId && oldBindingId !== nextBindingId) {
+          tx.remove(oldBindingId);
+        }
+        const b: BindingRecord = {
+          id: nextBindingId,
+          kind: 'binding',
+          fromId: orig.id,
+          toId: snap.elementId,
+          anchor: snap.anchor,
+        };
+        tx.put(b);
+      } else {
+        if (oldBindingId) {
+          tx.remove(oldBindingId);
+        }
+        if (data.reconnectBindingId && data.reconnectBindingId !== oldBindingId) {
+          tx.remove(data.reconnectBindingId);
+        }
+        nextBindingId = null;
+      }
+
+      const bounds = normalizeConnectorBounds(startWorld, endWorld);
+      tx.put({
+        ...orig,
+        x: bounds.x,
+        y: bounds.y,
+        w: bounds.w,
+        h: bounds.h,
+        props: {
+          ...orig.props,
+          start: bounds.start,
+          end: bounds.end,
+          ...(isStart ? { startBindingId: nextBindingId } : { endBindingId: nextBindingId }),
+        },
+      });
+    },
+    { label: 'reconnect' },
+  );
 }
 
 function apply(ctx: Ctx, results: readonly TransformResult[], label: string): void {
@@ -210,6 +327,11 @@ export const selectTool = defineTool({
         if (handle) {
           data.handle = handle;
           data.originals = transformable(board);
+          delete data.reconnectBindingId;
+          delete data.connectorSnap;
+          if (handle === 'connector-start' || handle === 'connector-end') {
+            return 'reconnecting';
+          }
           return handle === 'rotate' ? 'rotating' : 'resizing';
         }
 
@@ -286,7 +408,14 @@ export const selectTool = defineTool({
       cursor: 'nwse-resize',
       onPointerMove(ctx, e) {
         const { board, data } = ctx;
-        if (!data.handle || data.handle === 'rotate') return;
+        if (
+          !data.handle ||
+          data.handle === 'rotate' ||
+          data.handle === 'connector-start' ||
+          data.handle === 'connector-end'
+        ) {
+          return;
+        }
         const results = resizeElements(data.originals, data.handle, data.start, e.point, {
           keepRatio: e.modifiers.shift,
           registry: board.elements,
@@ -309,6 +438,21 @@ export const selectTool = defineTool({
       },
       onPointerUp: () => 'idle',
       onCancel: restoreSelection,
+    },
+
+    reconnecting: {
+      cursor: 'crosshair',
+      onPointerMove: dragConnectorEndpoint,
+      onPointerUp(ctx) {
+        delete ctx.data.connectorSnap;
+        delete ctx.data.reconnectBindingId;
+        return 'idle';
+      },
+      onCancel(ctx) {
+        delete ctx.data.connectorSnap;
+        delete ctx.data.reconnectBindingId;
+        restoreSelection(ctx);
+      },
     },
   },
 });

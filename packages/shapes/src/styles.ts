@@ -87,6 +87,9 @@ const GROUP_NAMES = {
   size: { id: 'Ukuran font', en: 'Font size' },
   align: { id: 'Perataan', en: 'Alignment' },
   brush: { id: 'Kuas', en: 'Brush' },
+  connectorStyle: { id: 'Bentuk jalur', en: 'Connector style' },
+  startArrow: { id: 'Ujung awal', en: 'Start arrow' },
+  endArrow: { id: 'Ujung akhir', en: 'End arrow' },
 } as const satisfies Record<string, Bilingual>;
 
 /** One style an element offers: a prop and its choices. */
@@ -215,6 +218,53 @@ export function geoActions<P>(el: ElementRecord<P>, ctx: ElementActionContext<P>
         dashed: { id: 'Putus-putus', en: 'Dashed' },
         dotted: { id: 'Titik-titik', en: 'Dotted' },
       }),
+    },
+  ]);
+}
+
+const ARROW_NAMES = {
+  none: { id: 'Tanpa panah', en: 'None' },
+  arrow: { id: 'Panah', en: 'Arrow' },
+  triangle: { id: 'Segitiga', en: 'Triangle' },
+  dot: { id: 'Titik', en: 'Dot' },
+  diamond: { id: 'Belah ketupat', en: 'Diamond' },
+} as const;
+
+/** @internal */
+export function connectorActions<P>(
+  el: ElementRecord<P>,
+  ctx: ElementActionContext<P>,
+): ElementAction[] {
+  return styleActions(el, ctx, 'connector', [
+    { style: 'color', prop: 'color', options: COLOR_OPTIONS },
+    { style: 'thickness', prop: 'strokeWidth', options: presets(GEO_STROKE_WIDTHS) },
+    {
+      style: 'dash',
+      prop: 'dash',
+      options: named(['solid', 'dashed', 'dotted'], {
+        solid: { id: 'Penuh', en: 'Solid' },
+        dashed: { id: 'Putus-putus', en: 'Dashed' },
+        dotted: { id: 'Titik-titik', en: 'Dotted' },
+      }),
+    },
+    {
+      style: 'connectorStyle',
+      prop: 'style',
+      options: named(['straight', 'elbow', 'curved'], {
+        straight: { id: 'Lurus', en: 'Straight' },
+        elbow: { id: 'Siku', en: 'Elbow' },
+        curved: { id: 'Lengkung', en: 'Curved' },
+      }),
+    },
+    {
+      style: 'startArrow',
+      prop: 'startArrow',
+      options: named(['none', 'arrow', 'triangle', 'dot', 'diamond'], ARROW_NAMES),
+    },
+    {
+      style: 'endArrow',
+      prop: 'endArrow',
+      options: named(['none', 'arrow', 'triangle', 'dot', 'diamond'], ARROW_NAMES),
     },
   ]);
 }

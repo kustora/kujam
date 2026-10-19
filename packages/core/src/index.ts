@@ -83,8 +83,14 @@ import { createSelection, type SelectionInput } from './selection/selection.js';
 import { resolveSnapOptions, type SnapOptions } from './geometry/snap.js';
 import { createSpatialIndex, unionBounds, type BoxBounds, type SpatialIndex } from './geometry/spatial.js';
 import { hitTestElements, queryElements, type HitTestOptions, type QueryFilter } from './geometry/query.js';
-import { resolveElementGeometry, toBoardTolerance, type Geometry, type Point } from './geometry/geometry.js';
-import type { BoardDocument, CameraState, ElementRecord } from './types.js';
+import {
+  localToBoard,
+  resolveElementGeometry,
+  toBoardTolerance,
+  type Geometry,
+  type Point,
+} from './geometry/geometry.js';
+import type { BindingRecord, BoardDocument, CameraState, ElementRecord } from './types.js';
 import { CURRENT_SCHEMA_VERSION } from './types.js';
 import { InvalidDocumentError, inspectDocument } from './document/validate.js';
 import {
@@ -1349,6 +1355,174 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   const store = createRecordStore(initial.document, {
     freeze,
     isReadOnly: () => configuredReadOnly || tooNew !== null,
+    beforeCommit: (tx, pending, _records, bindings) => {
+      let hasPendingBinding = false;
+      for (const rec of pending.values()) {
+        if (rec !== undefined && rec.kind === 'binding') {
+          hasPendingBinding = true;
+          break;
+        }
+      }
+      if (bindings.size === 0 && !hasPendingBinding) return;
+
+      const activeBindings = new Map<string, BindingRecord>();
+      const removedBindings = new Map<string, BindingRecord>();
+
+      for (const [id, b] of bindings) {
+        if (pending.has(id)) {
+          const after = pending.get(id);
+          if (after === undefined) removedBindings.set(id, b);
+          else if (after.kind === 'binding') activeBindings.set(id, after);
+        } else {
+          activeBindings.set(id, b);
+        }
+      }
+      for (const [id, rec] of pending) {
+        if (rec !== undefined && rec.kind === 'binding' && !bindings.has(id)) {
+          activeBindings.set(id, rec);
+        }
+      }
+
+      // Cascade-delete bindings whose fromId or toId no longer exists
+      for (const [bId, b] of Array.from(activeBindings.entries())) {
+        const fromRec = tx.get(b.fromId);
+        const toRec = tx.get(b.toId);
+        if (!fromRec || fromRec.kind !== 'element' || !toRec || toRec.kind !== 'element') {
+          tx.remove(bId);
+          activeBindings.delete(bId);
+          removedBindings.set(bId, b);
+        }
+      }
+
+      const affectedConnectors = new Set<string>();
+
+      // Clear startBindingId / endBindingId on surviving connectors when a binding is removed
+      for (const [bId, b] of removedBindings) {
+        const fromRec = tx.get(b.fromId);
+        if (fromRec && fromRec.kind === 'element') {
+          const props = fromRec.props;
+          const startMatch = props.startBindingId === bId;
+          const endMatch = props.endBindingId === bId;
+          if (startMatch || endMatch) {
+            tx.put({
+              ...fromRec,
+              props: {
+                ...props,
+                ...(startMatch ? { startBindingId: null } : {}),
+                ...(endMatch ? { endBindingId: null } : {}),
+              },
+            });
+          }
+          affectedConnectors.add(fromRec.id);
+        }
+      }
+
+      for (const b of activeBindings.values()) {
+        affectedConnectors.add(b.fromId);
+      }
+
+      for (const connId of affectedConnectors) {
+        const conn = tx.get(connId);
+        if (!conn || conn.kind !== 'element') continue;
+        const rawStart = conn.props.start as Point | undefined;
+        const rawEnd = conn.props.end as Point | undefined;
+        if (
+          !rawStart ||
+          typeof rawStart.x !== 'number' ||
+          typeof rawStart.y !== 'number' ||
+          !rawEnd ||
+          typeof rawEnd.x !== 'number' ||
+          typeof rawEnd.y !== 'number'
+        ) {
+          continue;
+        }
+
+        const startBId =
+          typeof conn.props.startBindingId === 'string' ? conn.props.startBindingId : null;
+        const endBId = typeof conn.props.endBindingId === 'string' ? conn.props.endBindingId : null;
+        const startBinding = startBId ? activeBindings.get(startBId) : undefined;
+        const endBinding = endBId ? activeBindings.get(endBId) : undefined;
+
+        const isRelevantChange =
+          pending.has(connId) ||
+          (startBId !== null && (!startBinding || pending.has(startBId))) ||
+          (endBId !== null && (!endBinding || pending.has(endBId))) ||
+          (startBinding !== undefined && pending.has(startBinding.toId)) ||
+          (endBinding !== undefined && pending.has(endBinding.toId)) ||
+          conn.props.style === 'elbow';
+        if (!isRelevantChange) continue;
+
+        let startWorld: Point = { x: conn.x + rawStart.x, y: conn.y + rawStart.y };
+        if (startBinding) {
+          const target = tx.get(startBinding.toId);
+          if (target && target.kind === 'element') {
+            startWorld = localToBoard(target, {
+              x: startBinding.anchor.x * target.w,
+              y: startBinding.anchor.y * target.h,
+            });
+          }
+        }
+
+        let endWorld: Point = { x: conn.x + rawEnd.x, y: conn.y + rawEnd.y };
+        if (endBinding) {
+          const target = tx.get(endBinding.toId);
+          if (target && target.kind === 'element') {
+            endWorld = localToBoard(target, {
+              x: endBinding.anchor.x * target.w,
+              y: endBinding.anchor.y * target.h,
+            });
+          }
+        }
+
+        let minX = Math.min(startWorld.x, endWorld.x);
+        let minY = Math.min(startWorld.y, endWorld.y);
+        let maxX = Math.max(startWorld.x, endWorld.x);
+        let maxY = Math.max(startWorld.y, endWorld.y);
+
+        const provisional: ElementRecord = {
+          ...conn,
+          x: minX,
+          y: minY,
+          w: maxX - minX,
+          h: maxY - minY,
+          props: {
+            ...conn.props,
+            startBindingId: startBinding ? startBinding.id : null,
+            endBindingId: endBinding ? endBinding.id : null,
+            start: { x: startWorld.x - minX, y: startWorld.y - minY },
+            end: { x: endWorld.x - minX, y: endWorld.y - minY },
+          },
+        };
+
+        const def = elements.get(conn.type);
+        if (def?.geometry) {
+          const geom = def.geometry(provisional as never);
+          if (geom?.kind === 'polyline') {
+            for (const pt of geom.points) {
+              const wx = provisional.x + pt.x;
+              const wy = provisional.y + pt.y;
+              if (wx < minX) minX = wx;
+              if (wy < minY) minY = wy;
+              if (wx > maxX) maxX = wx;
+              if (wy > maxY) maxY = wy;
+            }
+          }
+        }
+
+        tx.put({
+          ...provisional,
+          x: minX,
+          y: minY,
+          w: maxX - minX,
+          h: maxY - minY,
+          props: {
+            ...provisional.props,
+            start: { x: startWorld.x - minX, y: startWorld.y - minY },
+            end: { x: endWorld.x - minX, y: endWorld.y - minY },
+          },
+        });
+      }
+    },
     onChange: (event) => {
       // Update the spatial index incrementally (BOARD-404, BOARD-206)
       if (event.origin === 'load') {
