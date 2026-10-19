@@ -105,6 +105,34 @@ export interface ZoomToOptions {
 }
 
 /**
+ * Zoom levels that stepwise zoom (keyboard `Mod+=`/`Mod+-` and zoom buttons) steps through,
+ * within the board's zoom range (BOARD-901, BOARD-1404).
+ *
+ * @beta
+ */
+export const ZOOM_STEPS: readonly number[] = Object.freeze([
+  0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 6, 8,
+]);
+
+/** Relative tolerance so a zoom that is a step up to rounding counts as that step. */
+const ZOOM_STEP_EPSILON = 1e-3;
+
+/**
+ * Next zoom level from `zoom` in a direction: the nearest {@link ZOOM_STEPS} entry strictly above
+ * or below, clamped to `range`.
+ *
+ * @beta
+ */
+export function nextZoomStep(zoom: number, direction: 1 | -1, range: Readonly<ZoomRange>): number {
+  const next =
+    direction > 0
+      ? (ZOOM_STEPS.find((step) => step > zoom * (1 + ZOOM_STEP_EPSILON)) ?? range.max)
+      : ([...ZOOM_STEPS].reverse().find((step) => step < zoom * (1 - ZOOM_STEP_EPSILON)) ??
+        range.min);
+  return Math.min(range.max, Math.max(range.min, next));
+}
+
+/**
  * Default camera animation duration in milliseconds.
  *
  * @beta

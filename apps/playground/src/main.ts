@@ -2,15 +2,37 @@
  * Development playground for @kujam/* (BOARD-2401).
  *
  * Route: `/s/<scenario>`. Global query: `bare=1` (center area only, for Playwright),
- * `debug=0` (hide the debug panel). Other query params belong to the active scenario.
+ * `debug=0` (hide the debug panel), `test=1` (test mode: the scenario's board is exposed as
+ * `window.__board`, BOARD-2415). Other query params belong to the active scenario.
  */
+import type { Board } from '@kujam/core';
 import { append, h } from './dom.js';
 import { buildLanPopover } from './lan.js';
 import { DEFAULT_SCENARIO, findScenario, scenarios } from './registry.js';
 import type { ScenarioState } from './scenario.js';
 import './inspector.css';
 
-const GLOBAL_KEYS = ['bare', 'debug'];
+const GLOBAL_KEYS = ['bare', 'debug', 'test'];
+
+declare global {
+  interface Window {
+    /** Board of the active scenario, only in test mode (BOARD-2415). */
+    __board?: Board;
+  }
+}
+
+const testMode = new URL(location.href).searchParams.get('test') === '1';
+
+/** Exposes `board` in test mode; {@link clearExposedBoard} removes it on scenario changes. */
+function exposeBoard(board: Board): void {
+  if (!testMode) return;
+  window.__board = board;
+}
+
+function clearExposedBoard(): void {
+  delete window.__board;
+  delete document.documentElement.dataset.boardReady;
+}
 
 function currentScenarioId(): string {
   const match = /^\/s\/([^/]+)\/?$/.exec(location.pathname);
@@ -99,6 +121,7 @@ let cleanup: (() => void) | void;
 function render(): void {
   cleanup?.();
   cleanup = undefined;
+  clearExposedBoard();
   popover?.remove();
   popover = null;
   controls.replaceChildren();
@@ -125,7 +148,9 @@ function render(): void {
   description.textContent = scenario.description;
   document.title = `${scenario.title} · @kujam Playground`;
   main.dataset.layout = scenario.layout;
-  cleanup = scenario.mount({ main, controls, debug, state });
+  cleanup = scenario.mount({ main, controls, debug, state, expose: exposeBoard });
+  // Helpers wait for this attribute: the scenario has mounted and seeded its board.
+  if (window.__board) document.documentElement.dataset.boardReady = 'true';
 }
 
 function navigate(id: string): void {

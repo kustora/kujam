@@ -321,6 +321,8 @@ export {
   DEFAULT_CAMERA_ANIMATION_MS,
   DEFAULT_ZOOM_PADDING,
   DEFAULT_ZOOM_RANGE,
+  nextZoomStep,
+  ZOOM_STEPS,
   type BoardCamera,
   type CameraAnimation,
   type FrameScheduler,

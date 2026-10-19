@@ -9,6 +9,7 @@
  */
 
 import { defineCommand, type AnyCommandDefinition } from './commands.js';
+import { nextZoomStep } from '../camera/camera.js';
 import type { Point } from '../geometry/geometry.js';
 import type { Board } from '../index.js';
 import { compareIndex, indicesBetween } from '../document/indexing.js';
@@ -249,7 +250,8 @@ function duplicate(board: Board, offset: Point): void {
         for (const [origId, copyId] of idMap) {
           const origEl = doc.records[origId];
           const copyEl = tx.get(copyId);
-          if (!origEl || origEl.kind !== 'element' || !copyEl || copyEl.kind !== 'element') continue;
+          if (!origEl || origEl.kind !== 'element' || !copyEl || copyEl.kind !== 'element')
+            continue;
           const origStart = origEl.props.startBindingId;
           const origEnd = origEl.props.endBindingId;
           const nextStart =
@@ -339,6 +341,11 @@ const nudgeCommand = (direction: NudgeDirection, large: boolean) =>
 function hasViewport(board: Board): boolean {
   const { width, height } = board.camera.viewport;
   return width > 0 && height > 0;
+}
+
+/** Zooms to the next `ZOOM_STEPS` level around the viewport center (BOARD-901). */
+function zoomStep(board: Board, direction: 1 | -1): void {
+  board.camera.zoomTo(nextZoomStep(board.camera.get().zoom, direction, board.camera.zoomRange));
 }
 
 const layerCommand = (id: string, mode: LayerMode) =>
@@ -461,6 +468,26 @@ const commands: readonly AnyCommandDefinition[] = [
     nudgeCommand(direction, true),
   ]),
   defineCommand({
+    id: 'camera.zoom-in',
+    label: 'command.camera.zoom-in',
+    isEnabled: (board) => board.camera.get().zoom < board.camera.zoomRange.max,
+    repeatable: true,
+    run: (board) => zoomStep(board, 1),
+  }),
+  defineCommand({
+    id: 'camera.zoom-out',
+    label: 'command.camera.zoom-out',
+    isEnabled: (board) => board.camera.get().zoom > board.camera.zoomRange.min,
+    repeatable: true,
+    run: (board) => zoomStep(board, -1),
+  }),
+  defineCommand({
+    id: 'camera.zoom-reset',
+    label: 'command.camera.zoom-reset',
+    isEnabled: (board) => board.camera.get().zoom !== 1,
+    run: (board) => board.camera.zoomTo(1),
+  }),
+  defineCommand({
     id: 'camera.zoom-to-fit',
     label: 'command.camera.zoom-to-fit',
     isEnabled: (board) => hasViewport(board) && board.query().length > 0,
@@ -488,6 +515,8 @@ const commands: readonly AnyCommandDefinition[] = [
  * | `element.delete` | `Delete`, `Backspace` |
  * | `selection.all` | `Mod+A` |
  * | `camera.zoom-to-fit` / `camera.zoom-to-selection` | `Shift+1` / `Shift+2` |
+ * | `camera.zoom-in` / `camera.zoom-out` (next `ZOOM_STEPS` level) | `Mod+=`, `Mod++` / `Mod+-` |
+ * | `camera.zoom-reset` (100%) | `Mod+0` |
  * | `selection.next` / `selection.previous` (reading order, camera follows) | `Tab` / `Shift+Tab` |
  * | `selection.clear` | `Escape` |
  * | `element.nudge-left` … `element.nudge-down` (args {@link NudgeArgs}, 1 unit) | Arrow keys |
@@ -531,6 +560,10 @@ export const defaultCommands = definePlugin({
     'Mod+A': 'selection.all',
     'Shift+1': 'camera.zoom-to-fit',
     'Shift+2': 'camera.zoom-to-selection',
+    'Mod+=': 'camera.zoom-in',
+    'Mod++': 'camera.zoom-in',
+    'Mod+-': 'camera.zoom-out',
+    'Mod+0': 'camera.zoom-reset',
     Tab: 'selection.next',
     'Shift+Tab': 'selection.previous',
     Escape: 'selection.clear',

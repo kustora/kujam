@@ -294,11 +294,12 @@ export default defineScenario({
   description: 'Skenario pengujian untuk elemen terkunci (locked: true), rotasi sudut bebas, dan susunan bertingkat.',
   order: 2,
   layout: 'board',
-  mount({ main, controls, debug, state }) {
+  mount({ main, controls, debug, state, expose }) {
     const board = createBoard({
       locale: 'id',
       plugins: [defaultCommands, defaultElements, defaultTools],
     });
+    expose(board);
 
     const harness = new BoardHarness({
       board,

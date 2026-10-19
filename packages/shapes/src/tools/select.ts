@@ -28,6 +28,7 @@ import {
   type ConnectorSnapTarget,
 } from '../elements/connector-routing.js';
 import type { ConnectorProps } from '../elements/connector.js';
+import { buildDuplicate } from './duplicate.js';
 import { handlePinch, handleWheel } from './navigation.js';
 
 /** Screen distance a press must travel before it becomes a drag. */
@@ -70,16 +71,17 @@ export interface SelectToolData {
   hitId: string | null;
   /** Whether the pressed element was already selected (a click then narrows the selection). */
   wasSelected: boolean;
+  /**
+   * Whether the pressed element is locked: a click selects it (so it can be unlocked from the
+   * toolbar), and a drag draws a selection box instead of moving it (BOARD-902).
+   */
+  hitLocked: boolean;
+  /** Whether the drag moves copies made with Alt instead of the selection (BOARD-903). */
+  duplicating: boolean;
 }
 
 type State =
-  | 'idle'
-  | 'pointing'
-  | 'translating'
-  | 'brushing'
-  | 'resizing'
-  | 'rotating'
-  | 'reconnecting';
+  'idle' | 'pointing' | 'translating' | 'brushing' | 'resizing' | 'rotating' | 'reconnecting';
 type Ctx = ToolContext<State, SelectToolData>;
 
 function initialData(): SelectToolData {
@@ -93,6 +95,8 @@ function initialData(): SelectToolData {
     initialSelection: [],
     hitId: null,
     wasSelected: false,
+    hitLocked: false,
+    duplicating: false,
   };
 }
 
@@ -237,7 +241,41 @@ function translate(ctx: Ctx, e: ToolPointerEvent): void {
   const delta = { x: e.point.x - data.start.x, y: e.point.y - data.start.y };
   const snapped = snapTranslation(board, data.originals, delta, { modifiers: e.modifiers });
   data.guides = snapped.guides;
-  apply(ctx, moveElements(data.originals, snapped.delta.x, snapped.delta.y), 'move');
+  apply(
+    ctx,
+    moveElements(data.originals, snapped.delta.x, snapped.delta.y),
+    data.duplicating ? 'duplicate' : 'move',
+  );
+}
+
+/**
+ * Alt+drag (BOARD-903): writes copies of the selection over the originals as part of the
+ * interaction and selects them, so the drag moves the copies and the whole gesture is one undo step.
+ * Returns `false` when nothing could be copied.
+ */
+function startDuplicate(ctx: Ctx): boolean {
+  const { board, data } = ctx;
+  if (board.readOnly || data.originals.length === 0) return false;
+  const { records, copies } = buildDuplicate(board, data.originals);
+  if (copies.length === 0) return false;
+  ctx.change(
+    (tx) => {
+      for (const rec of records) tx.put(rec);
+    },
+    { label: 'duplicate' },
+  );
+  data.originals = copies;
+  data.duplicating = true;
+  board.select(copies.map((el) => el.id));
+  return true;
+}
+
+/** Starts a selection box from the press point (empty space, or a locked element). */
+function startBrushing(ctx: Ctx, e: ToolPointerEvent): 'brushing' {
+  const { board, data } = ctx;
+  if (!e.modifiers.shift) board.clearSelection();
+  data.initialSelection = board.selection;
+  return 'brushing';
 }
 
 function restoreSelection(ctx: Ctx): void {
@@ -264,6 +302,15 @@ function elementsInBox(board: Board, box: BoxBounds, partial: boolean): string[]
       return partial ? intersectsBox(geometry, box, el) : containedInBox(geometry, box, el);
     })
     .map((el) => el.id);
+}
+
+/** Updates the selection box to the pointer and selects what it covers. */
+function brush(ctx: Ctx, e: ToolPointerEvent): void {
+  const { board, data } = ctx;
+  const box = boxFrom(data.start, e.point);
+  data.brush = box;
+  const inside = elementsInBox(board, box, e.modifiers.alt);
+  board.select(e.modifiers.shift ? [...data.initialSelection, ...inside] : inside);
 }
 
 function pressed(e: ToolPointerEvent): boolean {
@@ -297,14 +344,17 @@ function editSelected(ctx: Ctx, e: ToolKeyEvent): false | void {
  * - Dragging on empty space draws a selection box: elements fully inside are selected, or touched
  *   ones with Alt. Shift adds to the existing selection.
  * - Dragging a selected element moves the selection, snapping to other elements and the grid
- *   (Ctrl/Cmd turns snapping off).
+ *   (Ctrl/Cmd turns snapping off). Alt+drag moves copies instead and leaves the originals in
+ *   place (BOARD-903).
+ * - Clicking a locked element selects it, without handles, so it can be unlocked; dragging from
+ *   it draws a selection box (BOARD-902).
  * - Dragging a handle resizes (Shift keeps the ratio) or rotates (Shift snaps to 15 degrees).
  * - Double click forwards to the element type's `onDoubleClick`; so does Enter on a single
  *   selected, unlocked element (BOARD-1902). Other keys are left unhandled.
  * - Esc (or pointer cancel) rolls back the interaction and restores the previous selection.
  * - Wheel scrolls, Ctrl/Cmd+wheel and pinch zoom.
  *
- * Locked elements are never hit, boxed, or transformed. Feedback for the overlay is in
+ * Locked elements are never boxed or transformed. Feedback for the overlay is in
  * {@link SelectToolData}, read through `board.toolData`.
  *
  * @beta
@@ -335,12 +385,15 @@ export const selectTool = defineTool({
           return handle === 'rotate' ? 'rotating' : 'resizing';
         }
 
-        const hit = board.hitTest(e.point, { tolerance: HIT_TOLERANCE_PX });
-        if (!hit) {
-          if (!e.modifiers.shift) board.clearSelection();
-          data.initialSelection = board.selection;
-          return 'brushing';
-        }
+        const hit = board.hitTest(e.point, { tolerance: HIT_TOLERANCE_PX, includeLocked: true });
+        data.duplicating = false;
+        if (!hit) return startBrushing(ctx, e);
+
+        data.hitId = hit.id;
+        data.wasSelected = board.selection.includes(hit.id);
+        data.hitLocked = hit.locked;
+        // Locked: the selection changes on release, since a drag becomes a selection box.
+        if (hit.locked) return 'pointing';
 
         if ((e.clickCount ?? 1) >= 2) {
           board.select(hit.id);
@@ -348,8 +401,6 @@ export const selectTool = defineTool({
           return;
         }
 
-        data.hitId = hit.id;
-        data.wasSelected = board.selection.includes(hit.id);
         if (e.modifiers.shift) {
           if (data.wasSelected) {
             board.removeFromSelection(hit.id);
@@ -370,14 +421,25 @@ export const selectTool = defineTool({
       onPointerMove(ctx, e) {
         const s = ctx.data.startScreen;
         if (Math.hypot(e.screen.x - s.x, e.screen.y - s.y) < DRAG_THRESHOLD_PX) return;
+        if (ctx.data.hitLocked) {
+          const next = startBrushing(ctx, e);
+          brush(ctx, e);
+          return next;
+        }
         ctx.data.originals = transformable(ctx.board);
+        if (e.modifiers.alt) startDuplicate(ctx);
         translate(ctx, e);
         return 'translating';
       },
       onPointerUp(ctx, e) {
-        // Clicking an element of a multi-selection without dragging selects just that element.
-        if (ctx.data.wasSelected && !e.modifiers.shift && ctx.data.hitId) {
-          ctx.board.select(ctx.data.hitId);
+        const { board, data } = ctx;
+        if (data.hitLocked && data.hitId) {
+          if (!e.modifiers.shift) board.select(data.hitId);
+          else if (data.wasSelected) board.removeFromSelection(data.hitId);
+          else board.addToSelection(data.hitId);
+        } else if (data.wasSelected && !e.modifiers.shift && data.hitId) {
+          // Clicking an element of a multi-selection without dragging selects just that element.
+          board.select(data.hitId);
         }
         return 'idle';
       },
@@ -393,13 +455,7 @@ export const selectTool = defineTool({
 
     brushing: {
       cursor: 'crosshair',
-      onPointerMove(ctx, e) {
-        const { board, data } = ctx;
-        const box = boxFrom(data.start, e.point);
-        data.brush = box;
-        const inside = elementsInBox(board, box, e.modifiers.alt);
-        board.select(e.modifiers.shift ? [...data.initialSelection, ...inside] : inside);
-      },
+      onPointerMove: brush,
       onPointerUp: () => 'idle',
       onCancel: restoreSelection,
     },

@@ -316,6 +316,37 @@ describe('BOARD-505: zoom commands', () => {
     board.clearSelection();
     expect(board.commands.isEnabled('camera.zoom-to-selection')).toBe(false);
   });
+
+  it('Mod+= and Mod+- step through the zoom levels around the viewport center (BOARD-901)', () => {
+    const board = setup();
+    board.camera.setViewport({ width: 800, height: 600 });
+    const center = board.camera.screenToBoard({ x: 400, y: 300 });
+    const mod = { ctrl: true };
+
+    expect(board.dispatch(keyDown('=', 'Equal', mod))).toBe(true);
+    expect(board.camera.get().zoom).toBe(1.25);
+    // Shift+= types `+` on US layouts and still zooms in.
+    expect(board.dispatch(keyDown('+', 'Equal', { ...mod, shift: true }))).toBe(true);
+    expect(board.camera.get().zoom).toBe(1.5);
+    expect(board.dispatch(keyDown('-', 'Minus', mod))).toBe(true);
+    expect(board.camera.get().zoom).toBe(1.25);
+    const after = board.camera.screenToBoard({ x: 400, y: 300 });
+    expect(after.x).toBeCloseTo(center.x);
+    expect(after.y).toBeCloseTo(center.y);
+
+    expect(board.dispatch(keyDown('0', 'Digit0', mod))).toBe(true);
+    expect(board.camera.get().zoom).toBe(1);
+    expect(board.commands.isEnabled('camera.zoom-reset')).toBe(false);
+  });
+
+  it('zoom in and out are disabled at the zoom range limits', () => {
+    const board = setup();
+    board.camera.zoomTo(board.camera.zoomRange.max);
+    expect(board.commands.isEnabled('camera.zoom-in')).toBe(false);
+    expect(board.commands.isEnabled('camera.zoom-out')).toBe(true);
+    board.camera.zoomTo(board.camera.zoomRange.min);
+    expect(board.commands.isEnabled('camera.zoom-out')).toBe(false);
+  });
 });
 
 describe('BOARD-1902: keyboard navigation commands', () => {

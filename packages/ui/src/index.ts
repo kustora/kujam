@@ -19,7 +19,7 @@ export {
   type ToolbarStyleOption,
 } from './toolbar.js';
 export { UI_ICON_NAMES } from './icons.js';
-export { nextZoomStep, ZOOM_STEPS } from './zoom.js';
+export { nextZoomStep, ZOOM_STEPS } from '@kujam/core';
 export { uiToken, type UiTokenName } from './theme.js';
 
 /**

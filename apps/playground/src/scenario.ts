@@ -1,3 +1,5 @@
+import type { Board } from '@kujam/core';
+
 /**
  * Playground scenario contract (BOARD-2401). One scenario = one file in `src/scenarios/`,
  * registered automatically via `import.meta.glob`.
@@ -16,6 +18,11 @@ export interface ScenarioContext {
   /** Right panel: debug information (can be hidden by the user). */
   debug: HTMLElement;
   state: ScenarioState;
+  /**
+   * Exposes the scenario's board as `window.__board` for Playwright helpers (BOARD-2415). Has no
+   * effect outside test mode (`?test=1`); the exposure is removed when the scenario unmounts.
+   */
+  expose(board: Board): void;
 }
 
 export interface Scenario {

@@ -156,11 +156,41 @@ describe('BOARD-502: select tool, clicking', () => {
     expect(board.selection).toEqual(['a']);
   });
 
-  it('never hits locked elements', () => {
+  it('selects a locked element on click, without editing it (BOARD-902)', () => {
     const board = setup();
     board.update('a', { locked: true });
+    board.select('b');
     click(board, { x: 50, y: 50 });
-    expect(board.selection).toEqual([]);
+    expect(board.selection).toEqual(['a']);
+    click(board, { x: 350, y: 50 }, { shift: true });
+    expect(board.selection).toEqual(['a', 'b']);
+    click(board, { x: 50, y: 50 }, { shift: true });
+    expect(board.selection).toEqual(['b']);
+
+    onDoubleClick.mockClear();
+    click(board, { x: 50, y: 50 }, {}, 2);
+    expect(onDoubleClick).not.toHaveBeenCalled();
+    expect(board.selection).toEqual(['a']);
+  });
+
+  it('draws a selection box when dragging from a locked element, without moving it', () => {
+    const board = setup();
+    board.update('a', { locked: true });
+    board.history.clear();
+    drag(
+      board,
+      [
+        { x: 50, y: 50 },
+        { x: 120, y: 120 },
+        { x: 450, y: 250 },
+      ],
+      { alt: true },
+    );
+    expect(pos(board, 'a')).toMatchObject({ x: 0, y: 0 });
+    // Alt: the box selects what it touches; `a` is locked and never boxed.
+    expect(data(board).brush).toBeNull();
+    expect(board.selection).toEqual(['b']);
+    expect(board.history.canUndo).toBe(false);
   });
 });
 
@@ -318,6 +348,118 @@ describe('BOARD-502: select tool, moving', () => {
     );
     expect(pos(board, 'a')).toMatchObject({ x: 30, y: 30 });
     expect(pos(board, 'c')).toMatchObject({ x: 0, y: 300 });
+  });
+});
+
+describe('BOARD-903: Alt+drag duplicates', () => {
+  const elementIds = (board: Board) => board.query().map((el) => el.id);
+
+  it('moves copies of the selection and leaves the originals, as one undo step', () => {
+    const board = setup();
+    board.select(['a', 'b']);
+    drag(
+      board,
+      [
+        { x: 50, y: 50 },
+        { x: 50, y: 250 },
+      ],
+      { alt: true, ctrl: true },
+    );
+    expect(pos(board, 'a')).toMatchObject({ x: 0, y: 0 });
+    expect(pos(board, 'b')).toMatchObject({ x: 300, y: 0 });
+    const copies = board.selection;
+    expect(copies).toHaveLength(2);
+    expect(copies).not.toContain('a');
+    expect(pos(board, copies[0]!)).toMatchObject({ x: 0, y: 200, w: 100, h: 100 });
+    expect(pos(board, copies[1]!)).toMatchObject({ x: 300, y: 200 });
+    // Copies are stacked above the existing elements.
+    expect(elementIds(board).slice(-2)).toEqual(copies);
+
+    expect(board.undo()).toBe(true);
+    expect(elementIds(board)).toEqual(['a', 'b', 'c']);
+    expect(board.history.canUndo).toBe(false);
+  });
+
+  it('removes the copies and restores the selection on Esc', () => {
+    const board = setup();
+    board.select('a');
+    drag(
+      board,
+      [
+        { x: 50, y: 50 },
+        { x: 50, y: 250 },
+      ],
+      { alt: true },
+      false,
+    );
+    expect(board.query()).toHaveLength(4);
+    escape(board);
+    expect(elementIds(board)).toEqual(['a', 'b', 'c']);
+    expect(board.selection).toEqual(['a']);
+    expect(board.history.canUndo).toBe(false);
+  });
+
+  it('copies bindings between copied elements and unbinds the others', () => {
+    const board = setup();
+    board.transact((tx) => {
+      tx.put({ id: 'ab', kind: 'binding', fromId: 'a', toId: 'b', anchor: { x: 0, y: 0 } });
+      tx.put({ id: 'ac', kind: 'binding', fromId: 'a', toId: 'c', anchor: { x: 0, y: 0 } });
+    });
+    board.select(['a', 'b']);
+    drag(
+      board,
+      [
+        { x: 50, y: 50 },
+        { x: 50, y: 250 },
+      ],
+      { alt: true },
+    );
+    const [copyA, copyB] = board.selection;
+    const bindings = Object.values(board.getDocument().records).filter((r) => r.kind === 'binding');
+    expect(bindings).toHaveLength(3);
+    expect(bindings).toContainEqual(
+      expect.objectContaining({ fromId: copyA, toId: copyB, anchor: { x: 0, y: 0 } }),
+    );
+  });
+
+  it('moves the originals when copying is not allowed', () => {
+    const board = createBoard({
+      plugins: [boxes, defaultTools],
+      snap: { grid: null },
+      permissions: (action) => action !== 'create',
+    });
+    board.camera.setViewport({ width: 1000, height: 1000 });
+    board.transact((tx) =>
+      tx.put({
+        id: 'a',
+        kind: 'element',
+        type: 'box',
+        pageId: board.pages.current,
+        parentId: null,
+        index: 'a0',
+        x: 0,
+        y: 0,
+        w: 100,
+        h: 100,
+        rotation: 0,
+        opacity: 1,
+        locked: false,
+        props: { label: '' },
+        meta: {},
+      }),
+    );
+    board.setTool('select');
+    board.select('a');
+    drag(
+      board,
+      [
+        { x: 50, y: 50 },
+        { x: 50, y: 250 },
+      ],
+      { alt: true },
+    );
+    expect(board.query()).toHaveLength(1);
+    expect(pos(board, 'a')).toMatchObject({ x: 0, y: 200 });
   });
 });
 

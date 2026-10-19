@@ -7,37 +7,14 @@
  * - `<kujam-history-control>`: undo and redo, disabled when there is nothing to undo or redo.
  */
 
-import type { Board, ZoomRange } from '@kujam/core';
+import { nextZoomStep, type Board } from '@kujam/core';
 import { createElementClass, type UiWindow } from './base.js';
 import { CONTROL_CSS, createMenu, labelButton, shortcutFor, type MenuEntry } from './controls.js';
 import { createIcon } from './icons.js';
 import { t } from './i18n.js';
 
-/**
- * Zoom levels the zoom buttons step through, within the board's zoom range.
- *
- * @public
- */
-export const ZOOM_STEPS: readonly number[] = Object.freeze([
-  0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 6, 8,
-]);
-
-/** Relative tolerance so a zoom that is a step up to rounding counts as that step. */
+/** Relative tolerance so a zoom at a range limit up to rounding counts as that limit. */
 const EPSILON = 1e-3;
-
-/**
- * Next zoom level from `zoom` in a direction (BOARD-1404): the nearest step strictly above or
- * below, clamped to `range`.
- *
- * @public
- */
-export function nextZoomStep(zoom: number, direction: 1 | -1, range: Readonly<ZoomRange>): number {
-  const next =
-    direction > 0
-      ? (ZOOM_STEPS.find((step) => step > zoom * (1 + EPSILON)) ?? range.max)
-      : ([...ZOOM_STEPS].reverse().find((step) => step < zoom * (1 - EPSILON)) ?? range.min);
-  return Math.min(range.max, Math.max(range.min, next));
-}
 
 /** Zoom as a whole percentage, for example `125%`. */
 function percent(zoom: number): string {
@@ -135,7 +112,7 @@ function renderZoom(root: ShadowRoot, board: Board, host: HTMLElement): () => vo
 
   const zoomOut = makeButton(doc, group, 'zoom-out');
   zoomOut.append(createIcon(doc, 'minus', 16)!);
-  labelButton(zoomOut, t('zoomOut', locale), undefined);
+  labelButton(zoomOut, t('zoomOut', locale), shortcutFor(board, 'camera.zoom-out'));
 
   const level = makeButton(doc, group, 'zoom-level');
   level.classList.add('percent');
@@ -149,7 +126,7 @@ function renderZoom(root: ShadowRoot, board: Board, host: HTMLElement): () => vo
 
   const zoomIn = makeButton(doc, group, 'zoom-in');
   zoomIn.append(createIcon(doc, 'plus', 16)!);
-  labelButton(zoomIn, t('zoomIn', locale), undefined);
+  labelButton(zoomIn, t('zoomIn', locale), shortcutFor(board, 'camera.zoom-in'));
 
   const step = (direction: 1 | -1): void => {
     board.camera.zoomTo(nextZoomStep(board.camera.get().zoom, direction, board.camera.zoomRange));

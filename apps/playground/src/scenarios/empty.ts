@@ -219,11 +219,12 @@ export default defineScenario({
   description: 'Papan whiteboard lengkap dengan elemen bawaan, bilah UI @kujam/ui, dan inline editor.',
   order: 0,
   layout: 'board',
-  mount({ main, controls, debug, state }) {
+  mount({ main, controls, debug, state, expose }) {
     const board = createBoard({
       locale: 'id',
       plugins: [defaultCommands, defaultElements, defaultTools],
     });
+    expose(board);
 
     if (state.get('theme') === 'dark') {
       board.setTheme('dark');

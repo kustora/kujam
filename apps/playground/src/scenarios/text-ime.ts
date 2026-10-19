@@ -261,11 +261,12 @@ export default defineScenario({
   description: 'Skenario khusus untuk format rich text (tebal, miring, tautan), daftar bertingkat 1-3, dan input IME.',
   order: 3,
   layout: 'board',
-  mount({ main, controls, debug, state }) {
+  mount({ main, controls, debug, state, expose }) {
     const board = createBoard({
       locale: 'id',
       plugins: [defaultCommands, defaultElements, defaultTools],
     });
+    expose(board);
 
     const harness = new BoardHarness({
       board,

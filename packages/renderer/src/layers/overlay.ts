@@ -25,7 +25,13 @@ export const SNAP_GUIDE_COLOR = '#e02874';
 export const BRUSH_FILL_COLOR = 'rgba(47, 111, 219, 0.08)';
 export const BRUSH_STROKE_COLOR = 'rgba(47, 111, 219, 0.8)';
 export const HOVER_STROKE_COLOR = 'rgba(47, 111, 219, 0.5)';
-export const DEFAULT_COLLAB_COLORS = ['#2F6FDB', '#6B4FA0', '#16754C', '#C2410C', '#9B3D7F'] as const;
+export const DEFAULT_COLLAB_COLORS = [
+  '#2F6FDB',
+  '#6B4FA0',
+  '#16754C',
+  '#C2410C',
+  '#9B3D7F',
+] as const;
 
 export interface RemoteCursor {
   readonly id: string;
@@ -158,10 +164,13 @@ export class OverlayRenderer {
 
     // 1. Gather selection elements
     const selectedElements: Readonly<ElementRecord>[] = [];
+    // Locked elements can be selected by clicking (BOARD-902) to unlock them from the toolbar;
+    // they get a dashed outline and no handles.
+    const lockedSelected: Readonly<ElementRecord>[] = [];
     for (const id of board.selection) {
       const el = board.getElement(id);
-      if (el && !el.locked) {
-        selectedElements.push(el);
+      if (el) {
+        (el.locked ? lockedSelected : selectedElements).push(el);
       }
     }
 
@@ -171,14 +180,16 @@ export class OverlayRenderer {
     const selectionBrush = isBoxBounds(brush) ? brush : null;
     const guides = toolData?.guides ?? [];
     const activeStroke = toolData?.activeStroke ?? null;
-    const hasActiveStroke = Boolean(activeStroke && activeStroke.points && activeStroke.points.length > 0);
+    const hasActiveStroke = Boolean(
+      activeStroke && activeStroke.points && activeStroke.points.length > 0,
+    );
     const connectorSnap = toolData?.connectorSnap ?? null;
     const hasConnectorSnap = Boolean(connectorSnap && connectorSnap.point);
     const connectorPreview = toolData?.connectorPreview ?? null;
     const hasConnectorPreview = Boolean(
       connectorPreview &&
-        ((connectorPreview.points && connectorPreview.points.length >= 2) ||
-          (connectorPreview.bezier && connectorPreview.bezier.length === 4)),
+      ((connectorPreview.points && connectorPreview.points.length >= 2) ||
+        (connectorPreview.bezier && connectorPreview.bezier.length === 4)),
     );
 
     // 3. Hovered element
@@ -193,6 +204,7 @@ export class OverlayRenderer {
 
     const hasContent =
       selectedElements.length > 0 ||
+      lockedSelected.length > 0 ||
       selectionBrush !== null ||
       guides.length > 0 ||
       hoveredEl !== null ||
@@ -237,6 +249,24 @@ export class OverlayRenderer {
       ctx.strokeStyle = hoverStroke;
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
+      ctx.strokeRect(-sw / 2, -sh / 2, sw, sh);
+      ctx.restore();
+    }
+
+    // --- A2. Locked selected elements: dashed outline, no handles ---
+    for (const el of lockedSelected) {
+      const center = camera.boardToScreen({ x: el.x + el.w / 2, y: el.y + el.h / 2 });
+      ctx.save();
+      ctx.scale(pixelRatio, pixelRatio);
+      ctx.translate(center.x, center.y);
+      if (el.rotation) {
+        ctx.rotate((el.rotation * Math.PI) / 180);
+      }
+      const sw = el.w * zoom;
+      const sh = el.h * zoom;
+      ctx.strokeStyle = selectionStroke;
+      ctx.lineWidth = selectionLineWidth;
+      ctx.setLineDash([6, 4]);
       ctx.strokeRect(-sw / 2, -sh / 2, sw, sh);
       ctx.restore();
     }

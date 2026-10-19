@@ -410,11 +410,12 @@ export default defineScenario({
   description: 'Koleksi lengkap seluruh elemen 0.1: sticky, pena & highlighter, teks, bentuk geometri, dan binding.',
   order: 1,
   layout: 'board',
-  mount({ main, controls, debug, state }) {
+  mount({ main, controls, debug, state, expose }) {
     const board = createBoard({
       locale: 'id',
       plugins: [defaultCommands, defaultElements, defaultTools],
     });
+    expose(board);
 
     const harness = new BoardHarness({
       board,
