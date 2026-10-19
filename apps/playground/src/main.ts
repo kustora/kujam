@@ -8,6 +8,7 @@ import { append, h } from './dom.js';
 import { buildLanPopover } from './lan.js';
 import { DEFAULT_SCENARIO, findScenario, scenarios } from './registry.js';
 import type { ScenarioState } from './scenario.js';
+import './inspector.css';
 
 const GLOBAL_KEYS = ['bare', 'debug'];
 

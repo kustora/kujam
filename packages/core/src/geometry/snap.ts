@@ -26,6 +26,8 @@ import type { ElementRecord } from '../types.js';
 export interface SnapOptions {
   /** Whether snapping is on. Ctrl/Cmd while dragging turns it off temporarily. */
   readonly enabled: boolean;
+  /** Whether snapping to elements is on. Defaults to `true`. */
+  readonly elements?: boolean;
   /** Grid spacing in board units (8 = 8 screen pixels at zoom 100%), or `null` for no grid snap. */
   readonly grid: number | null;
   /** Snap distance in screen pixels; converted to board units with the camera zoom. */
@@ -33,12 +35,13 @@ export interface SnapOptions {
 }
 
 /**
- * Default snap settings: enabled, 8-unit grid, 8-pixel threshold.
+ * Default snap settings: enabled, elements snap enabled, 8-unit grid, 8-pixel threshold.
  *
  * @beta
  */
 export const DEFAULT_SNAP_OPTIONS: Readonly<SnapOptions> = Object.freeze({
   enabled: true,
+  elements: true,
   grid: 8,
   threshold: 8,
 });
@@ -96,16 +99,18 @@ export function resolveSnapOptions(
   }
   const patch = input as Partial<Record<keyof SnapOptions, unknown>>;
   const enabled = patch.enabled ?? base.enabled;
+  const elements = patch.elements === undefined ? (base.elements ?? true) : patch.elements;
   const grid = patch.grid === undefined ? base.grid : patch.grid;
   const threshold = patch.threshold ?? base.threshold;
   if (typeof enabled !== 'boolean') throw new TypeError('snap.enabled wajib berupa boolean.');
+  if (typeof elements !== 'boolean') throw new TypeError('snap.elements wajib berupa boolean.');
   if (grid !== null && (typeof grid !== 'number' || !Number.isFinite(grid) || grid <= 0)) {
     throw new RangeError('snap.grid wajib berupa angka positif berhingga atau null.');
   }
   if (typeof threshold !== 'number' || !Number.isFinite(threshold) || threshold < 0) {
     throw new RangeError('snap.threshold wajib berupa angka berhingga dan tidak negatif.');
   }
-  return Object.freeze({ enabled, grid, threshold });
+  return Object.freeze({ enabled, elements, grid, threshold });
 }
 
 /**
@@ -272,9 +277,12 @@ export function snapTranslation(
     viewport.maxX > viewport.minX && viewport.maxY > viewport.minY
       ? board.query({ pageId: elements[0]!.pageId, inBounds: viewport })
       : board.query({ pageId: elements[0]!.pageId });
-  const targets = visible
-    .filter((el) => !exclude.has(el.id))
-    .flatMap((el) => elementSnapPoints(board, el));
+  const targets =
+    settings.elements !== false
+      ? visible
+          .filter((el) => !exclude.has(el.id))
+          .flatMap((el) => elementSnapPoints(board, el))
+      : [];
   const result = computeSnap(moving, targets, {
     threshold: toBoardTolerance(settings.threshold, board.camera.get().zoom),
     grid: settings.grid,

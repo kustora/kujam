@@ -83,10 +83,25 @@ importers:
       qrcode-generator:
         specifier: ^2.0.4
         version: 2.0.4
+      react:
+        specifier: ^19.0.0
+        version: 19.3.1
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.3.1(react@19.3.1)
+      vue:
+        specifier: ^3.5.13
+        version: 3.5.44(typescript@5.9.3)
     devDependencies:
       '@kujam/spike-board-008-richtext':
         specifier: workspace:^
         version: link:../../spikes/board-008-richtext
+      '@types/react':
+        specifier: ^19.0.10
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.0.4
+        version: 19.3.0(@types/react@19.3.0)
       quill:
         specifier: 2.0.3
         version: 2.0.3

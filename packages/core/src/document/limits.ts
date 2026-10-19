@@ -36,6 +36,14 @@ export const DEFAULT_BOARD_LIMITS: Readonly<BoardLimits> = Object.freeze({
 });
 
 /**
+ * Alias for {@link DEFAULT_BOARD_LIMITS}.
+ *
+ * @public
+ */
+export const DOCUMENT_LIMITS = DEFAULT_BOARD_LIMITS;
+
+
+/**
  * Validates a partial limits object and fills omitted values from {@link DEFAULT_BOARD_LIMITS}.
  *
  * @throws `TypeError` when `limits` is not an object, or `RangeError` when a value is not a

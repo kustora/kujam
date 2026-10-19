@@ -168,6 +168,34 @@ describe('opsi readOnly dan locale', () => {
     expect(defaults.locale).toBe('id');
   });
 
+  it('mendukung perubahan dinamis via setReadOnly dan setLocale', () => {
+    const board = createBoard({ readOnly: false, locale: 'id' });
+    board.setReadOnly(true);
+    expect(board.readOnly).toBe(true);
+    board.setReadOnly(false);
+    expect(board.readOnly).toBe(false);
+
+    board.setLocale('en');
+    expect(board.locale).toBe('en');
+    expect(board.elementContext.locale).toBe('en');
+    board.setLocale('id');
+    expect(board.locale).toBe('id');
+
+    expect(() => board.setReadOnly('true' as unknown as boolean)).toThrow(TypeError);
+    expect(() => board.setLocale('de' as unknown as 'id')).toThrow(RangeError);
+  });
+
+  it('mendukung setZoomRange pada kamera', () => {
+    const board = createBoard();
+    board.camera.setZoomRange({ min: 0.2, max: 5 });
+    expect(board.camera.zoomRange).toEqual({ min: 0.2, max: 5 });
+    board.setCamera({ zoom: 10 });
+    expect(board.getCamera().zoom).toBe(5);
+
+    expect(() => board.camera.setZoomRange({ min: 0, max: 2 })).toThrow(RangeError);
+    expect(() => board.camera.setZoomRange({ min: 3, max: 2 })).toThrow(RangeError);
+  });
+
   it('menolak locale yang tidak didukung', () => {
     expect(() => createBoard({ locale: 'fr' as 'id' })).toThrow(RangeError);
   });

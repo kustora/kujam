@@ -22,10 +22,15 @@
     "@kujam/sync-yjs": "workspace:*",
     "@kujam/ui": "workspace:*",
     "@kujam/vue": "workspace:*",
-    "qrcode-generator": "^2.0.4"
+    "qrcode-generator": "^2.0.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "vue": "^3.5.13"
   },
   "devDependencies": {
     "@kujam/spike-board-008-richtext": "workspace:^",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
     "quill": "2.0.3",
     "vite": "^6.2.0"
   }

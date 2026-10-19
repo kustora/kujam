@@ -133,6 +133,13 @@ export interface BoardCamera {
   set(patch: Partial<CameraState>): void;
   /** Zoom bounds in use (from `createBoard({ zoomRange })`, defaults to {@link DEFAULT_ZOOM_RANGE}). */
   readonly zoomRange: Readonly<ZoomRange>;
+  /**
+   * Sets the zoom bounds for the camera.
+   *
+   * @param range - Zoom limits `{ min, max }`.
+   * @throws `RangeError` when `min` or `max` is not finite, or `min <= 0`, or `min > max`.
+   */
+  setZoomRange(range: ZoomRange): void;
   /** Current viewport size; `{ width: 0, height: 0 }` until the renderer reports it. */
   readonly viewport: Readonly<ViewportSize>;
   /**
@@ -310,7 +317,7 @@ function assertPoint(value: unknown, method: string): asserts value is Point {
 
 /** @internal */
 export function createCamera(options: CameraOptions): CameraRuntime {
-  const { zoomRange } = options;
+  let zoomRange = options.zoomRange;
   let state: Readonly<CameraState> = Object.freeze({ x: 0, y: 0, zoom: 1 });
   let viewport: Readonly<ViewportSize> = Object.freeze({ width: 0, height: 0 });
   let reducedMotion = options.reducedMotion === true;
@@ -361,7 +368,28 @@ export function createCamera(options: CameraOptions): CameraRuntime {
   return {
     get: () => state,
     set,
-    zoomRange,
+    get zoomRange() {
+      return zoomRange;
+    },
+    setZoomRange(range: ZoomRange) {
+      if (
+        typeof range !== 'object' ||
+        range === null ||
+        typeof range.min !== 'number' ||
+        typeof range.max !== 'number' ||
+        !Number.isFinite(range.min) ||
+        !Number.isFinite(range.max) ||
+        range.min <= 0 ||
+        range.min > range.max
+      ) {
+        throw new RangeError('zoomRange wajib berisi angka berhingga dengan 0 < min <= max.');
+      }
+      zoomRange = Object.freeze({ min: range.min, max: range.max });
+      const nextZoom = clampZoom(state.zoom);
+      if (nextZoom !== state.zoom) {
+        set({ zoom: nextZoom });
+      }
+    },
     get viewport() {
       return viewport;
     },

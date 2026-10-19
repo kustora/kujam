@@ -1,0 +1,430 @@
+/* Inspector & Event Log Styles (BOARD-2404 & BOARD-2405) */
+
+/* ---------- Tabs ---------- */
+.tabs-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.tabs-header {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+
+.tab-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tab-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tab-btn.active {
+  color: var(--text);
+  background: #273449;
+  border-color: var(--border);
+}
+
+.tab-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.tab-content[hidden] {
+  display: none !important;
+}
+
+/* ---------- Stat & Runtime Bars ---------- */
+.stat-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.stat-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.stat-item + .stat-item::before {
+  content: '·';
+  color: var(--muted);
+  margin-right: 4px;
+}
+
+.stat-label {
+  color: var(--muted);
+}
+
+.stat-val {
+  font-weight: 600;
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.stat-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.stat-badge.warn {
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--warn);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.stat-badge.error {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--error);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+/* ---------- Inspector Record List ---------- */
+.inspector-filter-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.inspector-search-input {
+  flex: 1;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+  min-width: 0;
+}
+
+.inspector-search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.inspector-type-select {
+  padding: 4px 6px;
+  font-size: 12px;
+  background: var(--bg);
+}
+
+.record-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px;
+  background: rgba(15, 23, 42, 0.6);
+}
+
+.record-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  font-size: 12px;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.record-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.record-item.selected {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: var(--accent);
+}
+
+.record-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.record-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  background: #334155;
+  color: var(--code);
+  white-space: nowrap;
+}
+
+.record-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.record-snippet {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.empty-state {
+  padding: 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* ---------- JSON Editor ---------- */
+.editor-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.editor-textarea {
+  min-height: 180px;
+  max-height: 320px;
+  width: 100%;
+  line-height: 1.4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  tab-size: 2;
+}
+
+/* ---------- Event Log Stream ---------- */
+.event-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.event-controls select {
+  font-size: 11px;
+  padding: 3px 6px;
+  background: var(--bg);
+}
+
+.event-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px;
+  background: rgba(15, 23, 42, 0.7);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.event-entry {
+  display: flex;
+  flex-direction: column;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: rgba(30, 41, 59, 0.4);
+  overflow: hidden;
+}
+
+.event-entry:hover {
+  background: rgba(30, 41, 59, 0.8);
+}
+
+.event-entry.error {
+  border-left: 3px solid var(--error);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.event-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.event-time {
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.event-badge {
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.badge-change {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+.badge-selection {
+  background: rgba(168, 85, 247, 0.2);
+  color: #c084fc;
+}
+
+.badge-camera {
+  background: rgba(20, 184, 166, 0.2);
+  color: #2dd4bf;
+}
+
+.badge-tool {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+}
+
+.badge-action {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+}
+
+.badge-error {
+  background: rgba(239, 68, 68, 0.3);
+  color: #f87171;
+}
+
+.event-origin {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #273449;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.event-label-text {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.event-diff-stats {
+  color: var(--code);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.event-detail-pre {
+  margin: 4px;
+  padding: 6px 8px;
+  font-size: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+/* ---------- History Stack View ---------- */
+.history-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 140px;
+  overflow-y: auto;
+  font-size: 11px;
+}
+
+.history-step-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: #273449;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.history-step-item:hover {
+  border-color: var(--accent);
+  background: #334155;
+}
+
+.history-step-item.current {
+  border-color: var(--ok);
+  background: rgba(34, 197, 94, 0.15);
+}
+
+.history-step-name {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.history-step-meta {
+  color: var(--muted);
+  font-size: 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}

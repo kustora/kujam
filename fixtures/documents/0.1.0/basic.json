@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "meta": {
+    "title": "Dokumen Dasar",
+    "description": "Dokumen minimal yang valid untuk versi 0.1.0"
+  },
+  "records": {
+    "page:main": {
+      "id": "page:main",
+      "kind": "page",
+      "name": "Halaman 1",
+      "index": "a0",
+      "meta": {}
+    }
+  }
+}

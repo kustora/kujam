@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createBoard,
   defaultCommands,
+  DEFAULT_DARK_THEME,
+  DEFAULT_LIGHT_THEME,
   defineElement,
   definePlugin,
   object,
@@ -475,5 +477,79 @@ describe('BOARD-1902: keyboard focus and navigation', () => {
     input.focus();
     press('ArrowRight');
     expect(board.getElement('a')).toMatchObject({ x: 0 });
+  });
+});
+
+describe('BOARD-1904: Fokus Terlihat & Kontras Aksesibilitas (>= 3:1)', () => {
+  function relativeLuminance(hex: string): number {
+    const clean = hex.replace('#', '');
+    const r = parseInt(clean.slice(0, 2), 16) / 255;
+    const g = parseInt(clean.slice(2, 4), 16) / 255;
+    const b = parseInt(clean.slice(4, 6), 16) / 255;
+    const toLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+    return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+  }
+
+  function contrastRatio(hex1: string, hex2: string): number {
+    const l1 = relativeLuminance(hex1);
+    const l2 = relativeLuminance(hex2);
+    const lighter = Math.max(l1, l2);
+    const darker = Math.min(l1, l2);
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  it('memastikan kontras focus ring >= 3:1 pada tema terang (WCAG AA non-text)', () => {
+    const bg = DEFAULT_LIGHT_THEME.canvas.background; // #F4F3EF
+    const focusRing = DEFAULT_LIGHT_THEME.selection.focusRing!; // #2F6FDB
+    const stroke = DEFAULT_LIGHT_THEME.selection.stroke; // #2F6FDB
+
+    const ringRatio = contrastRatio(focusRing, bg);
+    const strokeRatio = contrastRatio(stroke, bg);
+
+    expect(ringRatio).toBeGreaterThanOrEqual(3.0);
+    expect(strokeRatio).toBeGreaterThanOrEqual(3.0);
+    // Verifikasi rasio empiris ~4.26:1
+    expect(ringRatio).toBeCloseTo(4.26, 1);
+  });
+
+  it('memastikan kontras focus ring >= 3:1 pada tema gelap (WCAG AA non-text)', () => {
+    const bg = DEFAULT_DARK_THEME.canvas.background; // #121317
+    const focusRing = DEFAULT_DARK_THEME.selection.focusRing!; // #6EA0F0
+    const stroke = DEFAULT_DARK_THEME.selection.stroke; // #2F6FDB
+
+    const ringRatio = contrastRatio(focusRing, bg);
+    const strokeRatio = contrastRatio(stroke, bg);
+
+    expect(ringRatio).toBeGreaterThanOrEqual(3.0);
+    expect(strokeRatio).toBeGreaterThanOrEqual(3.0);
+    // Verifikasi rasio empiris focus ring ~6.98:1 dan stroke ~3.89:1
+    expect(ringRatio).toBeCloseTo(6.98, 1);
+    expect(strokeRatio).toBeCloseTo(3.89, 1);
+  });
+
+  it('menampilkan 2px solid outline dengan kontras tinggi saat navigasi keyboard', () => {
+    const { board, view, root } = setup();
+    board.create({ id: 'card', type: 'note', x: 10, y: 10, w: 100, h: 100, props: { text: 'Uji' } });
+    settle();
+
+    // Inisial tanpa keyboard focus: tidak ada outline
+    board.select('card');
+    const targetEl = target(view, 'card');
+    expect(targetEl.style.outlineStyle).toBe('none');
+
+    // Fokuskan board root dan navigasi keyboard Tab memicu focus-visible
+    root.focus();
+    press('Tab');
+    expect(targetEl.style.outlineStyle).toBe('solid');
+    expect(targetEl.style.outlineWidth).toBe('2px');
+    expect(targetEl.style.outlineOffset).toBe('2px');
+    expect(targetEl.style.outlineColor).toBe(DEFAULT_LIGHT_THEME.selection.focusRing);
+    expect(contrastRatio(targetEl.style.outlineColor, DEFAULT_LIGHT_THEME.canvas.background)).toBeGreaterThanOrEqual(3.0);
+
+    // Ganti tema ke gelap: outline otomatis beralih ke warna kontras tinggi tema gelap (#6EA0F0)
+    board.setTheme('dark');
+    press('Shift');
+    expect(targetEl.style.outlineColor).toBe(DEFAULT_DARK_THEME.selection.focusRing);
+    expect(contrastRatio(targetEl.style.outlineColor, DEFAULT_DARK_THEME.canvas.background)).toBeGreaterThanOrEqual(3.0);
   });
 });

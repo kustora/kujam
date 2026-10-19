@@ -108,7 +108,7 @@ export {
   type ValidateDocumentOptions,
   type ValidationResult,
 } from './document/validate.js';
-export { DEFAULT_BOARD_LIMITS, type BoardLimits } from './document/limits.js';
+export { DEFAULT_BOARD_LIMITS, DOCUMENT_LIMITS, type BoardLimits } from './document/limits.js';
 export * from './document/schema.js';
 export {
   DEFAULT_URL_SCHEMES,
@@ -222,6 +222,7 @@ export {
   type BoardHistory,
   type HistoryEvent,
   type HistoryOptions,
+  type HistoryStep,
 } from './history/history.js';
 export {
   CHANGE_ORIGINS,
@@ -910,7 +911,23 @@ export interface Board {
    * (see {@link CreateBoardOptions.readOnly}). Loading a supported document lifts the forced mode.
    */
   readonly readOnly: boolean;
+  /**
+   * Sets or unsets the read-only mode for this board.
+   *
+   * @param readOnly - Whether the board should be read-only.
+   * @throws `Error` after `dispose`.
+   * @beta
+   */
+  setReadOnly(readOnly: boolean): void;
   readonly locale: BoardLocale;
+  /**
+   * Updates the UI locale ('id' | 'en') of this board.
+   *
+   * @param locale - Target locale.
+   * @throws `Error` after `dispose`.
+   * @beta
+   */
+  setLocale(locale: BoardLocale): void;
   /**
    * Active whiteboard theme (BOARD-1006).
    *
@@ -1264,8 +1281,8 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   }
   const reducedMotion = options.reducedMotion === true;
   let snapOptions = resolveSnapOptions(options.snap);
-  const locale = resolveLocale(options.locale);
-  const configuredReadOnly = resolveReadOnly(options.readOnly);
+  let locale = resolveLocale(options.locale);
+  let configuredReadOnly = resolveReadOnly(options.readOnly);
   /** Why the loaded document is too new for this board, or `null` (BOARD-703). */
   let tooNew: DocumentTooNewReason | null = null;
   const resolvers = resolveResolvers(options.resolvers);
@@ -1388,7 +1405,9 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   let activeTheme: Readonly<ThemeDefinition> = resolveTheme(options.theme);
 
   const elementContext: ElementContext = Object.freeze({
-    locale,
+    get locale() {
+      return locale;
+    },
     get theme() {
       return activeTheme;
     },
@@ -1405,7 +1424,9 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   /** Context for an element's `actions` (BOARD-605, BOARD-1108). */
   function actionContext(el: Readonly<ElementRecord>): ElementActionContext {
     return Object.freeze({
-      locale,
+      get locale() {
+        return locale;
+      },
       get theme() {
         return activeTheme;
       },
@@ -1601,7 +1622,23 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     get readOnly(): boolean {
       return configuredReadOnly || tooNew !== null;
     },
-    locale,
+    setReadOnly(readOnly: boolean): void {
+      assertUsable();
+      if (typeof readOnly !== 'boolean') {
+        throw new TypeError('readOnly wajib berupa boolean.');
+      }
+      configuredReadOnly = readOnly;
+      if (readOnly) {
+        tools.reset();
+      }
+    },
+    get locale(): BoardLocale {
+      return locale;
+    },
+    setLocale(nextLocale: BoardLocale): void {
+      assertUsable();
+      locale = resolveLocale(nextLocale);
+    },
     resolvers,
     assets,
     user,

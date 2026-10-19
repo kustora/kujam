@@ -269,6 +269,7 @@ export function mountRenderer(
 
   const root = doc.createElement('div');
   root.dataset.kujamViewport = '';
+  root.className = 'kujam-board-root';
   root.style.position = 'relative';
   root.style.width = '100%';
   root.style.height = '100%';
@@ -277,6 +278,7 @@ export function mountRenderer(
 
   const canvas = createLayer(doc, 'canvas', 'canvas', true);
   const html = createLayer(doc, 'div', 'html', false);
+  html.className = 'kujam-html-layer';
   const a11y = createLayer(doc, 'div', 'a11y', false);
   const overlay = createLayer(doc, 'canvas', 'overlay', false);
   // The canvases carry no semantics; the a11y layer describes their content (BOARD-1901).
@@ -462,11 +464,17 @@ export function mountRenderer(
     a11yTree.dispose();
     htmlLayer.dispose();
     root.remove();
+    if ((container as { __kujamView?: unknown }).__kujamView === view) {
+      delete (container as { __kujamView?: unknown }).__kujamView;
+    }
+    if ((root as { __kujamView?: unknown }).__kujamView === view) {
+      delete (root as { __kujamView?: unknown }).__kujamView;
+    }
   }
 
   scheduleRender();
 
-  return {
+  const view: BoardView = {
     board,
     container,
     layers,
@@ -522,4 +530,9 @@ export function mountRenderer(
     requestRender,
     unmount,
   };
+
+  (container as { __kujamView?: BoardView }).__kujamView = view;
+  (root as { __kujamView?: BoardView }).__kujamView = view;
+
+  return view;
 }

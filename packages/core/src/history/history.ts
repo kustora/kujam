@@ -94,6 +94,28 @@ export interface BoardHistory {
    * @beta
    */
   batch<T>(key: string, fn: () => T): T;
+  /**
+   * Inspection view of the undo stack (oldest first, latest step at the end).
+   *
+   * @beta
+   */
+  readonly undoStack?: readonly HistoryStep[];
+  /**
+   * Inspection view of the redo stack (next step to redo at the end).
+   *
+   * @beta
+   */
+  readonly redoStack?: readonly HistoryStep[];
+}
+
+/**
+ * Description of an undo or redo step for inspection (BOARD-2405).
+ *
+ * @public
+ */
+export interface HistoryStep {
+  readonly label?: string;
+  readonly diff?: RecordsDiff;
 }
 
 /**
@@ -368,6 +390,12 @@ export function createLocalHistory(store: RecordStore, options: LocalHistoryOpti
     },
     get canRedo() {
       return redoStack.length > 0;
+    },
+    get undoStack() {
+      return undoStack.map((e) => ({ label: e.diff.label, diff: e.diff }));
+    },
+    get redoStack() {
+      return redoStack.map((e) => ({ label: e.diff.label, diff: e.diff }));
     },
     limit,
     mergeWindowMs,

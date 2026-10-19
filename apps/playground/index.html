@@ -157,6 +157,11 @@
         background: radial-gradient(var(--border) 1px, transparent 1px);
         background-size: 20px 20px;
         background-color: var(--bg);
+        transition: outline 0.15s ease-in-out;
+      }
+      .stage.drag-over {
+        outline: 3px dashed var(--accent) !important;
+        outline-offset: -6px;
       }
       pre {
         padding: 10px;

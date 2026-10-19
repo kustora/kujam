@@ -4,11 +4,13 @@ import {
   attachTextEditor,
   defaultElements,
   defaultTools,
-  DEFAULT_ELEMENT_TYPES,
-  DEFAULT_TOOL_IDS,
 } from '@kujam/shapes';
 import { mountDefaultUi, type MountedUi } from '@kujam/ui';
-import { h, json, section } from '../dom.js';
+import { h, section } from '../dom.js';
+import { createEventLog } from '../event-log.js';
+import { createPerformanceHud } from '../hud.js';
+import { createInspector } from '../inspector.js';
+import { attachDragAndDropImport, createFileIoControls } from '../file-io.js';
 import { defineScenario } from '../scenario.js';
 
 function seedDemoElements(board: Board): void {
@@ -223,6 +225,32 @@ export default defineScenario({
     );
     setUiEnabled(state.get('ui') !== '0');
 
+    // Mount floating Performance HUD (BOARD-2406)
+    let hud: ReturnType<typeof createPerformanceHud> | null = null;
+    const setHudEnabled = (enabled: boolean) => {
+      if (enabled && !hud) {
+        hud = createPerformanceHud(board, main);
+      } else if (!enabled && hud) {
+        hud.dispose();
+        hud = null;
+      }
+      hudBtn.textContent = hud ? '⚡ HUD: Aktif' : '⚡ HUD: Nonaktif';
+      state.set('hud', hud ? null : '0');
+    };
+
+    const hudBtn = h(
+      'button',
+      {
+        type: 'button',
+        onclick: () => setHudEnabled(!hud),
+      },
+      '⚡ HUD: Aktif',
+    );
+    setHudEnabled(state.get('hud') !== '0');
+
+    // Attach drag and drop JSON import (BOARD-2403)
+    const detachDnd = attachDragAndDropImport(main, () => board);
+
     // Initial tool
     board.setTool('select');
 
@@ -350,7 +378,8 @@ export default defineScenario({
       section('Tool Aktif', toolContainer),
       section('Navigasi & Zoom', navRow),
       section('Riwayat', historyRow),
-      section('Tampilan', h('div', { class: 'row wrap' }, uiBtn, themeBtn, backgroundBtn)),
+      section('File I/O Dokumen', createFileIoControls(() => board)),
+      section('Tampilan', h('div', { class: 'row wrap' }, uiBtn, hudBtn, themeBtn, backgroundBtn)),
       section('Aksi', h('div', { class: 'row wrap' }, resetSampleBtn, clearBtn)),
       section(
         'Petunjuk Interaksi',
@@ -367,41 +396,41 @@ export default defineScenario({
       ),
     );
 
-    // ---------- Debug Panel ----------
-    const docPre = h('pre', { style: 'font-size: 11px; max-height: 250px; overflow: auto;' }, json(board.getDocument()));
-    const camPre = h('pre', { style: 'font-size: 11px;' }, json(board.getCamera()));
-    const selPre = h('pre', { style: 'font-size: 11px;' }, json(board.selection));
+    // ---------- Debug Panel (BOARD-2404 & BOARD-2405) ----------
+    const tabInspector = h('button', { type: 'button', class: 'tab-btn active' }, 'Inspector');
+    const tabEventLog = h('button', { type: 'button', class: 'tab-btn' }, 'Log Event & Riwayat');
+    const tabsHeader = h('div', { class: 'tabs-header' }, tabInspector, tabEventLog);
 
-    function updateDebug(): void {
-      docPre.textContent = json(board.getDocument());
-      camPre.textContent = json(board.getCamera());
-      selPre.textContent = json(board.selection);
-    }
+    const paneInspector = h('div', { class: 'tab-content' });
+    const paneEventLog = h('div', { class: 'tab-content', hidden: true });
 
-    const offChange = board.on('change', updateDebug);
-    const offCamera = board.on('camera', updateDebug);
-    const offSelection = board.on('selection', updateDebug);
+    tabInspector.onclick = () => {
+      tabInspector.classList.add('active');
+      tabEventLog.classList.remove('active');
+      paneInspector.removeAttribute('hidden');
+      paneEventLog.setAttribute('hidden', '');
+    };
 
-    debug.append(
-      section('Seleksi Aktif', selPre),
-      section('Kamera', camPre),
-      section(
-        'Dokumen',
-        h(
-          'p',
-          { class: 'muted', style: 'font-size: 12px; margin-bottom: 6px;' },
-          `Tipe terdaftar: ${DEFAULT_ELEMENT_TYPES.length} · Tool: ${DEFAULT_TOOL_IDS.length}`,
-        ),
-        docPre,
-      ),
-    );
+    tabEventLog.onclick = () => {
+      tabEventLog.classList.add('active');
+      tabInspector.classList.remove('active');
+      paneEventLog.removeAttribute('hidden');
+      paneInspector.setAttribute('hidden', '');
+    };
+
+    const inspector = createInspector(board, paneInspector);
+    const eventLog = createEventLog(board, paneEventLog);
+
+    const tabsContainer = h('div', { class: 'tabs-container' }, tabsHeader, paneInspector, paneEventLog);
+    debug.append(tabsContainer);
 
     return () => {
+      detachDnd();
       offTool();
       offTheme();
-      offChange();
-      offCamera();
-      offSelection();
+      inspector.dispose();
+      eventLog.dispose();
+      hud?.dispose();
       textEditor.detach();
       ui?.unmount();
       view.unmount();

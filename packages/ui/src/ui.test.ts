@@ -25,6 +25,7 @@ import {
   UI_TAGS,
   type KujamUiElement,
 } from './index.js';
+import { BASE_CSS, uiToken } from './theme.js';
 import { createIcon } from './icons.js';
 
 const tool = (id: string) => defineTool({ id, initial: 'idle', states: { idle: {} } });
@@ -835,4 +836,60 @@ describe('BOARD-1403: contextual selection toolbar', () => {
     expect(container.querySelector('kujam-selection-toolbar')).toBeNull();
   });
 });
+
+describe('BOARD-1904: Fokus Terlihat & Kontras Aksesibilitas @kujam/ui (>= 3:1)', () => {
+  function relativeLuminance(hex: string): number {
+    const clean = hex.replace('#', '');
+    const r = parseInt(clean.slice(0, 2), 16) / 255;
+    const g = parseInt(clean.slice(2, 4), 16) / 255;
+    const b = parseInt(clean.slice(4, 6), 16) / 255;
+    const toLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+    return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+  }
+
+  function contrastRatio(hex1: string, hex2: string): number {
+    const l1 = relativeLuminance(hex1);
+    const l2 = relativeLuminance(hex2);
+    const lighter = Math.max(l1, l2);
+    const darker = Math.min(l1, l2);
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  it('memastikan BASE_CSS mendefinisikan 2px solid focus ring untuk :focus-visible dengan outline-offset 2px', () => {
+    expect(BASE_CSS).toContain(':focus-visible');
+    expect(BASE_CSS).toContain('outline: 2px solid var(--kujam-ui-focus-ring);');
+    expect(BASE_CSS).toContain('outline-offset: 2px;');
+  });
+
+  it('memastikan kontras token focus-ring terhadap surface >= 3:1 pada tema terang', () => {
+    const surface = uiToken('light', 'surface'); // #FFFFFF
+    const focusRing = uiToken('light', 'focus-ring'); // #2F6FDB
+
+    const ratio = contrastRatio(focusRing, surface);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    // Verifikasi rasio empiris ~4.75:1
+    expect(ratio).toBeCloseTo(4.75, 1);
+  });
+
+  it('memastikan kontras token focus-ring terhadap surface >= 3:1 pada tema gelap', () => {
+    const surface = uiToken('dark', 'surface'); // #1A1C21
+    const focusRing = uiToken('dark', 'focus-ring'); // #6EA0F0
+
+    const ratio = contrastRatio(focusRing, surface);
+    expect(ratio).toBeGreaterThanOrEqual(3.0);
+    // Verifikasi rasio empiris ~6.45:1
+    expect(ratio).toBeCloseTo(6.45, 1);
+  });
+
+  it('memastikan komponen UI menyertakan aturan :focus-visible pada shadow DOM', () => {
+    const board = newBoard();
+    const el = mountToolbar(board, UI_TAGS.toolbar);
+    const styleEl = el.shadowRoot!.querySelector('style');
+
+    expect(styleEl).not.toBeNull();
+    expect(styleEl!.textContent).toContain(':focus-visible');
+    expect(styleEl!.textContent).toContain('outline: 2px solid var(--kujam-ui-focus-ring);');
+  });
+});
+
 

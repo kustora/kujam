@@ -50,6 +50,14 @@ export default defineConfig({
           testTimeout: 20_000,
         },
       },
+      {
+        test: {
+          name: 'playground',
+          include: ['apps/playground/src/**/*.test.ts'],
+          environment: 'happy-dom',
+          testTimeout: 20_000,
+        },
+      },
     ],
   },
 });

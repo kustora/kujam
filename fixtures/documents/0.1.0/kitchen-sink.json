@@ -1,0 +1,300 @@
+{
+  "schemaVersion": 1,
+  "meta": {
+    "title": "Kitchen Sink 0.1.0",
+    "description": "Dokumen lengkap berisi semua elemen bawaan 0.1: sticky, draw, text, geo (diamond, rounded-rectangle, star, arrow), dan bindings",
+    "generator": "@kujam/core"
+  },
+  "records": {
+    "page:main": {
+      "id": "page:main",
+      "kind": "page",
+      "name": "Halaman Utama",
+      "index": "a0",
+      "meta": {}
+    },
+    "text:title": {
+      "id": "text:title",
+      "kind": "element",
+      "type": "text",
+      "pageId": "page:main",
+      "parentId": null,
+      "index": "a1",
+      "x": 80,
+      "y": 40,
+      "rotation": 0,
+      "w": 520,
+      "h": 60,
+      "locked": false,
+      "opacity": 1,
+      "typeVersion": 1,
+      "props": {
+        "text": [
+          {
+            "insert": "Papan Whiteboard Agnostik\n",
+            "attributes": { "bold": true }
+          },
+          {
+            "insert": "Eksplorasi seluruh elemen bawaan 0.1 dengan format kanonikal.\n"
+          }
+        ],
+        "size": "m",
+        "align": "start",
+        "widthMode": "auto",
+        "color": "black"
+      },
+      "meta": {}
+    },
+    "sticky:1": {
+      "id": "sticky:1",
+      "kind": "element",
+      "type": "sticky",
+      "pageId": "page:main",
+      "parentId": null,
+      "index": "a2",
+      "x": 80,
+      "y": 140,
+      "rotation": 0,
+      "w": 200,
+      "h": 200,
+      "locked": false,
+      "opacity": 1,
+      "typeVersion": 1,
+      "props": {
+        "text": [
+          {
+            "insert": "Catatan Penting 💡\n",
+            "attributes": { "bold": true }
+          },
+          {
+            "insert": "Fitur sticky note:\n"
+          },
+          {
+            "insert": "Teks tebal & miring"
+          },
+          {
+            "insert": "\n",
+            "attributes": { "list": "bullet" }
+          },
+          {
+            "insert": "Daftar butir otomatis"
+          },
+          {
+            "insert": "\n",
+            "attributes": { "list": "bullet" }
+          }
+        ],
+        "color": "yellow",
+        "authorId": "user:demo"
+      },
+      "meta": {}
+    },
+    "sticky:2": {
+      "id": "sticky:2",
+      "kind": "element",
+      "type": "sticky",
+      "pageId": "page:main",
+      "parentId": null,
+      "index": "a3",
+      "x": 310,
+      "y": 140,
+      "rotation": 0,
+      "w": 200,
+      "h": 200,
+      "locked": false,
+      "opacity": 1,
+      "typeVersion": 1,
+      "props": {
+        "text": [
+          {
+            "insert": "Warna Pastel Hijau\n",
+            "attributes": { "bold": true }
+          },
+          {
+            "insert": "Palet warna sticky selaras dengan DESIGN.md dengan kontras teks > 12:1.\n"
+          }
+        ],
+        "color": "green",
+        "authorId": null
+      },
+      "meta": {}
+    },
+    "geo:rounded-rectangle": {
+      "id": "geo:rounded-rectangle",
+      "kind": "element",
+      "type": "geo",
+      "pageId": "page:main",
+      "parentId": null,
+      "index": "a4",
+      "x": 550,
+      "y": 140,
+      "rotation": 0,
+      "w": 180,
+      "h": 120,
+      "locked": false,
+      "opacity": 1,
+      "typeVersion": 1,
+      "props": {
+        "geo": "rounded-rectangle",
+        "fill": "semi",
+        "fillColor": "blue",
+        "strokeColor": "blue",
+        "strokeWidth": 2,
+        "dash": "solid",
+        "textColor": "blue",
+        "label": [
+          {
+            "insert": "Mulai Proses\n",
+            "attributes": { "bold": true }
+          }
+        ]
+      },
+      "meta": {}
+    },
+    "geo:diamond": {
+      "id": "geo:diamond",
+      "kind": "element",
+      "type": "geo",
+      "pageId": "page:main",
+      "parentId": null,
+      "index": "a5",
+      "x": 780,
+      "y": 120,
+      "rotation": 0,
+      "w": 160,
+      "h": 160,
+      "locked": false,
+      "opacity": 1,
+      "typeVersion": 1,
+      "props": {
+        "geo": "diamond",
+        "fill": "solid",
+        "fillColor": "yellow",
+        "strokeColor": "orange",
+        "strokeWidth": 3,
+        "dash": "solid",
+        "textColor": "black",
+        "label": [
+          {
+            "insert": "Validasi?\n",
+            "attributes": { "bold": true }
+          }
+        ]
+      },
+      "meta": {}
+    },
+    "geo:star": {
+      "id": "geo:star",
+      "kind": "element",
+      "type": "geo",
+      "pageId": "page:main",
+      "parentId": null,
+      "index": "a6",
+      "x": 980,
+      "y": 130,
+      "rotation": 0,
+      "w": 140,
+      "h": 140,
+      "locked": false,
+      "opacity": 1,
+      "typeVersion": 1,
+      "props": {
+        "geo": "star",
+        "fill": "semi",
+        "fillColor": "orange",
+        "strokeColor": "red",
+        "strokeWidth": 2,
+        "dash": "solid",
+        "textColor": "red",
+        "label": [
+          {
+            "insert": "Prioritas!\n",
+            "attributes": { "bold": true }
+          }
+        ]
+      },
+      "meta": {}
+    },
+    "geo:arrow": {
+      "id": "geo:arrow",
+      "kind": "element",
+      "type": "geo",
+      "pageId": "page:main",
+      "parentId": null,
+      "index": "a7",
+      "x": 780,
+      "y": 330,
+      "rotation": 0,
+      "w": 180,
+      "h": 90,
+      "locked": false,
+      "opacity": 1,
+      "typeVersion": 1,
+      "props": {
+        "geo": "arrow",
+        "fill": "semi",
+        "fillColor": "purple",
+        "strokeColor": "purple",
+        "strokeWidth": 2,
+        "dash": "solid",
+        "textColor": "purple",
+        "label": [
+          {
+            "insert": "Lanjut Alur\n"
+          }
+        ]
+      },
+      "meta": {}
+    },
+    "draw:stroke-1": {
+      "id": "draw:stroke-1",
+      "kind": "element",
+      "type": "draw",
+      "pageId": "page:main",
+      "parentId": null,
+      "index": "a8",
+      "x": 80,
+      "y": 370,
+      "rotation": 0,
+      "w": 360,
+      "h": 90,
+      "locked": false,
+      "opacity": 1,
+      "typeVersion": 1,
+      "props": {
+        "points": [
+          [20, 40, 0.5],
+          [80, 20, 0.7],
+          [140, 60, 0.9],
+          [210, 25, 0.6],
+          [290, 65, 0.8],
+          [350, 30, 0.4]
+        ],
+        "color": "red",
+        "thickness": 6,
+        "brush": "pen"
+      },
+      "meta": {}
+    },
+    "binding:rect-to-diamond": {
+      "id": "binding:rect-to-diamond",
+      "kind": "binding",
+      "fromId": "geo:rounded-rectangle",
+      "toId": "geo:diamond",
+      "anchor": {
+        "x": 1,
+        "y": 0.5
+      }
+    },
+    "binding:diamond-to-arrow": {
+      "id": "binding:diamond-to-arrow",
+      "kind": "binding",
+      "fromId": "geo:diamond",
+      "toId": "geo:arrow",
+      "anchor": {
+        "x": 0.5,
+        "y": 1
+      }
+    }
+  }
+}
