@@ -22,6 +22,7 @@ import {
 } from '../elements/elements.js';
 import type { Board } from '../index.js';
 import { checkKeybindingMap } from '../tools/keybindings.js';
+import { checkMessagesMap, type BoardMessages } from '../i18n/i18n.js';
 import { defineTool, type AnyToolDefinition, type BoardTools, type ToolError } from '../tools/tools.js';
 import type { BoardDocument, ElementRecord } from '../types.js';
 
@@ -249,6 +250,13 @@ export interface PluginDefinition<
    * @beta
    */
   readonly onDocumentSaved?: DocumentSavedHook;
+  /**
+   * Bilingual dictionary entries (`id` / `en`) contributed by the plugin (BOARD-1909).
+   * Merged in plugin installation order; consumer `createBoard({ messages })` wins over plugins.
+   *
+   * @public
+   */
+  readonly messages?: BoardMessages;
   /**
    * Initialization when the plugin is installed on `board`. May return a `teardown` function that is
    * called on `board.dispose()` in reverse installation order.
@@ -568,6 +576,9 @@ function collectPluginErrors(definition: unknown): string[] {
   if (definition.toolbarItems !== undefined) checkToolbarItems(definition.toolbarItems, errors);
   if (definition.exporters !== undefined) checkExporters(definition.exporters, errors);
   if (definition.migrations !== undefined) checkMigrations(definition.migrations, errors);
+  if (definition.messages !== undefined) {
+    errors.push(...checkMessagesMap(definition.messages, 'messages'));
+  }
 
   for (const fnKey of ['permissions', 'onDocumentSaved', 'setup'] as const) {
     if (definition[fnKey] !== undefined && typeof definition[fnKey] !== 'function') {
@@ -741,6 +752,7 @@ export interface PluginRuntimeOptions {
   tools: BoardTools;
   commands: BoardCommands;
   brushes: BrushRegistry;
+  i18n?: { addPluginMessages(messages: BoardMessages): void };
   plugins: Iterable<AnyPluginDefinition> | undefined;
 }
 
@@ -754,7 +766,7 @@ export interface PluginRuntime {
 
 /** @internal */
 export function createPluginRuntime(options: PluginRuntimeOptions): PluginRuntime {
-  const { getBoard, elements, tools, commands, brushes } = options;
+  const { getBoard, elements, tools, commands, brushes, i18n } = options;
   const ordered =
     options.plugins === undefined ? Object.freeze([]) : resolvePluginOrder(options.plugins);
   const byId = new Map<string, AnyPluginDefinition>();
@@ -806,6 +818,9 @@ export function createPluginRuntime(options: PluginRuntimeOptions): PluginRuntim
           }
           if (typeof plugin.permissions === 'function') {
             permissionHooks.push(plugin.permissions);
+          }
+          if (plugin.messages !== undefined) {
+            i18n?.addPluginMessages(plugin.messages);
           }
           byId.set(plugin.id, plugin);
           if (plugin.setup) {

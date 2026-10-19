@@ -280,10 +280,15 @@ export function sanitizePastedHtml(rawHtml: string): string {
   let cleaned = rawHtml.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
   cleaned = cleaned.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
   cleaned = cleaned.replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '');
+  cleaned = cleaned.replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '');
+  cleaned = cleaned.replace(/<embed\b[^>]*>/gi, '');
+  cleaned = cleaned.replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, '');
+  cleaned = cleaned.replace(/<math\b[^<]*(?:(?!<\/math>)<[^<]*)*<\/math>/gi, '');
   cleaned = cleaned.replace(/<template\b[^<]*(?:(?!<\/template>)<[^<]*)*<\/template>/gi, '');
   cleaned = cleaned.replace(/<noscript\b[^<]*(?:(?!<\/noscript>)<[^<]*)*<\/noscript>/gi, '');
+  cleaned = cleaned.replace(/<(?:img|input|form|base|meta|link)\b[^>]*>/gi, '');
   cleaned = cleaned.replace(/\son\w+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, '');
-  cleaned = cleaned.replace(/href\s*=\s*['"]javascript:[^'"]*['"]/gi, 'href=""');
+  cleaned = cleaned.replace(/(?:href|src|xlink:href)\s*=\s*['"]?\s*(?:javascript|vbscript|data):[^'"\s>]*/gi, 'href=""');
   return cleaned;
 }
 
@@ -490,9 +495,9 @@ export function attachTextEditor(
 
       if (rawHtml) {
         const cleanedHtml = sanitizePastedHtml(rawHtml);
-        const tempDiv = doc.createElement('div');
-        tempDiv.innerHTML = cleanedHtml;
-        const pastedDelta = domToRichText(tempDiv);
+        const Parser = doc.defaultView?.DOMParser ?? globalThis.DOMParser;
+        const parsedDoc = new Parser().parseFromString(cleanedHtml, 'text/html');
+        const pastedDelta = domToRichText(parsedDoc.body);
         const fragment = doc.createDocumentFragment();
         const tempContainer = doc.createElement('div');
         richTextToDom(pastedDelta, tempContainer);
@@ -500,13 +505,27 @@ export function attachTextEditor(
           fragment.appendChild(tempContainer.firstChild);
         }
         const sel = doc.getSelection();
-        if (sel && sel.rangeCount > 0) {
+        if (sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
           const range = sel.getRangeAt(0);
           range.deleteContents();
           range.insertNode(fragment);
+        } else {
+          editor.appendChild(fragment);
         }
       } else if (plainText) {
-        doc.execCommand?.('insertText', false, plainText);
+        const sel = doc.getSelection();
+        if (sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
+          const range = sel.getRangeAt(0);
+          range.deleteContents();
+          range.insertNode(doc.createTextNode(plainText));
+          range.collapse(false);
+        } else {
+          const p = doc.createElement('p');
+          p.style.margin = '0';
+          p.style.minHeight = '1em';
+          p.appendChild(doc.createTextNode(plainText));
+          editor.appendChild(p);
+        }
       }
     });
 

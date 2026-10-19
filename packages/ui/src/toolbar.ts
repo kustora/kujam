@@ -116,9 +116,9 @@ function colorStyle(
   const keys: readonly string[] = palette === 'sticky' ? STICKY_COLORS : COLOR_KEYS;
   return {
     key: 'color',
-    label: t('style.color', board.locale),
+    label: t('style.color', board),
     palette,
-    options: keys.map((value) => ({ value, label: tOr(`color.${value}`, board.locale, value) })),
+    options: keys.map((value) => ({ value, label: tOr(`color.${value}`, board, value) })),
     fallback: defaultOf(board, type, 'color'),
     clears: [],
   };
@@ -130,11 +130,11 @@ function brushStyle(board: Board): ToolbarStyleGroup | null {
   if (!board.elements.get('draw') || brushes.length < 2) return null;
   return {
     key: 'brush',
-    label: t('style.brush', board.locale),
+    label: t('style.brush', board),
     palette: undefined,
     options: brushes.map((brush) => ({
       value: brush.id,
-      label: tOr(brush.label, board.locale, brush.label),
+      label: tOr(brush.label, board, brush.label),
     })),
     fallback: defaultOf(board, 'draw', 'brush'),
     // A new brush starts at its own default size.
@@ -185,7 +185,6 @@ const BUILT_INS: readonly BuiltIn[] = [
  * @public
  */
 export function buildToolbarItems(board: Board): ToolbarItem[] {
-  const locale = board.locale;
   const items: ToolbarItem[] = [];
   const shown = new Set<string>();
 
@@ -195,7 +194,7 @@ export function buildToolbarItems(board: Board): ToolbarItem[] {
         .filter((v) => board.tools.get(v.toolId))
         .map((v) => ({
           id: v.toolId,
-          label: t(v.label, locale),
+          label: t(v.label, board),
           icon: v.toolId,
           shortcut: shortcutFor(board, `tool:${v.toolId}`),
           toolId: v.toolId,
@@ -215,7 +214,7 @@ export function buildToolbarItems(board: Board): ToolbarItem[] {
       }
       items.push({
         id: builtIn.id,
-        label: t(builtIn.label, locale),
+        label: t(builtIn.label, board),
         icon: builtIn.icon,
         shortcut: undefined,
         toolId: undefined,
@@ -231,7 +230,7 @@ export function buildToolbarItems(board: Board): ToolbarItem[] {
     const styles = (builtIn.styles?.(board) ?? []).filter((g): g is ToolbarStyleGroup => !!g);
     items.push({
       id: builtIn.id,
-      label: t(builtIn.label, locale),
+      label: t(builtIn.label, board),
       icon: builtIn.icon,
       shortcut: shortcutFor(board, `tool:${builtIn.id}`),
       toolId: builtIn.id,
@@ -259,7 +258,7 @@ export function buildToolbarItems(board: Board): ToolbarItem[] {
   for (const item of pluginItems) {
     items.push({
       id: item.id,
-      label: item.label,
+      label: tOr(item.label, board, item.label),
       icon: item.icon,
       shortcut: shortcutFor(board, item.toolId ? `tool:${item.toolId}` : item.commandId!),
       toolId: item.toolId,
@@ -369,7 +368,7 @@ function renderToolbar(root: ShadowRoot, board: Board, host: HTMLElement): () =>
   bar.className = 'bar';
   bar.setAttribute('role', 'toolbar');
   bar.setAttribute('aria-orientation', 'horizontal');
-  bar.setAttribute('aria-label', t('toolbar', board.locale));
+  bar.setAttribute('aria-label', t('toolbar', board));
   root.append(bar);
 
   function iconOrLetter(icon: string | undefined, label: string): Node {

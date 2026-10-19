@@ -91,8 +91,12 @@ export const BASE_CSS = `
     outline: 2px solid var(--kujam-ui-focus-ring);
     outline-offset: 2px;
   }
+  :host([data-reduced-motion='true']),
+  :host-context([data-reduced-motion='true']) {
+    --kujam-ui-motion: 0s;
+  }
   @media (prefers-reduced-motion: reduce) {
-    :host {
+    :host(:not([data-reduced-motion='false'])) {
       --kujam-ui-motion: 0s;
     }
   }

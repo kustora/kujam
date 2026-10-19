@@ -116,6 +116,7 @@ export interface Board {
     readonly history: BoardHistory;
     // @beta
     hitTest(point: Point, options?: HitTestOptions): Readonly<ElementRecord> | undefined;
+    readonly i18n: BoardI18n;
     // @beta
     readonly keybindings: BoardKeybindings;
     readonly limits: Readonly<BoardLimits>;
@@ -162,6 +163,7 @@ export interface Board {
     // @beta
     readonly snapOptions: Readonly<SnapOptions>;
     readonly spatial: SpatialIndex;
+    t(key: string, params?: TranslationParams): string;
     // @beta
     readonly theme: Readonly<ThemeDefinition>;
     // @beta
@@ -275,6 +277,17 @@ export interface BoardHistory {
     readonly undoStack?: readonly HistoryStep[];
 }
 
+// @public
+export interface BoardI18n {
+    addMessages(messages: BoardMessages): void;
+    addMessages(locale: BoardLocale, messages: LocaleMessages): void;
+    getMessages(locale?: BoardLocale): LocaleMessages;
+    has(key: string, locale?: BoardLocale): boolean;
+    readonly locale: BoardLocale;
+    setLocale(locale: BoardLocale): void;
+    t(key: string, params?: TranslationParams): string;
+}
+
 // @beta
 export type BoardInputEvent = ToolPointerEvent | ToolKeyEvent | ToolWheelEvent | ToolPinchEvent;
 
@@ -298,6 +311,9 @@ export interface BoardLimits {
 
 // @public
 export type BoardLocale = 'id' | 'en';
+
+// @public
+export type BoardMessages = Readonly<Partial<Record<BoardLocale, LocaleMessages>>>;
 
 // @beta
 export interface BoardPages {
@@ -564,6 +580,7 @@ export interface CreateBoardOptions {
     keybindings?: Readonly<Record<string, string | null>>;
     limits?: Partial<BoardLimits>;
     locale?: BoardLocale;
+    messages?: BoardMessages;
     // @beta
     permissions?: PermissionHook;
     // @beta
@@ -654,6 +671,9 @@ export const DEFAULT_LIGHT_THEME: Readonly<ThemeDefinition>;
 
 // @public
 export const DEFAULT_MERGE_WINDOW_MS = 1000;
+
+// @public
+export const DEFAULT_MESSAGES: Readonly<Record<BoardLocale, LocaleMessages>>;
 
 // @beta
 export const DEFAULT_MIN_SIZE: Readonly<ElementSize>;
@@ -1209,6 +1229,9 @@ export interface InsertContentResult {
     readonly rootIds: readonly string[];
 }
 
+// @public
+export function interpolateMessage(template: string, params?: TranslationParams): string;
+
 // @beta
 export function intersectsBox(geometry: Geometry, box: BoxBounds, element?: ElementTransform): boolean;
 
@@ -1253,6 +1276,9 @@ export type Listener<T> = (event: T) => void;
 
 // @public
 export function literal<const T extends string | number | boolean | null>(expected: T): Schema<T>;
+
+// @public
+export type LocaleMessages = Readonly<Record<string, string>>;
 
 // @beta
 export function localToBoard(element: ElementTransform, point: Point): Point;
@@ -1303,6 +1329,9 @@ export function nextZoomStep(zoom: number, direction: 1 | -1, range: Readonly<Zo
 
 // @public
 export function normalizeBounds(bounds: Bounds): BoxBounds;
+
+// @public
+export function normalizeLocale(locale?: string): BoardLocale;
 
 // @beta
 export const NUDGE_DISTANCE = 1;
@@ -1458,6 +1487,7 @@ export interface PluginDefinition<Id extends string = string, Elements extends r
     readonly id: Id;
     // @beta
     readonly keybindings?: Readonly<Record<string, string>>;
+    readonly messages?: BoardMessages;
     // @beta
     readonly migrations?: PluginMigrations;
     // @beta
@@ -1946,6 +1976,9 @@ export interface StringOptions {
 export type StrokePoint = Point | readonly number[];
 
 // @public
+export const SUPPORTED_LOCALES: readonly BoardLocale[];
+
+// @public
 export interface ThemeCanvasTokens {
     readonly background: string;
     readonly gridDot: string;
@@ -2198,6 +2231,12 @@ export interface TransformResult {
     // (undocumented)
     readonly y: number;
 }
+
+// @public
+export function translate(key: string, locale?: string, params?: TranslationParams, messages?: BoardMessages): string;
+
+// @public
+export type TranslationParams = Readonly<Record<string, string | number>>;
 
 // @public
 export type Unsubscribe = () => void;

@@ -70,7 +70,7 @@ describe('Inline HTML contenteditable rich text editor (BOARD-1003b, 1003c, 1003
     });
   });
 
-  describe('sanitizePastedHtml', () => {
+  describe('sanitizePastedHtml and XSS resistance (BOARD-2001)', () => {
     it('strips script, style, iframe, and dangerous event handlers', () => {
       const malicious =
         '<p>Halo <script>alert(1)</script><img src=x onerror="alert(1)"> <a href="javascript:alert(1)">klik</a></p>' +
@@ -80,9 +80,30 @@ describe('Inline HTML contenteditable rich text editor (BOARD-1003b, 1003c, 1003
       expect(clean).not.toContain('<script');
       expect(clean).not.toContain('<style');
       expect(clean).not.toContain('<iframe');
+      expect(clean).not.toContain('<img');
       expect(clean).not.toContain('onerror');
       expect(clean).not.toContain('javascript:');
       expect(clean).toContain('<p>Halo ');
+    });
+
+    it('renders <script>, <img onerror>, and HTML entities strictly as literal text without creating dangerous DOM elements', () => {
+      const container = document.createElement('div');
+      const delta: RichText = [
+        {
+          insert:
+            '<script>window.__xss = true</script> <img src=x onerror="alert(1)"> &lt;b&gt; &amp; &quot;teks&quot;\n',
+        },
+      ];
+      richTextToDom(delta, container);
+
+      expect(container.querySelector('script')).toBeNull();
+      expect(container.querySelector('img')).toBeNull();
+      expect(container.textContent).toBe(
+        '<script>window.__xss = true</script> <img src=x onerror="alert(1)"> &lt;b&gt; &amp; &quot;teks&quot;',
+      );
+
+      const roundTrip = domToRichText(container);
+      expect(roundTrip).toEqual(delta);
     });
   });
 

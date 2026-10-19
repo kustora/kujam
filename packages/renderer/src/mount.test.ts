@@ -358,4 +358,60 @@ describe('BOARD-801: mountRenderer', () => {
     expect(view.theme.mode).toBe('light');
     expect(view.layers.root.style.backgroundColor).toBe('#F4F3EF');
   });
+
+  it('syncs prefers-reduced-motion to board.camera.reducedMotion and supports explicit override (BOARD-1905)', () => {
+    const listeners = new Set<(e: MediaQueryListEvent) => void>();
+    let matchesReduced = true;
+
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn((query: string) => {
+      if (query === '(prefers-reduced-motion: reduce)') {
+        return {
+          matches: matchesReduced,
+          media: query,
+          onchange: null,
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+          addEventListener: vi.fn((_type: string, cb: (e: MediaQueryListEvent) => void) => {
+            listeners.add(cb);
+          }),
+          removeEventListener: vi.fn((_type: string, cb: (e: MediaQueryListEvent) => void) => {
+            listeners.delete(cb);
+          }),
+          dispatchEvent: vi.fn(),
+        } as unknown as MediaQueryList;
+      }
+      return originalMatchMedia?.call(window, query);
+    });
+
+    try {
+      // 1. Automatically enables reducedMotion when OS prefers-reduced-motion: reduce is active
+      const { board: b1, view: v1 } = setup();
+      expect(b1.camera.reducedMotion).toBe(true);
+      expect(v1.reducedMotion).toBe(true);
+      expect(v1.layers.root.dataset.reducedMotion).toBe('true');
+
+      // Dynamic OS toggle updates camera and root dataset
+      matchesReduced = false;
+      for (const cb of listeners) {
+        cb({ matches: false } as MediaQueryListEvent);
+      }
+      expect(b1.camera.reducedMotion).toBe(false);
+      expect(v1.layers.root.dataset.reducedMotion).toBe('false');
+
+      // 2. Explicit option overrides OS preference
+      matchesReduced = true;
+      const { board: b2, view: v2 } = setup(undefined, { reducedMotion: false });
+      expect(b2.camera.reducedMotion).toBe(false);
+      expect(v2.reducedMotion).toBe(false);
+      expect(v2.layers.root.dataset.reducedMotion).toBe('false');
+
+      // Runtime setter overrides and updates camera.reducedMotion
+      v2.reducedMotion = true;
+      expect(b2.camera.reducedMotion).toBe(true);
+      expect(v2.layers.root.dataset.reducedMotion).toBe('true');
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
+  });
 });

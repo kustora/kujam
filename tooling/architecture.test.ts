@@ -157,6 +157,15 @@ describe('BOARD-107: istilah domain aplikasi', () => {
   });
 });
 
+describe('BOARD-2001: larangan innerHTML/outerHTML/insertAdjacentHTML/document.write', () => {
+  it('lint menolak penggunaan innerHTML, outerHTML, insertAdjacentHTML, dan document.write di kode sumber package', async () => {
+    const messages = await lintFixtureAs('unsafe-html.ts', 'shapes');
+    const errors = errorsOf(messages, 'no-restricted-syntax');
+    expect(errors).toHaveLength(4);
+    expect(errors.every((error) => error.message.startsWith('BOARD-2001: '))).toBe(true);
+  });
+});
+
 describe('BOARD-102: inline dependensi @kujam/core', () => {
   it('package.json core tanpa dependencies dan peerDependencies', () => {
     const pkg = JSON.parse(readFileSync(join(ROOT, 'packages/core/package.json'), 'utf8')) as {
@@ -208,3 +217,20 @@ describe('BOARD-102: inline dependensi @kujam/core', () => {
     }
   }, 30_000);
 });
+
+describe('BOARD-1908: axe-core Playwright & checklist aksesibilitas per rilis', () => {
+  it('menyediakan docs/a11y-checklist.md lengkap (keyboard, VoiceOver, NVDA, zoom 200%) dan e2e/a11y.spec.ts', () => {
+    const checklist = readFileSync(join(ROOT, 'docs/a11y-checklist.md'), 'utf8');
+    expect(checklist).toContain('axe-core');
+    expect(checklist).toContain('Keyboard');
+    expect(checklist).toContain('VoiceOver');
+    expect(checklist).toContain('NVDA');
+    expect(checklist).toContain('200%');
+    expect(checklist).toContain('prefers-reduced-motion');
+
+    const e2eSpec = readFileSync(join(ROOT, 'e2e/a11y.spec.ts'), 'utf8');
+    expect(e2eSpec).toContain('@axe-core/playwright');
+    expect(e2eSpec).toContain("v.impact === 'serious' || v.impact === 'critical'");
+  });
+});
+

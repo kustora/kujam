@@ -116,6 +116,38 @@ export default tseslint.config(
     },
   },
   {
+    // BOARD-2001: Ban innerHTML, outerHTML, insertAdjacentHTML, and document.write in package runtime code.
+    files: ['packages/*/src/**/*.{ts,tsx}'],
+    ignores: ['packages/*/src/**/*.test.ts', 'packages/*/src/**/*.test-d.ts', 'packages/*/src/**/*.spec.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: `Identifier[name=/${FORBIDDEN_DOMAIN_TERMS_REGEX}/]:not([name=/${ALLOWED_IDENTIFIERS_REGEX}/])`,
+          message: DOMAIN_TERMS_MESSAGE,
+        },
+        {
+          selector: `Literal[value=/${FORBIDDEN_DOMAIN_TERMS_REGEX}/]:not([value=/${ALLOWED_STRINGS_REGEX}/])`,
+          message: DOMAIN_TERMS_MESSAGE,
+        },
+        {
+          selector: `TemplateElement[value.raw=/${FORBIDDEN_DOMAIN_TERMS_REGEX}/]`,
+          message: DOMAIN_TERMS_MESSAGE,
+        },
+        {
+          selector: "MemberExpression[property.name=/^(innerHTML|outerHTML|insertAdjacentHTML)$/]",
+          message:
+            'BOARD-2001: Dilarang memakai innerHTML/outerHTML/insertAdjacentHTML di kode sumber package @kujam/*; gunakan DOM API terstruktur (createElement, textContent) atau DOMParser.',
+        },
+        {
+          selector: "CallExpression[callee.object.name='document'][callee.property.name=/^(write|writeln)$/]",
+          message:
+            'BOARD-2001: Dilarang memakai document.write/writeln di kode sumber package @kujam/*.',
+        },
+      ],
+    },
+  },
+  {
     // BOARD-106: @kujam/core must be DOM-free. The full check is in typecheck
     // (`lib: ["ES2022"]` without `dom`); this rule gives a clear message for common cases.
     files: ['packages/core/src/**/*.ts'],

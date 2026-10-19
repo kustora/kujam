@@ -107,18 +107,17 @@ function makeButton(doc: Document, parent: HTMLElement, name: string): HTMLButto
 
 function renderZoom(root: ShadowRoot, board: Board, host: HTMLElement): () => void {
   const doc = host.ownerDocument;
-  const locale = board.locale;
-  const group = makeGroup(root, doc, t('zoom', locale));
+  const group = makeGroup(root, doc, t('zoom', board));
 
   const zoomOut = makeButton(doc, group, 'zoom-out');
   zoomOut.append(createIcon(doc, 'minus', 16)!);
-  labelButton(zoomOut, t('zoomOut', locale), shortcutFor(board, 'camera.zoom-out'));
+  labelButton(zoomOut, t('zoomOut', board), shortcutFor(board, 'camera.zoom-out'));
 
   const level = makeButton(doc, group, 'zoom-level');
   level.classList.add('percent');
   const menu = createMenu(doc, {
     id: 'kujam-zoom-menu',
-    label: t('zoomOptions', locale),
+    label: t('zoomOptions', board),
     anchor: level,
     wrap: level.parentElement!,
     radio: false,
@@ -126,7 +125,7 @@ function renderZoom(root: ShadowRoot, board: Board, host: HTMLElement): () => vo
 
   const zoomIn = makeButton(doc, group, 'zoom-in');
   zoomIn.append(createIcon(doc, 'plus', 16)!);
-  labelButton(zoomIn, t('zoomIn', locale), shortcutFor(board, 'camera.zoom-in'));
+  labelButton(zoomIn, t('zoomIn', board), shortcutFor(board, 'camera.zoom-in'));
 
   const step = (direction: 1 | -1): void => {
     board.camera.zoomTo(nextZoomStep(board.camera.get().zoom, direction, board.camera.zoomRange));
@@ -148,7 +147,7 @@ function renderZoom(root: ShadowRoot, board: Board, host: HTMLElement): () => vo
       preset(2),
       {
         id: 'zoom-to-fit',
-        label: t('zoomToFit', locale),
+        label: t('zoomToFit', board),
         shortcut: shortcutFor(board, 'camera.zoom-to-fit'),
         disabled: board.query().length === 0,
         select: () => void board.camera.zoomToFit(),
@@ -182,7 +181,7 @@ function renderZoom(root: ShadowRoot, board: Board, host: HTMLElement): () => vo
     const range = board.camera.zoomRange;
     const text = percent(zoom);
     if (level.textContent !== text) level.textContent = text;
-    labelButton(level, t('zoomLevel', locale).replace('{percent}', text), undefined);
+    labelButton(level, t('zoomLevel', board, { percent: text }), undefined);
     zoomOut.disabled = zoom <= range.min * (1 + EPSILON);
     zoomIn.disabled = zoom >= range.max * (1 - EPSILON);
   }
@@ -196,17 +195,16 @@ function renderZoom(root: ShadowRoot, board: Board, host: HTMLElement): () => vo
 
 function renderHistory(root: ShadowRoot, board: Board, host: HTMLElement): () => void {
   const doc = host.ownerDocument;
-  const locale = board.locale;
-  const group = makeGroup(root, doc, t('history', locale));
+  const group = makeGroup(root, doc, t('history', board));
 
   const undo = makeButton(doc, group, 'undo');
   undo.append(createIcon(doc, 'undo', 16)!);
-  labelButton(undo, t('undo', locale), shortcutFor(board, 'history.undo'));
+  labelButton(undo, t('undo', board), shortcutFor(board, 'history.undo'));
   undo.addEventListener('click', () => board.undo());
 
   const redo = makeButton(doc, group, 'redo');
   redo.append(createIcon(doc, 'redo', 16)!);
-  labelButton(redo, t('redo', locale), shortcutFor(board, 'history.redo'));
+  labelButton(redo, t('redo', board), shortcutFor(board, 'history.redo'));
   redo.addEventListener('click', () => board.redo());
 
   function sync(): void {

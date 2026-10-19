@@ -58,6 +58,11 @@ export interface RendererOptions {
    * `MigrationError` for invalid content. The board is unchanged.
    */
   readonly onClipboardError?: (error: unknown) => void;
+  /**
+   * Overrides the OS `prefers-reduced-motion` setting for camera animations and UI transitions
+   * (BOARD-1905). When omitted, follows `window.matchMedia('(prefers-reduced-motion: reduce)')`.
+   */
+  readonly reducedMotion?: boolean;
 }
 
 /**
@@ -136,6 +141,11 @@ export interface BoardView {
    * @throws `RangeError` when assigned a value other than `none`, `dots`, or `grid`.
    */
   background: BoardBackground;
+  /**
+   * Whether reduced motion is active for camera animations and UI transitions (BOARD-1905).
+   * Assigning a boolean overrides the OS `prefers-reduced-motion` setting.
+   */
+  reducedMotion: boolean;
   /**
    * Removes the DOM layers and releases the `ResizeObserver`, board listeners, and any pending
    * animation frame. Safe to call more than once. Also runs automatically when the board is
@@ -443,6 +453,36 @@ export function mountRenderer(
     board.on('dispose', unmount),
   ];
 
+  let reducedMotionOverridden = options.reducedMotion !== undefined;
+  function applyReducedMotion(enabled: boolean): void {
+    board.camera.setReducedMotion(enabled);
+    root.dataset.reducedMotion = enabled ? 'true' : 'false';
+  }
+
+  if (options.reducedMotion !== undefined) {
+    applyReducedMotion(Boolean(options.reducedMotion));
+  } else if (win && typeof win.matchMedia === 'function') {
+    const mql = win.matchMedia('(prefers-reduced-motion: reduce)');
+    if (mql) {
+      if (mql.matches && !board.camera.reducedMotion) {
+        board.camera.setReducedMotion(true);
+      }
+      root.dataset.reducedMotion = board.camera.reducedMotion ? 'true' : 'false';
+      const onMotionChange = (event: MediaQueryListEvent) => {
+        if (!mounted || reducedMotionOverridden) return;
+        applyReducedMotion(Boolean(event.matches));
+      };
+      mql.addEventListener?.('change', onMotionChange);
+      unsubscribers.push(() => {
+        mql.removeEventListener?.('change', onMotionChange);
+      });
+    } else {
+      root.dataset.reducedMotion = board.camera.reducedMotion ? 'true' : 'false';
+    }
+  } else {
+    root.dataset.reducedMotion = board.camera.reducedMotion ? 'true' : 'false';
+  }
+
   if (options.pixelRatio === undefined && win) {
     const detachDpr = listenDprChange(win, (newDpr) => {
       if (!mounted) return;
@@ -520,6 +560,13 @@ export function mountRenderer(
       canvasRenderer.background = next;
       canvasRenderer.markAllDirty();
       scheduleRender();
+    },
+    get reducedMotion() {
+      return board.camera.reducedMotion;
+    },
+    set reducedMotion(value: boolean) {
+      reducedMotionOverridden = true;
+      applyReducedMotion(Boolean(value));
     },
     mountEditor(editor, bounds) {
       const remove = htmlLayer.mountEditor(editor, bounds);

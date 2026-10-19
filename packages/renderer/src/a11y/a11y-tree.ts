@@ -132,18 +132,17 @@ export class A11yTree {
   ) {
     const doc = root.ownerDocument;
     this.doc = doc;
-    const locale = board.locale;
     layer.style.overflow = 'hidden';
 
     this.help = doc.createElement('div');
     this.help.id = `kujam-a11y-help-${++helpIds}`;
-    this.help.textContent = a11yText('help', locale);
+    this.help.textContent = a11yText('help', board);
     hideVisually(this.help);
 
     this.list = doc.createElement('div');
     this.list.dataset.kujamA11yList = '';
     this.list.setAttribute('role', 'list');
-    this.list.setAttribute('aria-label', a11yText('list', locale));
+    this.list.setAttribute('aria-label', a11yText('list', board));
     Object.assign(this.list.style, {
       position: 'absolute',
       left: '0',
@@ -154,8 +153,8 @@ export class A11yTree {
     layer.append(this.help, this.list);
 
     root.setAttribute('role', 'region');
-    root.setAttribute('aria-roledescription', a11yText('roleDescription', locale));
-    root.setAttribute('aria-label', a11yText('board', locale));
+    root.setAttribute('aria-roledescription', a11yText('roleDescription', board));
+    root.setAttribute('aria-label', a11yText('board', board));
     root.setAttribute('aria-describedby', this.help.id);
 
     const listen = <K extends keyof HTMLElementEventMap>(
@@ -574,10 +573,10 @@ export class A11yTree {
     const label =
       typeof a11y?.label === 'string' && a11y.label.trim()
         ? a11y.label
-        : a11yText('element', board.locale, { type: el.type });
+        : a11yText('element', board, { type: el.type });
     let description = typeof a11y?.description === 'string' ? a11y.description : '';
     if (el.locked) {
-      const locked = a11yText('locked', board.locale);
+      const locked = a11yText('locked', board);
       description = description ? `${locked}. ${description}` : locked;
     }
     return { role, label, description };

@@ -1025,4 +1025,47 @@ describe('BOARD-1904: Fokus Terlihat & Kontras Aksesibilitas @kujam/ui (>= 3:1)'
   });
 });
 
+describe('BOARD-1909: custom i18n messages in UI components', () => {
+  it('menerapkan kamus kustom dari createBoard({ messages }) dan plugin messages pada toolbar', () => {
+    const customPlugin = definePlugin({
+      id: 'laser-plugin',
+      tools: [tool('laser')],
+      toolbarItems: [{ id: 'laser', label: 'plugin.laser', toolId: 'laser' }],
+      messages: {
+        id: { 'plugin.laser': 'Sinar Laser' },
+        en: { 'plugin.laser': 'Laser Beam' },
+      },
+    });
+
+    const board = newBoard({
+      locale: 'id',
+      plugins: [defaultCommands, builtInTools, customPlugin],
+      messages: {
+        id: {
+          toolbar: 'Bilah Alat Utama',
+          'tool.select': 'Pilih Objek',
+        },
+        en: {
+          toolbar: 'Primary Toolbar',
+          'tool.select': 'Select Object',
+        },
+      },
+    });
+
+    const itemsId = buildToolbarItems(board);
+    expect(itemsId.find((i) => i.id === 'select')?.label).toBe('Pilih Objek');
+    expect(itemsId.find((i) => i.id === 'laser')?.label).toBe('Sinar Laser');
+
+    const el = mountToolbar(board, UI_TAGS.toolbar);
+    const bar = el.shadowRoot!.querySelector('[role="toolbar"]');
+    expect(bar?.getAttribute('aria-label')).toBe('Bilah Alat Utama');
+
+    board.setLocale('en');
+    const itemsEn = buildToolbarItems(board);
+    expect(itemsEn.find((i) => i.id === 'select')?.label).toBe('Select Object');
+    expect(itemsEn.find((i) => i.id === 'laser')?.label).toBe('Laser Beam');
+  });
+});
+
+
 

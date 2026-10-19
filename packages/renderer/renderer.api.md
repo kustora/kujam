@@ -24,6 +24,7 @@ export interface BoardView {
     mountEditor(editor: HTMLElement, bounds: EditorBounds): () => void;
     readonly overlayStats: Readonly<OverlayRenderStats>;
     readonly pixelRatio: number;
+    reducedMotion: boolean;
     requestRender(): void;
     setTheme(theme: ThemeMode | ThemeDefinition): void;
     readonly size: Readonly<ViewportSize>;
@@ -190,6 +191,7 @@ export interface RendererOptions {
     readonly debug?: boolean;
     readonly onClipboardError?: (error: unknown) => void;
     readonly pixelRatio?: number;
+    readonly reducedMotion?: boolean;
     readonly theme?: ThemeMode | ThemeDefinition;
 }
 

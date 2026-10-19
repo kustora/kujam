@@ -104,8 +104,33 @@ import {
   type ThemeDefinition,
   type ThemeMode,
 } from './theme/theme.js';
+import {
+  createI18nRuntime,
+  DEFAULT_MESSAGES,
+  interpolateMessage,
+  normalizeLocale,
+  SUPPORTED_LOCALES,
+  translate,
+  type BoardI18n,
+  type BoardLocale,
+  type BoardMessages,
+  type LocaleMessages,
+  type TranslationParams,
+} from './i18n/i18n.js';
 
 export * from './types.js';
+export {
+  DEFAULT_MESSAGES,
+  interpolateMessage,
+  normalizeLocale,
+  SUPPORTED_LOCALES,
+  translate,
+  type BoardI18n,
+  type BoardLocale,
+  type BoardMessages,
+  type LocaleMessages,
+  type TranslationParams,
+};
 export { deepClone } from './utils/clone.js';
 export { deprecate, isDevelopmentMode, resetDeprecationWarnings } from './utils/deprecate.js';
 export {
@@ -390,13 +415,6 @@ export type ResolveElementProps<T> = T extends keyof BoardElementTypes
       : Record<string, unknown>;
 
 /**
- * UI locales supported by the package.
- *
- * @public
- */
-export type BoardLocale = 'id' | 'en';
-
-/**
  * Function that fetches external data by ID (BOARD-604).
  *
  * @beta
@@ -478,6 +496,13 @@ export interface CreateBoardOptions {
   readOnly?: boolean;
   /** UI locale. Defaults to `'id'`. */
   locale?: BoardLocale;
+  /**
+   * Custom translation messages per locale (`id` / `en`), overriding built-in and plugin
+   * dictionaries (BOARD-1909).
+   *
+   * @public
+   */
+  messages?: BoardMessages;
   /**
    * Limits on document size, element count, and stroke points (BOARD-210). Omitted values
    * fall back to {@link DEFAULT_BOARD_LIMITS}.
@@ -938,6 +963,19 @@ export interface Board {
    */
   setLocale(locale: BoardLocale): void;
   /**
+   * Translates `key` in the board's active locale with `{name}` parameter interpolation, falling
+   * back to Indonesian (`'id'`) and then to `key` itself (BOARD-1909).
+   *
+   * @public
+   */
+  t(key: string, params?: TranslationParams): string;
+  /**
+   * Dictionary and translation runtime of this board (BOARD-1909).
+   *
+   * @public
+   */
+  readonly i18n: BoardI18n;
+  /**
    * Active whiteboard theme (BOARD-1006).
    *
    * @beta
@@ -1291,6 +1329,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   const reducedMotion = options.reducedMotion === true;
   let snapOptions = resolveSnapOptions(options.snap);
   let locale = resolveLocale(options.locale);
+  const i18n = createI18nRuntime(locale, options.messages);
   let configuredReadOnly = resolveReadOnly(options.readOnly);
   /** Why the loaded document is too new for this board, or `null` (BOARD-703). */
   let tooNew: DocumentTooNewReason | null = null;
@@ -1706,6 +1745,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     tools: tools.api,
     commands: commands.api,
     brushes: brushes.api,
+    i18n,
     plugins: options.plugins,
   });
 
@@ -1815,7 +1855,12 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     setLocale(nextLocale: BoardLocale): void {
       assertUsable();
       locale = resolveLocale(nextLocale);
+      i18n.api.setLocale(locale);
     },
+    t(key: string, params?: TranslationParams): string {
+      return i18n.api.t(key, params);
+    },
+    i18n: i18n.api,
     resolvers,
     assets,
     user,

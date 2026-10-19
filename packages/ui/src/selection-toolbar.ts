@@ -8,13 +8,7 @@
  * - Repositions to avoid viewport edges and never cover the selection
  */
 
-import {
-  COLOR_KEYS,
-  STICKY_COLORS,
-  type Board,
-  type ElementAction,
-  type ElementRecord,
-} from '@kujam/core';
+import type { ElementAction, ElementRecord } from '@kujam/core';
 import { createElementClass, type UiWindow } from './base.js';
 import { createIcon } from './icons.js';
 import { t, tOr, type UiStringKey } from './i18n.js';
@@ -141,7 +135,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
     render(root, board, host) {
       const doc = host.ownerDocument;
       host.setAttribute('role', 'toolbar');
-      host.setAttribute('aria-label', t('selectionToolbar', board.locale));
+      host.setAttribute('aria-label', t('selectionToolbar', board));
       host.hidden = true;
 
       const bar = doc.createElement('div');
@@ -283,7 +277,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
           if (groupKey === 'style.color' || groupKey === 'style.fillColor') {
             const isFill = groupKey === 'style.fillColor';
             const groupLabelKey: UiStringKey = isFill ? 'style.fillColor' : 'style.color';
-            const groupLabel = t(groupLabelKey, board.locale);
+            const groupLabel = t(groupLabelKey, board);
 
             const { wrap, button } = createControlWrap(groupKey);
             button.classList.add('swatch-btn');
@@ -302,7 +296,6 @@ export function createSelectionToolbarClass(win: UiWindow) {
 
             labelButton(button, groupLabel, undefined);
 
-            const isStickyGroup = groupActions.some((a) => STICKY_COLORS.includes(a.id.split('.').pop() as any));
             const popup = createMenu(doc, {
               id: `kujam-selection-${groupKey}`,
               label: groupLabel,
@@ -314,7 +307,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
             const entries: MenuEntry[] = groupActions.map((action) => {
               const key = action.id.split('.').pop()!;
               const color = resolveColor(key);
-              const label = tOr(`color.${key}`, board.locale, key);
+              const label = tOr(`color.${key}`, board, key);
               return {
                 id: action.id,
                 label,
@@ -343,7 +336,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
 
           // Alignment group: style.align
           if (groupKey === 'style.align') {
-            const groupLabel = t('style.align', board.locale);
+            const groupLabel = t('style.align', board);
             const { wrap, button } = createControlWrap(groupKey);
             const activeAction = groupActions.find((a) => a.isActive?.());
             const alignKey = activeAction ? activeAction.id.split('.').pop()! : 'start';
@@ -369,7 +362,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
               const labelKey: UiStringKey = key === 'center' ? 'style.align.center' : key === 'end' ? 'style.align.end' : 'style.align.start';
               return {
                 id: action.id,
-                label: t(labelKey, board.locale),
+                label: t(labelKey, board),
                 icon: iconOrLetter(icon, key, 16),
                 checked: action.isActive?.(),
                 disabled: action.isEnabled ? !action.isEnabled() : false,
@@ -392,7 +385,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
 
           // Line dash group: style.dash
           if (groupKey === 'style.dash') {
-            const groupLabel = t('style.dash', board.locale);
+            const groupLabel = t('style.dash', board);
             const { wrap, button } = createControlWrap(groupKey);
             const activeAction = groupActions.find((a) => a.isActive?.());
             const dashKey = activeAction ? activeAction.id.split('.').pop()! : 'solid';
@@ -418,7 +411,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
               const labelKey: UiStringKey = key === 'dashed' ? 'style.dash.dashed' : key === 'dotted' ? 'style.dash.dotted' : 'style.dash.solid';
               return {
                 id: action.id,
-                label: t(labelKey, board.locale),
+                label: t(labelKey, board),
                 icon: iconOrLetter(icon, key, 16),
                 checked: action.isActive?.(),
                 disabled: action.isEnabled ? !action.isEnabled() : false,
@@ -441,7 +434,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
 
           // Thickness group: style.thickness
           if (groupKey === 'style.thickness') {
-            const groupLabel = t('style.thickness', board.locale);
+            const groupLabel = t('style.thickness', board);
             const { wrap, button } = createControlWrap(groupKey);
             const activeAction = groupActions.find((a) => a.isActive?.());
             const thicknessKey = activeAction ? activeAction.id.split('.').pop()! : 'm';
@@ -469,7 +462,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
               const labelKey: UiStringKey = key === 's' ? 'size.s' : key === 'm' ? 'size.m' : key === 'l' ? 'size.l' : 'size.xl';
               return {
                 id: action.id,
-                label: t(labelKey, board.locale),
+                label: t(labelKey, board),
                 checked: action.isActive?.(),
                 disabled: action.isEnabled ? !action.isEnabled() : false,
                 select: () => action.run(),
@@ -491,7 +484,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
 
           // Font size group: style.size
           if (groupKey === 'style.size') {
-            const groupLabel = t('style.size', board.locale);
+            const groupLabel = t('style.size', board);
             const { wrap, button } = createControlWrap(groupKey);
             const activeAction = groupActions.find((a) => a.isActive?.());
             const sizeKey = activeAction ? activeAction.id.split('.').pop()! : 'm';
@@ -519,7 +512,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
               const labelKey: UiStringKey = key === 's' ? 'size.s' : key === 'm' ? 'size.m' : key === 'l' ? 'size.l' : 'size.xl';
               return {
                 id: action.id,
-                label: t(labelKey, board.locale),
+                label: t(labelKey, board),
                 checked: action.isActive?.(),
                 disabled: action.isEnabled ? !action.isEnabled() : false,
                 select: () => action.run(),
@@ -541,7 +534,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
 
           // Fill style: style.fill
           if (groupKey === 'style.fill') {
-            const groupLabel = t('style.fill', board.locale);
+            const groupLabel = t('style.fill', board);
             const { wrap, button } = createControlWrap(groupKey);
             const activeAction = groupActions.find((a) => a.isActive?.());
             const fillKey = activeAction ? activeAction.id.split('.').pop()! : 'solid';
@@ -549,7 +542,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
 
             const labelEl = doc.createElement('span');
             labelEl.className = 'btn-label';
-            labelEl.textContent = t(fillLabelKey, board.locale);
+            labelEl.textContent = t(fillLabelKey, board);
             button.append(labelEl);
 
             const caret = doc.createElement('span');
@@ -570,7 +563,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
               const labelKey: UiStringKey = key === 'none' ? 'style.fill.none' : key === 'semi' ? 'style.fill.semi' : 'style.fill.solid';
               return {
                 id: action.id,
-                label: t(labelKey, board.locale),
+                label: t(labelKey, board),
                 checked: action.isActive?.(),
                 disabled: action.isEnabled ? !action.isEnabled() : false,
                 select: () => action.run(),
@@ -592,7 +585,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
 
           // Connector path style: style.connectorStyle (or connectorStyle)
           if (groupKey === 'style.connectorStyle' || groupKey === 'connectorStyle') {
-            const groupLabel = t('style.connectorStyle', board.locale);
+            const groupLabel = t('style.connectorStyle', board);
             const { wrap, button } = createControlWrap(groupKey);
             const activeAction = groupActions.find((a) => a.isActive?.());
             const styleKey = activeAction ? activeAction.id.split('.').pop()! : 'straight';
@@ -605,7 +598,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
 
             const labelEl = doc.createElement('span');
             labelEl.className = 'btn-label';
-            labelEl.textContent = t(styleLabelKey, board.locale);
+            labelEl.textContent = t(styleLabelKey, board);
             button.append(labelEl);
 
             const caret = doc.createElement('span');
@@ -631,7 +624,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
                     : 'style.connectorStyle.straight';
               return {
                 id: action.id,
-                label: t(labelKey, board.locale),
+                label: t(labelKey, board),
                 checked: action.isActive?.(),
                 disabled: action.isEnabled ? !action.isEnabled() : false,
                 select: () => action.run(),
@@ -659,7 +652,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
             groupKey === 'endArrow'
           ) {
             const isStart = groupKey === 'style.startArrow' || groupKey === 'startArrow';
-            const groupLabel = t(isStart ? 'style.startArrow' : 'style.endArrow', board.locale);
+            const groupLabel = t(isStart ? 'style.startArrow' : 'style.endArrow', board);
             const { wrap, button } = createControlWrap(groupKey);
             const activeAction = groupActions.find((a) => a.isActive?.());
             const arrowKey = activeAction
@@ -670,7 +663,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
 
             const labelEl = doc.createElement('span');
             labelEl.className = 'btn-label';
-            labelEl.textContent = tOr(`style.arrow.${arrowKey}`, board.locale, arrowKey);
+            labelEl.textContent = tOr(`style.arrow.${arrowKey}`, board, arrowKey);
             button.append(labelEl);
 
             const caret = doc.createElement('span');
@@ -693,7 +686,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
                 : action.label;
               return {
                 id: action.id,
-                label: tOr(`style.arrow.${key}`, board.locale, fallback),
+                label: tOr(`style.arrow.${key}`, board, fallback),
                 checked: action.isActive?.(),
                 disabled: action.isEnabled ? !action.isEnabled() : false,
                 select: () => action.run(),
@@ -779,13 +772,13 @@ export function createSelectionToolbarClass(win: UiWindow) {
         const layerCaret = doc.createElement('span');
         layerCaret.className = 'caret';
         layerBtn.append(layerCaret);
-        labelButton(layerBtn, t('layer', board.locale), undefined);
+        labelButton(layerBtn, t('layer', board), undefined);
         layerWrap.append(layerBtn);
         bar.append(layerWrap);
 
         const layerMenu = createMenu(doc, {
           id: 'kujam-selection-layer',
-          label: t('layer', board.locale),
+          label: t('layer', board),
           anchor: layerBtn,
           wrap: layerWrap,
           radio: false,
@@ -794,25 +787,25 @@ export function createSelectionToolbarClass(win: UiWindow) {
         const layerEntries: MenuEntry[] = [
           {
             id: 'layer.bring-to-front',
-            label: t('layer.bringToFront', board.locale),
+            label: t('layer.bringToFront', board),
             shortcut: shortcutFor(board, 'layer.bring-to-front'),
             select: () => void board.run('layer.bring-to-front'),
           },
           {
             id: 'layer.bring-forward',
-            label: t('layer.bringForward', board.locale),
+            label: t('layer.bringForward', board),
             shortcut: shortcutFor(board, 'layer.bring-forward'),
             select: () => void board.run('layer.bring-forward'),
           },
           {
             id: 'layer.send-backward',
-            label: t('layer.sendBackward', board.locale),
+            label: t('layer.sendBackward', board),
             shortcut: shortcutFor(board, 'layer.send-backward'),
             select: () => void board.run('layer.send-backward'),
           },
           {
             id: 'layer.send-to-back',
-            label: t('layer.sendToBack', board.locale),
+            label: t('layer.sendToBack', board),
             shortcut: shortcutFor(board, 'layer.send-to-back'),
             select: () => void board.run('layer.send-to-back'),
           },
@@ -832,7 +825,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
         const { button: lockBtn } = createControlWrap('lock');
         lockBtn.append(iconOrLetter(anyLocked ? 'unlock' : 'lock', anyLocked ? 'unlock' : 'lock', 18));
         const lockLabelKey: UiStringKey = anyLocked ? 'unlock' : 'lock';
-        labelButton(lockBtn, t(lockLabelKey, board.locale), shortcutFor(board, anyLocked ? 'element.unlock' : 'element.lock'));
+        labelButton(lockBtn, t(lockLabelKey, board), shortcutFor(board, anyLocked ? 'element.unlock' : 'element.lock'));
         lockBtn.disabled = board.readOnly;
         lockBtn.addEventListener('click', () => {
           if (anyLocked) void board.run('element.unlock');
@@ -843,7 +836,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
         // 4. Duplicate Button
         const { button: dupBtn } = createControlWrap('duplicate');
         dupBtn.append(iconOrLetter('duplicate', 'duplicate', 18));
-        labelButton(dupBtn, t('duplicate', board.locale), shortcutFor(board, 'element.duplicate'));
+        labelButton(dupBtn, t('duplicate', board), shortcutFor(board, 'element.duplicate'));
         dupBtn.disabled = board.readOnly || selected.every((el) => el.locked);
         dupBtn.addEventListener('click', () => {
           void board.run('element.duplicate');
@@ -853,7 +846,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
         // 5. Delete Button (BOARD-1403)
         const { button: delBtn } = createControlWrap('delete');
         delBtn.append(iconOrLetter('trash', 'delete', 18));
-        labelButton(delBtn, t('delete', board.locale), shortcutFor(board, 'element.delete'));
+        labelButton(delBtn, t('delete', board), shortcutFor(board, 'element.delete'));
         delBtn.disabled = board.readOnly || selected.every((el) => el.locked);
         delBtn.addEventListener('click', () => {
           void board.run('element.delete');
