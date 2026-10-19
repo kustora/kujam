@@ -345,5 +345,166 @@ describe('Inline HTML contenteditable rich text editor (BOARD-1003b, 1003c, 1003
 
       attachment.detach();
     });
+
+    it('BOARD-914: Tab creates adjacent sticky to the right and opens editor', () => {
+      const board = createBoard({ plugins: [defaultElements] });
+      board.create({
+        id: 's1',
+        type: 'sticky',
+        x: 100,
+        y: 100,
+        w: 120,
+        h: 120,
+        props: { color: 'blue', text: [{ insert: 'Note 1\n' }] },
+      });
+
+      let currentMounted: HTMLElement | null = null;
+      const host: TextEditorHost = {
+        board,
+        mountEditor(el) {
+          currentMounted = el;
+          return () => {
+            currentMounted = null;
+          };
+        },
+      };
+
+      const attachment = attachTextEditor(host);
+      attachment.edit('s1');
+      expect(attachment.activeElementId).toBe('s1');
+
+      // Press Tab while editing s1
+      currentMounted?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Tab', shiftKey: false, bubbles: true, cancelable: true }),
+      );
+
+      // A new sticky should have been created to the right: 100 + 120 + 20 = 240
+      const stickies = board.query({ type: 'sticky' });
+      expect(stickies.length).toBe(2);
+
+      const newSticky = stickies.find((s) => s.id !== 's1')!;
+      expect(newSticky.x).toBe(240);
+      expect(newSticky.y).toBe(100);
+      expect(newSticky.w).toBe(120);
+      expect(newSticky.h).toBe(120);
+      expect(newSticky.props.color).toBe('blue');
+
+      // The new sticky should now be active in editor
+      expect(attachment.activeElementId).toBe(newSticky.id);
+      expect(board.selection).toEqual([newSticky.id]);
+
+      attachment.detach();
+    });
+
+    it('BOARD-914: Shift+Tab creates adjacent sticky to the left and opens editor', () => {
+      const board = createBoard({ plugins: [defaultElements] });
+      board.create({
+        id: 's1',
+        type: 'sticky',
+        x: 300,
+        y: 100,
+        w: 120,
+        h: 120,
+        props: { color: 'pink', text: [{ insert: 'Note 1\n' }] },
+      });
+
+      let currentMounted: HTMLElement | null = null;
+      const host: TextEditorHost = {
+        board,
+        mountEditor(el) {
+          currentMounted = el;
+          return () => {
+            currentMounted = null;
+          };
+        },
+      };
+
+      const attachment = attachTextEditor(host);
+      attachment.edit('s1');
+
+      // Press Shift+Tab while editing s1
+      currentMounted?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }),
+      );
+
+      // A new sticky should have been created to the left: 300 - 120 - 20 = 160
+      const stickies = board.query({ type: 'sticky' });
+      expect(stickies.length).toBe(2);
+
+      const newSticky = stickies.find((s) => s.id !== 's1')!;
+      expect(newSticky.x).toBe(160);
+      expect(newSticky.y).toBe(100);
+      expect(newSticky.props.color).toBe('pink');
+
+      expect(attachment.activeElementId).toBe(newSticky.id);
+      attachment.detach();
+    });
+
+    it('BOARD-914: Tab wraps to new row when parent frame boundary is full', () => {
+      const board = createBoard({ plugins: [defaultElements] });
+      // Frame width 300 at (0, 0)
+      const frame = board.create({
+        type: 'frame',
+        x: 0,
+        y: 0,
+        w: 300,
+        h: 600,
+        props: { name: 'F1', fill: 'surface', clip: true },
+      })!;
+
+      // Sticky at (20, 20), w=120, h=120 inside frame. Next candidate would be 20+120+20 = 160.
+      // Sticky 2 at (160, 20), w=120 => 160+120 = 280.
+      // Then from sticky 2, next candidate would be 160+120+20 = 300.
+      // Candidate 300 + 120 = 420 > maxRight (300) => should wrap to new row!
+      const s1 = board.create({
+        parentId: frame.id,
+        type: 'sticky',
+        x: 20,
+        y: 20,
+        w: 120,
+        h: 120,
+        props: { color: 'yellow', text: [{ insert: '\n' }] },
+      })!;
+
+      const s2 = board.create({
+        parentId: frame.id,
+        type: 'sticky',
+        x: 160,
+        y: 20,
+        w: 120,
+        h: 120,
+        props: { color: 'yellow', text: [{ insert: '\n' }] },
+      })!;
+
+      let currentMounted: HTMLElement | null = null;
+      const host: TextEditorHost = {
+        board,
+        mountEditor(el) {
+          currentMounted = el;
+          return () => {
+            currentMounted = null;
+          };
+        },
+      };
+
+      const attachment = attachTextEditor(host);
+      attachment.edit(s2.id);
+
+      // Press Tab while editing s2
+      currentMounted?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Tab', shiftKey: false, bubbles: true, cancelable: true }),
+      );
+
+      const stickies = board.query({ type: 'sticky', parentId: frame.id });
+      expect(stickies.length).toBe(3);
+
+      const s3 = stickies.find((s) => s.id !== s1.id && s.id !== s2.id)!;
+      // Should wrap to rowStartX (20) and rowStartY (20 + 120 + 20 = 160)
+      expect(s3.x).toBe(20);
+      expect(s3.y).toBe(160);
+      expect(s3.parentId).toBe(frame.id);
+
+      attachment.detach();
+    });
   });
 });

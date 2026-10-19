@@ -414,7 +414,7 @@ describe('BOARD-810: Error Isolation in HTML Layer', () => {
     const observer = FakeResizeObserver.instances.at(-1);
     if (observer) observer.resize(800, 600);
 
-    const errors: any[] = [];
+    const errors: { code: string; message: string; cause: unknown }[] = [];
     board.on('error', (e) => errors.push(e));
 
     // Create good card and buggy card

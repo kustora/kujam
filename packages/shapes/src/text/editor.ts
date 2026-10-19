@@ -4,7 +4,7 @@
  * @packageDocumentation
  */
 
-import type { Board } from '@kujam/core';
+import type { Board, ElementRecord } from '@kujam/core';
 import {
   COLOR_VALUES,
   STICKY_COLOR_VALUES,
@@ -19,6 +19,13 @@ import {
   type RichText,
   type RichTextOp,
 } from './model.js';
+
+/**
+ * Gap between adjacent sticky notes created via Tab or Shift+Tab, in board units (BOARD-914).
+ *
+ * @beta
+ */
+export const STICKY_TAB_GAP = 20;
 
 /**
  * Minimal interface required from the renderer view to host an active text editor.
@@ -326,6 +333,20 @@ export function attachTextEditor(
       return;
     }
 
+    if (record.type === 'frame') {
+      const plain = domToRichText(editor).map((op) => op.insert).join('').replace(/\n/g, '').trim();
+      const currentName = (record.props as { name?: string }).name ?? 'Frame';
+      if (plain.length > 0 && plain !== currentName) {
+        board.update(
+          elId,
+          { props: { ...(record.props as Record<string, unknown>), name: plain } },
+          { label: 'edit-frame-name' },
+        );
+      }
+      options?.onEditEnd?.(elId);
+      return;
+    }
+
     const isLabelProp = record.type === 'geo' || record.type === 'connector';
     const textPropName = isLabelProp ? 'label' : 'text';
     const currentDelta =
@@ -362,7 +383,8 @@ export function attachTextEditor(
       record.type !== 'sticky' &&
       record.type !== 'text' &&
       record.type !== 'geo' &&
-      record.type !== 'connector'
+      record.type !== 'connector' &&
+      record.type !== 'frame'
     ) {
       return;
     }
@@ -381,6 +403,7 @@ export function attachTextEditor(
     const isSticky = record.type === 'sticky';
     const isGeo = record.type === 'geo';
     const isConnector = record.type === 'connector';
+    const isFrame = record.type === 'frame';
 
     // Style editor to visually blend over canvas element
     editor.style.boxSizing = 'border-box';
@@ -401,6 +424,17 @@ export function attachTextEditor(
       editor.style.padding = '16px';
       editor.style.fontSize = '20px';
       editor.style.textAlign = 'left';
+    } else if (isFrame) {
+      editor.style.backgroundColor = theme.mode === 'dark' ? '#1E293B' : '#FFFFFF';
+      editor.style.color = theme.mode === 'dark' ? '#F8FAFC' : '#0F172A';
+      editor.style.border = '1px solid #3B82F6';
+      editor.style.borderRadius = '4px';
+      editor.style.padding = '2px 6px';
+      editor.style.fontSize = '13px';
+      editor.style.fontWeight = '600';
+      editor.style.lineHeight = '20px';
+      editor.style.whiteSpace = 'nowrap';
+      editor.style.overflow = 'hidden';
     } else if (isGeo || isConnector) {
       editor.style.backgroundColor = 'transparent';
       const colorKey = (
@@ -427,8 +461,9 @@ export function attachTextEditor(
       editor.style.textAlign = align === 'end' ? 'right' : align === 'center' ? 'center' : 'left';
     }
 
-    const initialText: RichText =
-      isGeo || isConnector
+    const initialText: RichText = isFrame
+      ? [{ insert: ((record.props as { name?: string }).name || 'Frame') + '\n' }]
+      : isGeo || isConnector
         ? ((record.props as { label?: RichText }).label ?? [{ insert: '\n' }])
         : ((record.props as { text?: RichText }).text ?? [{ insert: '\n' }]);
     richTextToDom(initialText, editor);
@@ -439,6 +474,99 @@ export function attachTextEditor(
 
       // Guard IME composition (BOARD-1003d): do not interrupt IME candidate selection
       if (isComposing || e.isComposing) {
+        return;
+      }
+
+      if (isFrame && e.key === 'Enter') {
+        e.preventDefault();
+        commitAndClose();
+        return;
+      }
+
+      // Tab creates adjacent sticky notes (BOARD-914)
+      if (
+        e.key === 'Tab' &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        record.type === 'sticky'
+      ) {
+        e.preventDefault();
+
+        const reverse = e.shiftKey;
+        const currentRecord = board.getElement(elementId);
+        if (!currentRecord || currentRecord.type !== 'sticky') return;
+
+        commitAndClose();
+
+        const w = currentRecord.w;
+        const h = currentRecord.h;
+        const color = (currentRecord.props as { color?: string }).color ?? 'yellow';
+
+        let candidateX = reverse
+          ? currentRecord.x - w - STICKY_TAB_GAP
+          : currentRecord.x + w + STICKY_TAB_GAP;
+        let candidateY = currentRecord.y;
+
+        if (!reverse) {
+          let maxRight: number | undefined;
+          let rowStartX = currentRecord.x;
+
+          if (currentRecord.parentId !== null) {
+            const parent = board.getElement(currentRecord.parentId);
+            if (parent) {
+              maxRight = parent.x + parent.w;
+              const siblings = board
+                .query({ pageId: currentRecord.pageId, parentId: currentRecord.parentId })
+                .filter((s) => s.type === 'sticky' && Math.abs(s.y - currentRecord.y) < h * 0.5);
+              if (siblings.length > 0) {
+                rowStartX = Math.min(...siblings.map((s) => s.x));
+              }
+            }
+          } else if (board.camera.viewport.width > 0) {
+            const viewBounds = board.camera.getViewportBounds();
+            maxRight = viewBounds.maxX;
+            const stickies = board
+              .query({ pageId: currentRecord.pageId })
+              .filter(
+                (s) =>
+                  s.type === 'sticky' &&
+                  s.parentId === null &&
+                  Math.abs(s.y - currentRecord.y) < h * 0.5,
+              );
+            if (stickies.length > 0) {
+              rowStartX = Math.min(...stickies.map((s) => s.x));
+            }
+          }
+
+          if (maxRight !== undefined && candidateX + w > maxRight && candidateX > rowStartX) {
+            candidateX = rowStartX;
+            candidateY = currentRecord.y + h + STICKY_TAB_GAP;
+          }
+        }
+
+        let newSticky: Readonly<ElementRecord> | undefined;
+        board.history.batch('sticky.tab-create', () => {
+          newSticky = board.create({
+            type: 'sticky',
+            pageId: currentRecord.pageId,
+            parentId: currentRecord.parentId,
+            x: candidateX,
+            y: candidateY,
+            w,
+            h,
+            props: {
+              text: [{ insert: '\n' }],
+              color,
+              authorId: null,
+            },
+          });
+        });
+
+        if (newSticky) {
+          board.select([newSticky.id]);
+          startEdit(newSticky.id);
+        }
         return;
       }
 
@@ -533,21 +661,29 @@ export function attachTextEditor(
       commitAndClose();
     });
 
-    const editorBounds = isConnector
+    const editorBounds = isFrame
       ? {
-          x: record.x + record.w / 2 - Math.max(120, record.w) / 2,
-          y: record.y + record.h / 2 - Math.max(36, record.h) / 2,
-          w: Math.max(120, record.w),
-          h: Math.max(36, record.h),
+          x: record.x,
+          y: record.y - 28,
+          w: Math.max(160, Math.min(record.w, 320)),
+          h: 24,
           rotation: record.rotation,
         }
-      : {
-          x: record.x,
-          y: record.y,
-          w: record.w,
-          h: record.h,
-          rotation: record.rotation,
-        };
+      : isConnector
+        ? {
+            x: record.x + record.w / 2 - Math.max(120, record.w) / 2,
+            y: record.y + record.h / 2 - Math.max(36, record.h) / 2,
+            w: Math.max(120, record.w),
+            h: Math.max(36, record.h),
+            rotation: record.rotation,
+          }
+        : {
+            x: record.x,
+            y: record.y,
+            w: record.w,
+            h: record.h,
+            rotation: record.rotation,
+          };
     unmountEditorFn = host.mountEditor(editor, editorBounds);
 
     // Focus editor and select all text

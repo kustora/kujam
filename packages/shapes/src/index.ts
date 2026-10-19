@@ -18,7 +18,10 @@ import { textElement } from './elements/text.js';
 import { connectorTool } from './tools/connector.js';
 import { drawTool } from './tools/draw.js';
 import { eraserTool } from './tools/eraser.js';
+import { frameTool } from './tools/frame.js';
 import { ellipseTool, geoTool, rectangleTool } from './tools/geo.js';
+import { groupElement } from './elements/group.js';
+import { frameElement } from './elements/frame.js';
 import { handTool } from './tools/hand.js';
 import { selectTool } from './tools/select.js';
 import { stickyTool } from './tools/sticky.js';
@@ -152,19 +155,30 @@ export {
   type TextLayoutOptions,
   type TextRun,
 } from './text/layout.js';
+export { groupElement, groupPropsSchema, type GroupProps } from './elements/group.js';
+export {
+  DEFAULT_FRAME_SIZE,
+  FRAME_FILLS,
+  frameElement,
+  framePropsSchema,
+  type FrameFill,
+  type FrameProps,
+} from './elements/frame.js';
+export { frameTool } from './tools/frame.js';
 export {
   attachTextEditor,
   domToRichText,
   richTextToDom,
   sanitizePastedHtml,
+  STICKY_TAB_GAP,
   type TextEditorAttachment,
   type TextEditorHost,
   type TextEditorOptions,
 } from './text/editor.js';
 
 /**
- * Built-in elements plugin (`sticky`, `draw`, `text`, `geo`, `connector`) with the `pen` and
- * `highlighter` brushes used by `draw` (BOARD-603, BOARD-1101), ready to install via
+ * Built-in elements plugin (`sticky`, `draw`, `text`, `geo`, `connector`, `group`, `frame`) with the `pen` and
+ * `highlighter` brushes used by `draw` (BOARD-603, BOARD-1101, BOARD-1104, BOARD-1105), ready to install via
  * `createBoard({ plugins: [defaultElements, defaultTools] })` or `createElementRegistry(defaultElements)`.
  *
  * @public
@@ -177,6 +191,8 @@ export const defaultElements = definePlugin({
     textElement,
     geoElement,
     connectorElement,
+    groupElement,
+    frameElement,
   ] as const),
   brushes: DEFAULT_BRUSHES,
   setup: (board) => registerConnectorBoard(board),
@@ -184,7 +200,7 @@ export const defaultElements = definePlugin({
 
 /**
  * Built-in tools plugin, ready to install via `createBoard({ plugins: [defaultElements, defaultTools] })`.
- * Contains navigation, selection, and creation tools (BOARD-502, BOARD-913, BOARD-1101) with standard shortcuts.
+ * Contains navigation, selection, and creation tools (BOARD-502, BOARD-913, BOARD-1101, BOARD-1105) with standard shortcuts.
  *
  * @public
  */
@@ -200,6 +216,7 @@ export const defaultTools = definePlugin({
     rectangleTool,
     ellipseTool,
     connectorTool,
+    frameTool,
     eraserTool,
   ] as const),
   keybindings: {
@@ -211,6 +228,7 @@ export const defaultTools = definePlugin({
     r: 'tool:rectangle',
     o: 'tool:ellipse',
     l: 'tool:connector',
+    f: 'tool:frame',
     e: 'tool:eraser',
   },
   setup: (board) => registerConnectorBoard(board),
@@ -222,7 +240,15 @@ export const defaultTools = definePlugin({
  *
  * @public
  */
-export const DEFAULT_ELEMENT_TYPES = ['sticky', 'draw', 'text', 'geo', 'connector'] as const;
+export const DEFAULT_ELEMENT_TYPES = [
+  'sticky',
+  'draw',
+  'text',
+  'geo',
+  'connector',
+  'group',
+  'frame',
+] as const;
 
 /**
  * String type for built-in elements.

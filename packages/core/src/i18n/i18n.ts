@@ -58,6 +58,7 @@ const RAW_DICTIONARY = {
   'tool.connector': { id: 'Konektor', en: 'Connector' },
   'tool.text': { id: 'Teks', en: 'Text' },
   'tool.eraser': { id: 'Penghapus', en: 'Eraser' },
+  'tool.frame': { id: 'Frame', en: 'Frame' },
 
   // Brushes & colors
   'style.color': { id: 'Warna', en: 'Color' },
@@ -90,6 +91,9 @@ const RAW_DICTIONARY = {
 
   // Selection toolbar & element actions
   selectionToolbar: { id: 'Aksi elemen', en: 'Element actions' },
+  group: { id: 'Grup', en: 'Group' },
+  ungroup: { id: 'Lepas grup', en: 'Ungroup' },
+  'frame.clip': { id: 'Potong konten frame', en: 'Clip frame content' },
   lock: { id: 'Kunci', en: 'Lock' },
   unlock: { id: 'Buka kunci', en: 'Unlock' },
   delete: { id: 'Hapus', en: 'Delete' },
@@ -166,6 +170,22 @@ const RAW_DICTIONARY = {
   'element.geo.cloud': { id: 'Awan', en: 'Cloud' },
   'element.geo.arrow-right': { id: 'Panah kanan', en: 'Right arrow' },
   'element.geo.arrow-left': { id: 'Panah kiri', en: 'Left arrow' },
+  'element.group': { id: 'Grup', en: 'Group' },
+  'element.frame': { id: 'Frame', en: 'Frame' },
+
+  // Commands
+  'command.element.group': { id: 'Grup', en: 'Group' },
+  'command.element.ungroup': { id: 'Lepas grup', en: 'Ungroup' },
+  'command.align.left': { id: 'Rata kiri', en: 'Align left' },
+  'command.align.right': { id: 'Rata kanan', en: 'Align right' },
+  'command.align.top': { id: 'Rata atas', en: 'Align top' },
+  'command.align.bottom': { id: 'Rata bawah', en: 'Align bottom' },
+  'command.align.center-h': { id: 'Rata tengah horizontal', en: 'Align center horizontally' },
+  'command.align.center-v': { id: 'Rata tengah vertikal', en: 'Align center vertically' },
+  'command.distribute.horizontal': { id: 'Sebar horizontal', en: 'Distribute horizontally' },
+  'command.distribute.vertical': { id: 'Sebar vertikal', en: 'Distribute vertically' },
+  'command.arrange.grid': { id: 'Susun grid', en: 'Arrange in grid' },
+  'command.arrange.row': { id: 'Susun baris', en: 'Arrange in row' },
 } as const satisfies Record<string, { readonly id: string; readonly en: string }>;
 
 function buildDefaultMessages(): Readonly<Record<BoardLocale, LocaleMessages>> {

@@ -16,6 +16,8 @@ import { compareIndex, indicesBetween } from '../document/indexing.js';
 import { definePlugin } from '../plugins/plugins.js';
 import type { ElementRecord } from '../types.js';
 import { nextInReadingOrder, revealBounds, type ReadingDirection } from '../a11y/reading-order.js';
+import { ARRANGE_COMMANDS } from './arrange.js';
+import { GROUP_COMMANDS, GROUP_KEYBINDINGS } from '../elements/containers.js';
 
 /**
  * Offset of copies made by `element.duplicate`, in board units.
@@ -500,6 +502,8 @@ const commands: readonly AnyCommandDefinition[] = [
     isEnabled: (board) => hasViewport(board) && board.selectionBounds !== null,
     run: (board) => void board.camera.zoomToSelection(),
   }),
+  ...ARRANGE_COMMANDS,
+  ...GROUP_COMMANDS,
 ];
 
 /**
@@ -508,6 +512,7 @@ const commands: readonly AnyCommandDefinition[] = [
  * | Command | Shortcut |
  * | --- | --- |
  * | `history.undo` / `history.redo` | `Mod+Z` / `Shift+Mod+Z`, `Mod+Y` |
+ * | `element.group` / `element.ungroup` | `Mod+G` / `Shift+Mod+G` |
  * | `layer.bring-forward` / `layer.send-backward` | `Mod+]` / `Mod+[` |
  * | `layer.bring-to-front` / `layer.send-to-back` | `Shift+Mod+]` / `Shift+Mod+[` |
  * | `element.toggle-lock` (plus `element.lock`, `element.unlock`) | `Shift+Mod+L` |
@@ -549,6 +554,7 @@ export const defaultCommands = definePlugin({
     'Mod+Z': 'history.undo',
     'Shift+Mod+Z': 'history.redo',
     'Mod+Y': 'history.redo',
+    ...GROUP_KEYBINDINGS,
     'Mod+]': 'layer.bring-forward',
     'Mod+[': 'layer.send-backward',
     'Shift+Mod+]': 'layer.bring-to-front',

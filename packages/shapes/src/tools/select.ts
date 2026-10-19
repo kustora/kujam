@@ -21,6 +21,10 @@ import {
   type ToolKeyEvent,
   type ToolPointerEvent,
   type TransformResult,
+  collectContainerDescendants,
+  enterGroupOnDoubleClick,
+  reparentElementsToFrames,
+  resolveTopmostGroupClick,
 } from '@kujam/core';
 import {
   findSnapAnchor,
@@ -78,6 +82,8 @@ export interface SelectToolData {
   hitLocked: boolean;
   /** Whether the drag moves copies made with Alt instead of the selection (BOARD-903). */
   duplicating: boolean;
+  /** ID of the group currently entered for editing, or `null` at the root level (BOARD-909). */
+  enteredGroupId: string | null;
 }
 
 type State =
@@ -97,6 +103,7 @@ function initialData(): SelectToolData {
     wasSelected: false,
     hitLocked: false,
     duplicating: false,
+    enteredGroupId: null,
   };
 }
 
@@ -105,6 +112,46 @@ function transformable(board: Board): Readonly<ElementRecord>[] {
   return board.selection
     .map((id) => board.getElement(id))
     .filter((el): el is Readonly<ElementRecord> => !!el && !el.locked && board.can('update', el));
+}
+
+/** Transformable elements including all descendants of selected containers (groups and frames). */
+function transformableWithDescendants(board: Board): Readonly<ElementRecord>[] {
+  const selected = transformable(board);
+  const descendants = collectContainerDescendants(
+    board,
+    selected.map((el) => el.id),
+  );
+  const allMoved = [...selected];
+  const seen = new Set(selected.map((el) => el.id));
+  for (const desc of descendants) {
+    if (!seen.has(desc.id) && !desc.locked && board.can('update', desc)) {
+      seen.add(desc.id);
+      allMoved.push(desc);
+    }
+  }
+  return allMoved;
+}
+
+/** Transformable elements for resize/rotate handles, expanding groups to their descendants. */
+function transformableForHandles(board: Board): Readonly<ElementRecord>[] {
+  const selected = transformable(board);
+  const result: Readonly<ElementRecord>[] = [];
+  for (const el of selected) {
+    if (el.type === 'group') {
+      const descendants = collectContainerDescendants(board, [el.id]);
+      const content = descendants.filter(
+        (d) => d.type !== 'group' && !d.locked && board.can('update', d),
+      );
+      if (content.length > 0) {
+        result.push(...content);
+      } else {
+        result.push(el);
+      }
+    } else {
+      result.push(el);
+    }
+  }
+  return result;
 }
 
 /** The resize, rotate, or connector endpoint handle under `screen`, closest first. */
@@ -376,7 +423,7 @@ export const selectTool = defineTool({
         const handle = handleAt(board, e.screen);
         if (handle) {
           data.handle = handle;
-          data.originals = transformable(board);
+          data.originals = transformableForHandles(board);
           delete data.reconnectBindingId;
           delete data.connectorSnap;
           if (handle === 'connector-start' || handle === 'connector-end') {
@@ -385,9 +432,17 @@ export const selectTool = defineTool({
           return handle === 'rotate' ? 'rotating' : 'resizing';
         }
 
-        const hit = board.hitTest(e.point, { tolerance: HIT_TOLERANCE_PX, includeLocked: true });
+        const rawHit = board.hitTest(e.point, {
+          tolerance: HIT_TOLERANCE_PX,
+          includeLocked: true,
+        });
         data.duplicating = false;
-        if (!hit) return startBrushing(ctx, e);
+        if (!rawHit) {
+          data.enteredGroupId = null;
+          return startBrushing(ctx, e);
+        }
+
+        const hit = resolveTopmostGroupClick(board, rawHit, data.enteredGroupId);
 
         data.hitId = hit.id;
         data.wasSelected = board.selection.includes(hit.id);
@@ -396,6 +451,13 @@ export const selectTool = defineTool({
         if (hit.locked) return 'pointing';
 
         if ((e.clickCount ?? 1) >= 2) {
+          if (hit.type === 'group') {
+            const entered = enterGroupOnDoubleClick(board, hit, e.point);
+            if (entered) {
+              data.enteredGroupId = entered.enteredGroupId;
+              return;
+            }
+          }
           board.select(hit.id);
           board.elements.get(hit.type)?.onDoubleClick?.(hit as never, board.elementContext);
           return;
@@ -412,7 +474,22 @@ export const selectTool = defineTool({
         }
         return 'pointing';
       },
-      onKeyDown: editSelected,
+      onKeyDown(ctx, e) {
+        if (e.key === 'Escape' && !e.repeat && ctx.data.enteredGroupId) {
+          const parentGroup = ctx.board.getElement(ctx.data.enteredGroupId);
+          const outerGroupId =
+            parentGroup?.parentId &&
+            ctx.board.getElement(parentGroup.parentId)?.type === 'group'
+              ? parentGroup.parentId
+              : null;
+          ctx.data.enteredGroupId = outerGroupId;
+          if (parentGroup) {
+            ctx.board.select(parentGroup.id);
+          }
+          return;
+        }
+        return editSelected(ctx, e);
+      },
       onWheel: (ctx, e) => handleWheel(ctx.board, e),
       onPinch: (ctx, e) => handlePinch(ctx.board, e),
     },
@@ -426,7 +503,7 @@ export const selectTool = defineTool({
           brush(ctx, e);
           return next;
         }
-        ctx.data.originals = transformable(ctx.board);
+        ctx.data.originals = transformableWithDescendants(ctx.board);
         if (e.modifiers.alt) startDuplicate(ctx);
         translate(ctx, e);
         return 'translating';
@@ -449,7 +526,11 @@ export const selectTool = defineTool({
     translating: {
       cursor: 'move',
       onPointerMove: translate,
-      onPointerUp: () => 'idle',
+      onPointerUp(ctx) {
+        const movedRoots = ctx.board.selection;
+        reparentElementsToFrames(ctx.board, movedRoots);
+        return 'idle';
+      },
       onCancel: restoreSelection,
     },
 

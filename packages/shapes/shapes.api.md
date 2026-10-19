@@ -16,6 +16,7 @@ import { DEFAULT_DARK_THEME } from '@kujam/core';
 import { DEFAULT_LIGHT_THEME } from '@kujam/core';
 import { ElementCanvasContext } from '@kujam/core';
 import { ElementContext } from '@kujam/core';
+import { ElementDefinition } from '@kujam/core';
 import { ElementRecord } from '@kujam/core';
 import { ElementTransform } from '@kujam/core';
 import { Geometry } from '@kujam/core';
@@ -317,7 +318,13 @@ export { DEFAULT_DARK_THEME }
 export const DEFAULT_ELBOW_CLEARANCE = 16;
 
 // @public
-export const DEFAULT_ELEMENT_TYPES: readonly ["sticky", "draw", "text", "geo", "connector"];
+export const DEFAULT_ELEMENT_TYPES: readonly ["sticky", "draw", "text", "geo", "connector", "group", "frame"];
+
+// @public
+export const DEFAULT_FRAME_SIZE: Readonly<{
+    w: 800;
+    h: 600;
+}>;
 
 export { DEFAULT_LIGHT_THEME }
 
@@ -405,6 +412,10 @@ export const defaultElements: Readonly<{
                 indent?: number | undefined;
             } | undefined;
         }[]>;
+    }, undefined>, _kujam_core.ElementDefinition<"group", {}, undefined>, _kujam_core.ElementDefinition<"frame", {
+        name: _kujam_core.Schema<string>;
+        fill: _kujam_core.Schema<"yellow" | "green" | "pink" | "blue" | "purple" | "gray" | "none" | "surface">;
+        clip: _kujam_core.Schema<boolean>;
     }, undefined>];
     readonly brushes: readonly [_kujam_core.BrushDefinition, _kujam_core.BrushDefinition];
     readonly setup: (board: _kujam_core.Board) => () => void;
@@ -419,7 +430,7 @@ export type DefaultToolId = (typeof DEFAULT_TOOL_IDS)[number];
 // @public
 export const defaultTools: Readonly<{
     readonly id: "default-tools";
-    readonly tools: readonly [_kujam_core.ToolDefinition<"idle" | "pointing" | "translating" | "brushing" | "resizing" | "rotating" | "reconnecting", SelectToolData>, _kujam_core.ToolDefinition<"idle" | "panning", HandToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<DrawToolState, DrawToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<ConnectorToolState, ConnectorToolData>, _kujam_core.ToolDefinition<EraserToolState, EraserToolData>];
+    readonly tools: readonly [_kujam_core.ToolDefinition<"idle" | "pointing" | "translating" | "brushing" | "resizing" | "rotating" | "reconnecting", SelectToolData>, _kujam_core.ToolDefinition<"idle" | "panning", HandToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<DrawToolState, DrawToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<ConnectorToolState, ConnectorToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<EraserToolState, EraserToolData>];
     readonly keybindings: {
         readonly v: "tool:select";
         readonly h: "tool:hand";
@@ -429,6 +440,7 @@ export const defaultTools: Readonly<{
         readonly r: "tool:rectangle";
         readonly o: "tool:ellipse";
         readonly l: "tool:connector";
+        readonly f: "tool:frame";
         readonly e: "tool:eraser";
     };
     readonly setup: (board: _kujam_core.Board) => () => void;
@@ -556,6 +568,37 @@ export function findSnapAnchor(board: Board, point: Point, excludeIds?: Readonly
 // @internal
 export function formatFont(fontSize: number, fontFamily?: string, bold?: boolean, italic?: boolean): string;
 
+// @public
+export const FRAME_FILLS: readonly ["surface", "none", "yellow", "green", "pink", "blue", "purple", "gray"];
+
+// @public
+const frameElement_2: ElementDefinition<"frame", {
+    name: _kujam_core.Schema<string>;
+    fill: _kujam_core.Schema<"yellow" | "green" | "pink" | "blue" | "purple" | "gray" | "none" | "surface">;
+    clip: _kujam_core.Schema<boolean>;
+}, undefined>;
+export { frameElement_2 as frameElement }
+
+// @public
+export type FrameFill = (typeof FRAME_FILLS)[number];
+
+// @public
+export interface FrameProps {
+    clip: boolean;
+    fill: FrameFill;
+    name: string;
+}
+
+// @public
+export const framePropsSchema: _kujam_core.ObjectSchema<{
+    name: _kujam_core.Schema<string>;
+    fill: _kujam_core.Schema<"yellow" | "green" | "pink" | "blue" | "purple" | "gray" | "none" | "surface">;
+    clip: _kujam_core.Schema<boolean>;
+}>;
+
+// @public
+export const frameTool: ToolDefinition<BoxToolState, BoxToolData>;
+
 // @beta
 export const GEO_KINDS: readonly ["rectangle", "rounded-rectangle", "ellipse", "diamond", "triangle", "parallelogram", "star", "arrow"];
 
@@ -596,6 +639,15 @@ export type GeoKind = (typeof GEO_KINDS)[number];
 
 // @public
 export const geoTool: ToolDefinition<BoxToolState, BoxToolData>;
+
+// @public
+export const groupElement: _kujam_core.ElementDefinition<"group", {}, undefined>;
+
+// @public
+export type GroupProps = Record<string, never>;
+
+// @public
+export const groupPropsSchema: _kujam_core.ObjectSchema<{}>;
 
 // @public
 export const HANDLE_TOLERANCE_PX = 8;
@@ -733,6 +785,7 @@ export interface SelectToolData {
     brush: BoxBounds | null;
     connectorSnap?: ConnectorSnapTarget;
     duplicating: boolean;
+    enteredGroupId: string | null;
     guides: readonly SnapGuide[];
     handle: SelectHandle | null;
     hitId: string | null;
@@ -759,6 +812,9 @@ export const SNAP_ANCHOR_TOLERANCE_PX = 16;
 export const STICKY_COLOR_VALUES: Readonly<Record<StickyColor, string>>;
 
 export { STICKY_COLORS }
+
+// @beta
+export const STICKY_TAB_GAP = 20;
 
 // @beta
 export const STICKY_TEXT_COLOR = "#17191E";

@@ -242,7 +242,31 @@ function drawSingleElement(
     compact: Boolean(def?.lod && camera.zoom < def.lod.compactBelowZoom),
   };
 
+  // Find ancestor clipping frame (BOARD-1105)
+  let clipFrame: Readonly<ElementRecord> | null = null;
+  let curr = el.parentId;
+  const visited = new Set<string>();
+  while (curr !== null && !visited.has(curr)) {
+    visited.add(curr);
+    const parent = board.getElement(curr);
+    if (!parent) break;
+    if (parent.type === 'frame') {
+      const clip = (parent.props as { clip?: boolean }).clip !== false;
+      if (clip) {
+        clipFrame = parent;
+        break;
+      }
+    }
+    curr = parent.parentId;
+  }
+
   ctx.save();
+  if (clipFrame) {
+    ctx.beginPath();
+    ctx.rect(clipFrame.x, clipFrame.y, clipFrame.w, clipFrame.h);
+    ctx.clip();
+  }
+
   ctx.translate(el.x, el.y);
   if (el.rotation) {
     ctx.rotate((el.rotation * Math.PI) / 180);

@@ -10,6 +10,12 @@ export interface ActionEvent {
     readonly payload: unknown;
 }
 
+// @beta
+export function alignElements(board: Board, mode: AlignMode): boolean;
+
+// @beta
+export type AlignMode = 'left' | 'right' | 'top' | 'bottom' | 'center-h' | 'center-v';
+
 // @public
 export type AnyCommandDefinition = CommandDefinition<any>;
 
@@ -21,6 +27,28 @@ export type AnyPluginDefinition = PluginDefinition<string, readonly AnyElementDe
 
 // @beta
 export type AnyToolDefinition = ToolDefinition<any, any>;
+
+// @beta
+export const ARRANGE_COMMANDS: readonly AnyCommandDefinition[];
+
+// @beta
+export function arrangeElementsGrid(board: Board, options?: ArrangeGridOptions): boolean;
+
+// @beta
+export function arrangeElementsRow(board: Board, options?: ArrangeRowOptions): boolean;
+
+// @beta
+export interface ArrangeGridOptions {
+    readonly columns?: number;
+    readonly gap?: number;
+    readonly gapX?: number;
+    readonly gapY?: number;
+}
+
+// @beta
+export interface ArrangeRowOptions {
+    readonly gap?: number;
+}
 
 // @public
 export function array<T>(item: Schema<T>, options?: ArrayOptions): Schema<T[]>;
@@ -108,6 +136,7 @@ export interface Board {
     // @beta
     readonly elementContext: ElementContext;
     readonly elements: ElementRegistry;
+    readonly frames: BoardFrames;
     // @beta
     getActions(ids?: SelectionInput): readonly ElementAction[];
     getCamera(): Readonly<CameraState>;
@@ -260,6 +289,12 @@ export interface BoardEventMap {
     theme: Readonly<ThemeDefinition>;
     // @beta
     tool: ToolEvent;
+}
+
+// @public
+export interface BoardFrames {
+    getChildren(frameId: string): readonly Readonly<ElementRecord>[];
+    list(pageId?: string): readonly Readonly<ElementRecord>[];
 }
 
 // @public
@@ -493,6 +528,9 @@ export interface ClipboardPayload {
 }
 
 // @beta
+export function collectContainerDescendants(board: Board, rootIds: Iterable<string>): Readonly<ElementRecord>[];
+
+// @beta
 export const COLOR_KEYS: readonly ["black", "grey", "white", "red", "orange", "yellow", "green", "blue", "violet", "purple"];
 
 // @beta
@@ -608,6 +646,9 @@ export function createElementRegistry(definitions?: Iterable<AnyElementDefinitio
 // @public
 export function createEmptyDocument(meta?: Record<string, unknown>): BoardDocument;
 
+// @internal
+export function createFramesRuntime(getBoard: () => Board): BoardFrames;
+
 // @public
 export function createId(size?: number): string;
 
@@ -644,6 +685,9 @@ export interface CustomThemeOverrides {
 
 // @public
 export function deepClone<T>(value: T): T;
+
+// @beta
+export const DEFAULT_ARRANGE_GAP = 24;
 
 // @public
 export const DEFAULT_BOARD_LIMITS: Readonly<BoardLimits>;
@@ -701,9 +745,6 @@ export const defaultCommands: Readonly<{
     readonly id: "default-commands";
     readonly commands: readonly AnyCommandDefinition[];
     readonly keybindings: {
-        readonly 'Mod+Z': "history.undo";
-        readonly 'Shift+Mod+Z': "history.redo";
-        readonly 'Mod+Y': "history.redo";
         readonly 'Mod+]': "layer.bring-forward";
         readonly 'Mod+[': "layer.send-backward";
         readonly 'Shift+Mod+]': "layer.bring-to-front";
@@ -730,6 +771,9 @@ export const defaultCommands: Readonly<{
         readonly 'Shift+ArrowRight': "element.nudge-right-large";
         readonly 'Shift+ArrowUp': "element.nudge-up-large";
         readonly 'Shift+ArrowDown': "element.nudge-down-large";
+        readonly 'Mod+Z': "history.undo";
+        readonly 'Shift+Mod+Z': "history.redo";
+        readonly 'Mod+Y': "history.redo";
     };
 }>;
 
@@ -760,6 +804,12 @@ export function deprecate(message: string): void;
 
 // @beta
 export function distanceToEdge(geometry: Geometry, point: Point, element?: ElementTransform): number;
+
+// @beta
+export type DistributeAxis = 'horizontal' | 'vertical';
+
+// @beta
+export function distributeElements(board: Board, axis: DistributeAxis): boolean;
 
 // @public
 export const DOCUMENT_LIMITS: Readonly<BoardLimits>;
@@ -1112,6 +1162,12 @@ export interface EllipseGeometry {
     readonly y: number;
 }
 
+// @beta
+export function enterGroupOnDoubleClick(board: Board, groupEl: Readonly<ElementRecord>, point: Point): {
+    enteredGroupId: string;
+    childId: string | null;
+} | null;
+
 // @public
 export function enumOf<const T extends readonly [string, ...string[]]>(values: T): Schema<T[number]>;
 
@@ -1136,6 +1192,15 @@ export function geometryBounds(geometry: Geometry, element?: ElementTransform): 
 
 // @beta
 export function getReadingOrder(board: Board): ReadingOrder;
+
+// @beta
+export const GROUP_COMMANDS: readonly AnyCommandDefinition[];
+
+// @beta
+export const GROUP_KEYBINDINGS: Readonly<Record<string, string>>;
+
+// @beta
+export function groupSelection(board: Board): Readonly<ElementRecord> | undefined;
 
 // @beta
 export const HAND_TOOL_ID = "hand";
@@ -1621,6 +1686,9 @@ export class ReadOnlyBoardError extends Error {
     constructor();
 }
 
+// @internal
+export function reconcileContainersInTransaction(tx: Transaction, pending: ReadonlyMap<string, BoardRecord | undefined>, records: ReadonlyMap<string, BoardRecord>, getElementAABB?: (el: ElementRecord) => BoxBounds): void;
+
 // @public
 export interface RecordsDiff {
     // (undocumented)
@@ -1668,6 +1736,9 @@ export interface RectGeometry {
     readonly y: number;
 }
 
+// @beta
+export function reparentElementsToFrames(board: Board, movedIds: readonly string[]): void;
+
 // @internal
 export function resetDeprecationWarnings(): void;
 
@@ -1710,6 +1781,9 @@ export function resolvePluginOrder(plugins: Iterable<AnyPluginDefinition>): read
 
 // @beta
 export type ResolveResult<D> = D | ResolveError | PromiseLike<D | ResolveError>;
+
+// @beta
+export function resolveTopmostGroupClick(board: Board, hit: Readonly<ElementRecord>, enteredGroupId: string | null): Readonly<ElementRecord>;
 
 // @beta
 export function revealBounds(board: Board, bounds: BoxBounds, options?: RevealOptions): boolean;
@@ -2237,6 +2311,9 @@ export function translate(key: string, locale?: string, params?: TranslationPara
 
 // @public
 export type TranslationParams = Readonly<Record<string, string | number>>;
+
+// @beta
+export function ungroupSelection(board: Board): readonly string[];
 
 // @public
 export type Unsubscribe = () => void;

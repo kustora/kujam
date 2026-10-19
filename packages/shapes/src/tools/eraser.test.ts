@@ -7,7 +7,6 @@ import {
   type ToolPointerEvent,
 } from '@kujam/core';
 import {
-  createEraserTool,
   defaultElements,
   defaultTools,
   type EraserToolData,

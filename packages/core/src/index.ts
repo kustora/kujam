@@ -81,7 +81,13 @@ import {
 import { createPages, type BoardPages } from './pages/pages.js';
 import { createSelection, type SelectionInput } from './selection/selection.js';
 import { resolveSnapOptions, type SnapOptions } from './geometry/snap.js';
-import { createSpatialIndex, unionBounds, type BoxBounds, type SpatialIndex } from './geometry/spatial.js';
+import {
+  computeElementAABB,
+  createSpatialIndex,
+  unionBounds,
+  type BoxBounds,
+  type SpatialIndex,
+} from './geometry/spatial.js';
 import { hitTestElements, queryElements, type HitTestOptions, type QueryFilter } from './geometry/query.js';
 import {
   localToBoard,
@@ -117,6 +123,11 @@ import {
   type LocaleMessages,
   type TranslationParams,
 } from './i18n/i18n.js';
+import {
+  createFramesRuntime,
+  reconcileContainersInTransaction,
+  type BoardFrames,
+} from './elements/containers.js';
 
 export * from './types.js';
 export {
@@ -427,6 +438,31 @@ export type BoardResolver<D = unknown> = (id: string) => ResolveResult<D>;
  * @beta
  */
 export type BoardResolvers = Readonly<Record<string, BoardResolver>>;
+export {
+  createFramesRuntime,
+  groupSelection,
+  ungroupSelection,
+  GROUP_COMMANDS,
+  GROUP_KEYBINDINGS,
+  resolveTopmostGroupClick,
+  enterGroupOnDoubleClick,
+  collectContainerDescendants,
+  reparentElementsToFrames,
+  reconcileContainersInTransaction,
+  type BoardFrames,
+} from './elements/containers.js';
+export {
+  alignElements,
+  distributeElements,
+  arrangeElementsGrid,
+  arrangeElementsRow,
+  ARRANGE_COMMANDS,
+  DEFAULT_ARRANGE_GAP,
+  type AlignMode,
+  type DistributeAxis,
+  type ArrangeGridOptions,
+  type ArrangeRowOptions,
+} from './tools/arrange.js';
 
 /**
  * Adapter for resolving and uploading media assets for image elements (BOARD-211, BOARD-1103).
@@ -792,6 +828,12 @@ export interface Board {
    * @beta
    */
   readonly pages: BoardPages;
+  /**
+   * Frame presentation and query runtime (BOARD-1105).
+   *
+   * @public
+   */
+  readonly frames: BoardFrames;
   /**
    * Axis-aligned bounds enclosing every selected element, accounting for rotation and element
    * geometry (BOARD-405), or `null` when nothing is selected. Computed on every read.
@@ -1397,7 +1439,11 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   const store = createRecordStore(initial.document, {
     freeze,
     isReadOnly: () => configuredReadOnly || tooNew !== null,
-    beforeCommit: (tx, pending, _records, bindings) => {
+    beforeCommit: (tx, pending, records, bindings) => {
+      reconcileContainersInTransaction(tx, pending, records, (el) =>
+        computeElementAABB(el, (e) => hitGeometry(e)),
+      );
+
       let hasPendingBinding = false;
       for (const rec of pending.values()) {
         if (rec !== undefined && rec.kind === 'binding') {
@@ -2116,6 +2162,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       camera.set(patch);
     },
     pages: pages.api,
+    frames: createFramesRuntime(() => board),
     get selection() {
       return selection.ids;
     },

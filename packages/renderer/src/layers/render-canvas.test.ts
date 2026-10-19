@@ -501,7 +501,7 @@ describe('BOARD-810: Error Isolation in Canvas Renderer', () => {
       resizeObserver.resize(800, 600);
     }
 
-    const errors: any[] = [];
+    const errors: { code: string; message: string; cause: unknown }[] = [];
     board.on('error', (e) => errors.push(e));
 
     // Create one normal box and one exploding box

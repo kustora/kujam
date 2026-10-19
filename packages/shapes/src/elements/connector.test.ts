@@ -369,14 +369,14 @@ describe('BOARD-1101: Connector element and binding', () => {
 
     it('cascades binding deletion when a bound shape is deleted, leaves connector unbound, and restores on undo', () => {
       const board = setup();
-      const boxA = board.create<'geo'>({
+      board.create<'geo'>({
         id: 'box-a',
         type: 'geo',
         x: 50,
         y: 50,
         w: 100,
         h: 100,
-      })!;
+      });
       const boxB = board.create<'geo'>({
         id: 'box-b',
         type: 'geo',

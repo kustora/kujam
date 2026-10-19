@@ -277,7 +277,9 @@ export function createInspector(
         if (rec.kind === 'element' && rec.props) {
           try {
             propsMatch = JSON.stringify(rec.props).toLowerCase().includes(searchQuery);
-          } catch {}
+          } catch {
+            // Ignore non-serializable props
+          }
         }
         if (!idMatch && !typeMatch && !snippetMatch && !propsMatch) return false;
       }
@@ -438,7 +440,9 @@ export function createInspector(
         if (err.cause && typeof err.cause === 'object') {
           try {
             errorMsg += ` (${JSON.stringify(err.cause)})`;
-          } catch {}
+          } catch {
+            // Ignore non-serializable cause
+          }
         }
       });
 

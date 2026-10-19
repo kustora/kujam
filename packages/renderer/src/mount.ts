@@ -468,9 +468,9 @@ export function mountRenderer(
         board.camera.setReducedMotion(true);
       }
       root.dataset.reducedMotion = board.camera.reducedMotion ? 'true' : 'false';
-      const onMotionChange = (event: MediaQueryListEvent) => {
+      const onMotionChange = (event?: MediaQueryListEvent) => {
         if (!mounted || reducedMotionOverridden) return;
-        applyReducedMotion(Boolean(event.matches));
+        applyReducedMotion(Boolean(event?.matches ?? mql.matches));
       };
       mql.addEventListener?.('change', onMotionChange);
       unsubscribers.push(() => {

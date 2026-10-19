@@ -190,7 +190,7 @@ describe('tanpa state global (BOARD-207)', () => {
 describe('board.reportError (BOARD-207, BOARD-810)', () => {
   it('memancarkan event error dengan kode, pesan, dan cause', () => {
     const board = createBoard();
-    const errors: any[] = [];
+    const errors: { code: string; message: string; cause: unknown }[] = [];
     board.on('error', (e) => errors.push(e));
 
     board.reportError('render-error', 'Gagal render elemen test', { id: 'el-1' });
