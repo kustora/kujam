@@ -6,6 +6,7 @@
 
 import { Board } from '@kujam/core';
 import { BoxBounds } from '@kujam/core';
+import { Point } from '@kujam/core';
 import { ThemeDefinition } from '@kujam/core';
 import { ThemeMode } from '@kujam/core';
 import { ViewportSize } from '@kujam/core';
@@ -187,9 +188,11 @@ export interface RendererLayers {
 
 // @public
 export interface RendererOptions {
+    readonly acceptDrop?: (files: readonly File[], point: Point, board: Board) => boolean | Promise<boolean>;
     readonly background?: BoardBackground;
     readonly debug?: boolean;
     readonly onClipboardError?: (error: unknown) => void;
+    readonly onDropRejected?: (files: readonly File[], reason: string) => void;
     readonly pixelRatio?: number;
     readonly reducedMotion?: boolean;
     readonly theme?: ThemeMode | ThemeDefinition;

@@ -371,9 +371,31 @@ describe('BOARD-211: opsi createBoard dan properti board', () => {
     });
     expect(board.assets?.resolve('test')).toBe('asset-url');
     expect(board.assets?.upload).toBeUndefined();
+    expect(board.elementContext.assets?.resolve('test')).toBe('asset-url');
     expect(board.user).toEqual({ id: 'u-simple', meta: {} });
     expect(board.user?.name).toBeUndefined();
     expect(board.user?.color).toBeUndefined();
+
+    // AssetRecord lookup via board.getAsset and elementContext.getAsset
+    board.transact((tx) => {
+      tx.put({
+        id: 'asset:photo',
+        kind: 'asset',
+        mimeType: 'image/png',
+        w: 800,
+        h: 600,
+        meta: { filename: 'photo.png' },
+      });
+    });
+
+    const asset = board.getAsset('asset:photo');
+    expect(asset).toBeDefined();
+    expect(asset?.mimeType).toBe('image/png');
+    expect(asset?.w).toBe(800);
+    expect(asset?.h).toBe(600);
+    expect(board.elementContext.getAsset?.('asset:photo')).toEqual(asset);
+    expect(board.getAsset('non-existent')).toBeUndefined();
+
     board.dispose();
   });
 

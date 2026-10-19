@@ -52,7 +52,7 @@ export type Checks = [
   Expect<
     Equal<
       (typeof defaultElements)['elements'][number]['type'],
-      'sticky' | 'draw' | 'text' | 'geo' | 'connector' | 'group' | 'frame'
+      'sticky' | 'draw' | 'text' | 'geo' | 'connector' | 'group' | 'frame' | 'image'
     >
   >,
   // BOARD-502: built-in select and hand tools, and the overlay data of the select tool.

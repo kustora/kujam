@@ -25,6 +25,7 @@ import {
   type BoardDocument,
   type Point,
 } from '@kujam/core';
+import { insertImageFiles, isImageFile } from './drag-drop.js';
 
 /** Data attribute carrying the board JSON in the `text/html` fallback. */
 const HTML_ATTRIBUTE = 'data-kujam-clipboard';
@@ -158,14 +159,24 @@ export function attachClipboard(
   function onPaste(e: ClipboardEvent): void {
     if (!handles(e)) return;
     const content = readClipboardContent(win!, e.clipboardData!);
-    // Not board content: leave it to other handlers (system paste, BOARD-907).
-    if (!content) return;
-    e.preventDefault();
-    try {
-      const result = insertContent(board, content, { at: pasteTarget() });
-      board.select(result.rootIds);
-    } catch (error) {
-      options.onError?.(error);
+    if (content) {
+      e.preventDefault();
+      try {
+        const result = insertContent(board, content, { at: pasteTarget() });
+        board.select(result.rootIds);
+      } catch (error) {
+        options.onError?.(error);
+      }
+      return;
+    }
+
+    const files = e.clipboardData?.files ? Array.from(e.clipboardData.files) : [];
+    const imageFiles = files.filter(isImageFile);
+    if (imageFiles.length > 0) {
+      e.preventDefault();
+      insertImageFiles(board, imageFiles, pasteTarget()).catch((error) => {
+        options.onError?.(error);
+      });
     }
   }
 

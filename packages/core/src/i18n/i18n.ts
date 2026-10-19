@@ -172,6 +172,13 @@ const RAW_DICTIONARY = {
   'element.geo.arrow-left': { id: 'Panah kiri', en: 'Left arrow' },
   'element.group': { id: 'Grup', en: 'Group' },
   'element.frame': { id: 'Frame', en: 'Frame' },
+  'element.image': { id: 'Gambar', en: 'Image' },
+  'image.alt': { id: 'Teks alternatif', en: 'Alt text' },
+  'image.crop': { id: 'Potong gambar', en: 'Crop image' },
+  'image.resetCrop': { id: 'Reset potongan', en: 'Reset crop' },
+  'image.retry': { id: 'Coba lagi unggah', en: 'Retry upload' },
+  'image.uploading': { id: 'Mengunggah...', en: 'Uploading...' },
+  'image.uploadFailed': { id: 'Gagal mengunggah', en: 'Upload failed' },
 
   // Commands
   'command.element.group': { id: 'Grup', en: 'Group' },

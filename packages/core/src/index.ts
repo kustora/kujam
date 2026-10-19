@@ -96,7 +96,14 @@ import {
   type Geometry,
   type Point,
 } from './geometry/geometry.js';
-import type { BindingRecord, BoardDocument, CameraState, ElementRecord } from './types.js';
+import type {
+  AssetAdapter,
+  AssetRecord,
+  BindingRecord,
+  BoardDocument,
+  CameraState,
+  ElementRecord,
+} from './types.js';
 import { CURRENT_SCHEMA_VERSION } from './types.js';
 import { InvalidDocumentError, inspectDocument } from './document/validate.js';
 import {
@@ -465,18 +472,6 @@ export {
 } from './tools/arrange.js';
 
 /**
- * Adapter for resolving and uploading media assets for image elements (BOARD-211, BOARD-1103).
- *
- * @beta
- */
-export interface AssetAdapter {
-  /** Returns the asset URL (sync or async), or `null`/`undefined` when unavailable. */
-  resolve(assetId: string): string | null | undefined | PromiseLike<string | null | undefined>;
-  /** Uploads an asset file/blob and returns the new `assetId`. */
-  upload?(file: unknown): string | PromiseLike<string>;
-}
-
-/**
  * Options for creating a `Board` instance (BOARD-211).
  *
  * @public
@@ -725,6 +720,12 @@ export interface Board {
   getElement<T = Record<string, unknown>>(
     id: string,
   ): Readonly<ElementRecord<ResolveElementProps<T>>> | undefined;
+  /**
+   * Media asset record with the given ID, or `undefined` when missing or not an asset (BOARD-1103).
+   *
+   * @beta
+   */
+  getAsset(id: string): Readonly<AssetRecord> | undefined;
   /**
    * Finds elements in the document by type, page, parent, and spatial bounds filters (BOARD-206).
    * Without `pageId`, only the current page is searched (BOARD-208); pass `allPages: true` to
@@ -1680,6 +1681,13 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       }
       events.emit('action', Object.freeze({ name, payload }));
     },
+    get assets() {
+      return assets;
+    },
+    getAsset(id: string) {
+      const rec = store.getRecord(id);
+      return rec?.kind === 'asset' ? (rec as never) : undefined;
+    },
   });
   const toolStyles = createToolStyles((event) => events.emit('tool-style', event));
 
@@ -1694,6 +1702,10 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       },
       resolveBrush: elementContext.resolveBrush,
       emit: elementContext.emit,
+      get assets() {
+        return assets;
+      },
+      getAsset: elementContext.getAsset,
       updateProps: (patch: Partial<Record<string, unknown>>): boolean =>
         board.update(el.id, { props: patch }) !== undefined,
       brushes: brushes.api.list(),
@@ -2035,6 +2047,10 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     getElement(id: string) {
       const rec = store.getRecord(id);
       return rec?.kind === 'element' ? (rec as never) : undefined;
+    },
+    getAsset(id: string) {
+      const rec = store.getRecord(id);
+      return rec?.kind === 'asset' ? (rec as never) : undefined;
     },
     query(filter) {
       assertUsable();

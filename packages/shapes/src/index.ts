@@ -22,6 +22,7 @@ import { frameTool } from './tools/frame.js';
 import { ellipseTool, geoTool, rectangleTool } from './tools/geo.js';
 import { groupElement } from './elements/group.js';
 import { frameElement } from './elements/frame.js';
+import { imageElement } from './elements/image.js';
 import { handTool } from './tools/hand.js';
 import { selectTool } from './tools/select.js';
 import { stickyTool } from './tools/sticky.js';
@@ -176,9 +177,19 @@ export {
   type TextEditorOptions,
 } from './text/editor.js';
 
+export {
+  clearImageCache,
+  DEFAULT_IMAGE_SIZE,
+  imageCropSchema,
+  imageElement,
+  imagePropsSchema,
+  type ImageCrop,
+  type ImageProps,
+} from './elements/image.js';
+
 /**
- * Built-in elements plugin (`sticky`, `draw`, `text`, `geo`, `connector`, `group`, `frame`) with the `pen` and
- * `highlighter` brushes used by `draw` (BOARD-603, BOARD-1101, BOARD-1104, BOARD-1105), ready to install via
+ * Built-in elements plugin (`sticky`, `draw`, `text`, `geo`, `connector`, `group`, `frame`, `image`) with the `pen` and
+ * `highlighter` brushes used by `draw` (BOARD-603, BOARD-1101, BOARD-1103, BOARD-1104, BOARD-1105), ready to install via
  * `createBoard({ plugins: [defaultElements, defaultTools] })` or `createElementRegistry(defaultElements)`.
  *
  * @public
@@ -193,6 +204,7 @@ export const defaultElements = definePlugin({
     connectorElement,
     groupElement,
     frameElement,
+    imageElement,
   ] as const),
   brushes: DEFAULT_BRUSHES,
   setup: (board) => registerConnectorBoard(board),
@@ -248,6 +260,7 @@ export const DEFAULT_ELEMENT_TYPES = [
   'connector',
   'group',
   'frame',
+  'image',
 ] as const;
 
 /**

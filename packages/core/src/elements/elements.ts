@@ -12,7 +12,7 @@ import type { InferShape, ObjectSchema, SchemaResult, SchemaShape } from '../doc
 import { object, validate } from '../document/schema.js';
 import type { ThemeDefinition } from '../theme/theme.js';
 import type { ToolStyles } from '../tools/tool-styles.js';
-import type { ElementRecord } from '../types.js';
+import type { AssetAdapter, AssetRecord, ElementRecord } from '../types.js';
 
 // ---------- Render context and callbacks ----------
 
@@ -77,6 +77,24 @@ export interface ElementCanvasContext {
   fillText(text: string, x: number, y: number, maxWidth?: number): void;
   measureText(text: string): { readonly width: number };
   setLineDash(segments: number[]): void;
+  /**
+   * Draws an image or bitmap onto the canvas (BOARD-1103).
+   *
+   * @beta
+   */
+  drawImage?(image: object, dx: number, dy: number): void;
+  drawImage?(image: object, dx: number, dy: number, dw: number, dh: number): void;
+  drawImage?(
+    image: object,
+    sx: number,
+    sy: number,
+    sw: number,
+    sh: number,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+  ): void;
 }
 
 /**
@@ -125,6 +143,18 @@ export interface ElementContext {
    * @beta
    */
   resolveBrush(id: string): Readonly<BrushDefinition>;
+  /**
+   * Asset adapter for resolving media assets (BOARD-1103).
+   *
+   * @beta
+   */
+  readonly assets?: Readonly<AssetAdapter> | null;
+  /**
+   * Looks up an asset record from the document (BOARD-1103).
+   *
+   * @beta
+   */
+  getAsset?(id: string): Readonly<AssetRecord> | undefined;
 }
 
 /**
@@ -159,6 +189,18 @@ export type ResolveResult<D> = D | ResolveError | PromiseLike<D | ResolveError>;
  */
 export interface ElementResolveContext {
   readonly resolvers: Readonly<Record<string, (id: string) => unknown>>;
+  /**
+   * Asset adapter for resolving media assets (BOARD-1103).
+   *
+   * @beta
+   */
+  readonly assets?: Readonly<AssetAdapter> | null;
+  /**
+   * Looks up an asset record from the document (BOARD-1103).
+   *
+   * @beta
+   */
+  getAsset?(id: string): Readonly<AssetRecord> | undefined;
 }
 
 // ---------- Contract parts ----------

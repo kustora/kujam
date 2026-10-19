@@ -5,6 +5,7 @@ import {
   defineBrush,
   definePlugin,
   PluginError,
+  rect,
   validate,
   type AnyElementDefinition,
   type ElementCanvasContext,
@@ -28,6 +29,11 @@ import {
   richTextToPlainText,
   stickyElement,
   textElement,
+  imageElement,
+  imagePropsSchema,
+  imageCropSchema,
+  clearImageCache,
+  DEFAULT_IMAGE_SIZE,
   type RichText,
 } from './index.js';
 import { builtInBrush } from './brushes.js';
@@ -429,3 +435,80 @@ describe('geo', () => {
     expect(geoElement.export?.text?.(el, undefined)).toBe('Target');
   });
 });
+
+describe('image (BOARD-1103, BOARD-1906)', () => {
+  it('props, geometri, ukuran default, dan ekspor teks', () => {
+    clearImageCache();
+    expect(DEFAULT_IMAGE_SIZE).toEqual({ w: 320, h: 240 });
+    expect(imageElement.resize).toBe('fixed-ratio');
+
+    const el = withDefaults(imageElement, { assetId: 'asset-abc', alt: 'Kucing oranye' });
+    expect(validate(imagePropsSchema, el.props).ok).toBe(true);
+    expect(validate(imageCropSchema, { x: 0, y: 0, w: 1, h: 1 }).ok).toBe(true);
+    expect(imageElement.geometry(el)).toEqual(rect(200, 100));
+    expect(imageElement.export?.text?.(el)).toBe('Kucing oranye');
+  });
+
+  it('a11y dwibahasa dan fallback', () => {
+    const elWithAlt = withDefaults(imageElement, { assetId: 'a1', alt: 'Diagram' });
+    expect(imageElement.a11y?.(elWithAlt, undefined, ctx('en'))).toEqual({
+      role: 'img',
+      label: 'Diagram',
+    });
+
+    const elDefault = withDefaults(imageElement, { assetId: 'a1', alt: '' });
+    expect(imageElement.a11y?.(elDefault, undefined, ctx('en'))).toEqual({
+      role: 'img',
+      label: 'Image',
+    });
+    expect(imageElement.a11y?.(elDefault, undefined, ctx('id'))).toEqual({
+      role: 'img',
+      label: 'Gambar',
+    });
+  });
+
+  it('double-click dan aksi kontekstual', () => {
+    const emitted: string[] = [];
+    const mockCtx = {
+      ...ctx('en'),
+      emit: (name: string) => emitted.push(name),
+    };
+
+    const el = withDefaults(imageElement, {
+      assetId: 'a1',
+      crop: { x: 0, y: 0, w: 0.5, h: 0.5 },
+      uploadStatus: 'error',
+    });
+
+    imageElement.onDoubleClick?.(el, mockCtx);
+    expect(emitted).toContain('image.crop');
+    expect(emitted).toContain('edit');
+
+    const actions = imageElement.actions?.(el, undefined, mockCtx);
+    expect(actions?.map((a) => a.id)).toEqual(['image.alt', 'image.crop', 'image.resetCrop', 'image.retry']);
+    expect(actions?.find((a) => a.id === 'image.resetCrop')?.isActive?.()).toBe(true);
+    expect(actions?.find((a) => a.id === 'image.retry')?.isActive?.()).toBe(true);
+  });
+
+  it('render canvas: status upload, error, dan placeholder', () => {
+    let { g, calls } = recorder();
+    const elUploading = withDefaults(imageElement, {
+      assetId: 'a1',
+      uploadStatus: 'uploading',
+      uploadProgress: 50,
+    });
+    imageElement.render?.canvas?.(g, elUploading, undefined, lod, ctx('id'));
+    expect(calls.some((c) => c.includes('fillText(Mengunggah...'))).toBe(true);
+
+    ({ g, calls } = recorder());
+    const elError = withDefaults(imageElement, {
+      assetId: 'a1',
+      uploadStatus: 'error',
+      uploadError: 'Gagal',
+    });
+    imageElement.render?.canvas?.(g, elError, undefined, lod, ctx('en'));
+    expect(calls.some((c) => c.includes('fillText(Gagal'))).toBe(true);
+    expect(calls.some((c) => c.includes('fillText(Retry upload'))).toBe(true);
+  });
+});
+

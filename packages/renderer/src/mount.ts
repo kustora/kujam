@@ -11,10 +11,11 @@
  * views, so several boards (or iframes) on one page never affect each other.
  */
 
-import type { Board, ThemeDefinition, ThemeMode, ViewportSize } from '@kujam/core';
+import type { Board, Point, ThemeDefinition, ThemeMode, ViewportSize } from '@kujam/core';
 import { HtmlLayer, type EditorBounds } from './layers/html-layer.js';
 import { attachInput } from './input/input.js';
 import { attachClipboard } from './input/clipboard.js';
+import { attachDragDrop } from './input/drag-drop.js';
 import { CanvasRenderer, type RenderStats } from './layers/render-canvas.js';
 import { OverlayRenderer, type OverlayRenderStats } from './layers/overlay.js';
 import { assertBackground, type BoardBackground } from './layers/background.js';
@@ -24,6 +25,7 @@ export type { RenderStats } from './layers/render-canvas.js';
 export type { OverlayRenderStats } from './layers/overlay.js';
 export type { EditorBounds } from './layers/html-layer.js';
 export type { BoardBackground } from './layers/background.js';
+export type { DragDropOptions } from './input/drag-drop.js';
 
 /**
  * Options for {@link mountRenderer}.
@@ -63,6 +65,15 @@ export interface RendererOptions {
    * (BOARD-1905). When omitted, follows `window.matchMedia('(prefers-reduced-motion: reduce)')`.
    */
   readonly reducedMotion?: boolean;
+  /**
+   * Called to handle dropped non-image files (BOARD-908).
+   * Return `true` (or a promise resolving to `true`) if handled, or `false` to reject.
+   */
+  readonly acceptDrop?: (files: readonly File[], point: Point, board: Board) => boolean | Promise<boolean>;
+  /**
+   * Called when dropped files are rejected (BOARD-908).
+   */
+  readonly onDropRejected?: (files: readonly File[], reason: string) => void;
 }
 
 /**
@@ -336,6 +347,10 @@ export function mountRenderer(
     afterKey: (e) => a11yTree.afterKey(e),
   });
   const detachClipboard = attachClipboard(board, root, { onError: options.onClipboardError });
+  const detachDragDrop = attachDragDrop(board, root, {
+    acceptDrop: options.acceptDrop,
+    onDropRejected: options.onDropRejected,
+  });
   let size: Readonly<ViewportSize> = Object.freeze({ width: 0, height: 0 });
   let mounted = true;
   let frame: number | null = null;
@@ -505,6 +520,7 @@ export function mountRenderer(
     unsubscribers.length = 0;
     detachInput();
     detachClipboard();
+    detachDragDrop();
     a11yTree.dispose();
     htmlLayer.dispose();
     root.remove();

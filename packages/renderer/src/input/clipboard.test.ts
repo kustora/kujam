@@ -29,6 +29,7 @@ const notes = definePlugin({ id: 'notes', elements: [note] });
 /** Minimal `DataTransfer` stand-in. */
 class FakeDataTransfer {
   readonly store = new Map<string, string>();
+  files: readonly File[] = [];
   setData(type: string, value: string): void {
     this.store.set(type, value);
   }
@@ -269,6 +270,49 @@ describe('BOARD-906: paste', () => {
     const { event } = clipboardEvent('copy');
     root.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(false);
+  });
+
+  it('pastes image files from clipboard at the viewport center', () => {
+    const { board, root } = setup();
+    const file = new File(['png-data'], 'screenshot.png', { type: 'image/png' });
+    const data = new FakeDataTransfer();
+    data.files = [file];
+
+    const event = pasteInto(root, data);
+    expect(event.defaultPrevented).toBe(true);
+
+    const elements = board.query() as ElementRecord[];
+    expect(elements).toHaveLength(1);
+    const imgEl = elements[0]!;
+    expect(imgEl.type).toBe('image');
+    expect((imgEl.props as { alt: string }).alt).toBe('screenshot');
+    expect(board.selection).toEqual([imgEl.id]);
+
+    const center = board.camera.screenToBoard({ x: 400, y: 300 });
+    expect(imgEl.x).toBeCloseTo(center.x);
+    expect(imgEl.y).toBeCloseTo(center.y);
+
+    const assetId = (imgEl.props as { assetId: string }).assetId;
+    const asset = board.getAsset(assetId);
+    expect(asset).toBeDefined();
+    expect(asset?.mimeType).toBe('image/png');
+  });
+
+  it('pastes image files from clipboard at the cursor position', () => {
+    const { board, root } = setup();
+    const file = new File(['png-data'], 'capture.png', { type: 'image/png' });
+    const data = new FakeDataTransfer();
+    data.files = [file];
+
+    root.dispatchEvent(new window.PointerEvent('pointermove', { clientX: 300, clientY: 250 }));
+    const event = pasteInto(root, data);
+    expect(event.defaultPrevented).toBe(true);
+
+    const [imgEl] = board.query() as ElementRecord[];
+    expect(imgEl).toBeDefined();
+    const cursor = board.camera.screenToBoard({ x: 200, y: 200 });
+    expect(imgEl!.x).toBeCloseTo(cursor.x);
+    expect(imgEl!.y).toBeCloseTo(cursor.y);
   });
 });
 

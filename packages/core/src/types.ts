@@ -91,6 +91,18 @@ export interface AssetRecord {
 }
 
 /**
+ * Adapter for resolving media asset URLs and uploading binary files (BOARD-1103).
+ *
+ * @beta
+ */
+export interface AssetAdapter {
+  /** Returns the asset URL (sync or async), or `null`/`undefined` when unavailable. */
+  resolve(assetId: string): string | null | undefined | PromiseLike<string | null | undefined>;
+  /** Uploads an asset file/blob and returns the new `assetId`. */
+  upload?(file: unknown): string | PromiseLike<string>;
+}
+
+/**
  * Union of every record kind in a board document.
  *
  * @public

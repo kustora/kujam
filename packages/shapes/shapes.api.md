@@ -16,7 +16,6 @@ import { DEFAULT_DARK_THEME } from '@kujam/core';
 import { DEFAULT_LIGHT_THEME } from '@kujam/core';
 import { ElementCanvasContext } from '@kujam/core';
 import { ElementContext } from '@kujam/core';
-import { ElementDefinition } from '@kujam/core';
 import { ElementRecord } from '@kujam/core';
 import { ElementTransform } from '@kujam/core';
 import { Geometry } from '@kujam/core';
@@ -94,6 +93,9 @@ export const CARDINAL_SIDES: readonly AnchorSide[];
 
 // @beta
 export function chunkPoints(points: readonly (readonly number[])[], maxPoints?: number): number[][][];
+
+// @public
+export function clearImageCache(): void;
 
 export { COLOR_KEYS }
 
@@ -318,12 +320,18 @@ export { DEFAULT_DARK_THEME }
 export const DEFAULT_ELBOW_CLEARANCE = 16;
 
 // @public
-export const DEFAULT_ELEMENT_TYPES: readonly ["sticky", "draw", "text", "geo", "connector", "group", "frame"];
+export const DEFAULT_ELEMENT_TYPES: readonly ["sticky", "draw", "text", "geo", "connector", "group", "frame", "image"];
 
 // @public
 export const DEFAULT_FRAME_SIZE: Readonly<{
     w: 800;
     h: 600;
+}>;
+
+// @public
+export const DEFAULT_IMAGE_SIZE: Readonly<{
+    w: 320;
+    h: 240;
 }>;
 
 export { DEFAULT_LIGHT_THEME }
@@ -416,6 +424,18 @@ export const defaultElements: Readonly<{
         name: _kujam_core.Schema<string>;
         fill: _kujam_core.Schema<"yellow" | "green" | "pink" | "blue" | "purple" | "gray" | "none" | "surface">;
         clip: _kujam_core.Schema<boolean>;
+    }, undefined>, _kujam_core.ElementDefinition<"image", {
+        assetId: _kujam_core.Schema<string>;
+        crop: _kujam_core.OptionalSchema<{
+            x: number;
+            y: number;
+            w: number;
+            h: number;
+        } | null>;
+        alt: _kujam_core.OptionalSchema<string>;
+        uploadStatus: _kujam_core.OptionalSchema<"pending" | "uploading" | "error" | "ready">;
+        uploadProgress: _kujam_core.OptionalSchema<number>;
+        uploadError: _kujam_core.OptionalSchema<string>;
     }, undefined>];
     readonly brushes: readonly [_kujam_core.BrushDefinition, _kujam_core.BrushDefinition];
     readonly setup: (board: _kujam_core.Board) => () => void;
@@ -572,7 +592,7 @@ export function formatFont(fontSize: number, fontFamily?: string, bold?: boolean
 export const FRAME_FILLS: readonly ["surface", "none", "yellow", "green", "pink", "blue", "purple", "gray"];
 
 // @public
-const frameElement_2: ElementDefinition<"frame", {
+const frameElement_2: _kujam_core.ElementDefinition<"frame", {
     name: _kujam_core.Schema<string>;
     fill: _kujam_core.Schema<"yellow" | "green" | "pink" | "blue" | "purple" | "gray" | "none" | "surface">;
     clip: _kujam_core.Schema<boolean>;
@@ -666,6 +686,62 @@ export const highlighterBrush: BrushDefinition;
 
 // @public
 export const HIT_TOLERANCE_PX = 4;
+
+// @public
+export interface ImageCrop {
+    readonly h: number;
+    readonly w: number;
+    readonly x: number;
+    readonly y: number;
+}
+
+// @public
+export const imageCropSchema: _kujam_core.ObjectSchema<{
+    x: _kujam_core.Schema<number>;
+    y: _kujam_core.Schema<number>;
+    w: _kujam_core.Schema<number>;
+    h: _kujam_core.Schema<number>;
+}>;
+
+// @public
+export const imageElement: _kujam_core.ElementDefinition<"image", {
+    assetId: _kujam_core.Schema<string>;
+    crop: _kujam_core.OptionalSchema<{
+        x: number;
+        y: number;
+        w: number;
+        h: number;
+    } | null>;
+    alt: _kujam_core.OptionalSchema<string>;
+    uploadStatus: _kujam_core.OptionalSchema<"pending" | "uploading" | "error" | "ready">;
+    uploadProgress: _kujam_core.OptionalSchema<number>;
+    uploadError: _kujam_core.OptionalSchema<string>;
+}, undefined>;
+
+// @public
+export interface ImageProps {
+    readonly alt?: string;
+    readonly assetId: string;
+    readonly crop?: ImageCrop | null;
+    readonly uploadError?: string;
+    readonly uploadProgress?: number;
+    readonly uploadStatus?: ImageUploadStatus;
+}
+
+// @public
+export const imagePropsSchema: _kujam_core.ObjectSchema<{
+    assetId: _kujam_core.Schema<string>;
+    crop: _kujam_core.OptionalSchema<{
+        x: number;
+        y: number;
+        w: number;
+        h: number;
+    } | null>;
+    alt: _kujam_core.OptionalSchema<string>;
+    uploadStatus: _kujam_core.OptionalSchema<"pending" | "uploading" | "error" | "ready">;
+    uploadProgress: _kujam_core.OptionalSchema<number>;
+    uploadError: _kujam_core.OptionalSchema<string>;
+}>;
 
 // @public
 export function isRichTextEmpty(delta: RichText): boolean;

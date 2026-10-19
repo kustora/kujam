@@ -139,6 +139,8 @@ export interface Board {
     readonly frames: BoardFrames;
     // @beta
     getActions(ids?: SelectionInput): readonly ElementAction[];
+    // @beta
+    getAsset(id: string): Readonly<AssetRecord> | undefined;
     getCamera(): Readonly<CameraState>;
     getDocument(): Readonly<BoardDocument>;
     getElement<T = Record<string, unknown>>(id: string): Readonly<ElementRecord<ResolveElementProps<T>>> | undefined;
@@ -888,6 +890,12 @@ export interface ElementCanvasContext {
     clip(fillRule?: 'evenodd' | 'nonzero'): void;
     // (undocumented)
     closePath(): void;
+    // @beta
+    drawImage?(image: object, dx: number, dy: number): void;
+    // (undocumented)
+    drawImage?(image: object, dx: number, dy: number, dw: number, dh: number): void;
+    // (undocumented)
+    drawImage?(image: object, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number): void;
     // (undocumented)
     ellipse(x: number, y: number, radiusX: number, radiusY: number, rotation: number, startAngle: number, endAngle: number, counterclockwise?: boolean): void;
     // (undocumented)
@@ -947,7 +955,11 @@ export interface ElementCanvasContext {
 // @public
 export interface ElementContext {
     // @beta
+    readonly assets?: Readonly<AssetAdapter> | null;
+    // @beta
     emit(name: string, payload?: unknown): void;
+    // @beta
+    getAsset?(id: string): Readonly<AssetRecord> | undefined;
     readonly locale: string;
     // @beta
     resolveBrush(id: string): Readonly<BrushDefinition>;
@@ -1116,6 +1128,8 @@ export type ElementResizeMode = 'free' | 'fixed-ratio' | 'none';
 
 // @beta
 export interface ElementResolveContext {
+    readonly assets?: Readonly<AssetAdapter> | null;
+    getAsset?(id: string): Readonly<AssetRecord> | undefined;
     // (undocumented)
     readonly resolvers: Readonly<Record<string, (id: string) => unknown>>;
 }
