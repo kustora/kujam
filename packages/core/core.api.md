@@ -92,6 +92,9 @@ export interface AttachStorageOptions {
 }
 
 // @public
+export function attachSync(board: Board, adapter: SyncAdapter): SyncAttachment;
+
+// @public
 export interface BindingRecord {
     anchor: {
         x: number;
@@ -109,6 +112,8 @@ export interface BindingRecord {
 
 // @public
 export interface Board {
+    // @internal
+    readonly [BOARD_SYNC_HISTORY_DELEGATE]?: BoardSyncHistoryDelegateHook;
     // @beta
     addToSelection(ids: SelectionInput): void;
     // @beta
@@ -653,6 +658,12 @@ export function createFramesRuntime(getBoard: () => Board): BoardFrames;
 
 // @public
 export function createId(size?: number): string;
+
+// @public
+export function createMemorySyncAdapter(options?: MemorySyncAdapterOptions): SyncAdapter;
+
+// @public
+export function createMemorySyncBus(): MemorySyncBus;
 
 // @public
 export function createSpatialIndex(getGeometry?: (el: ElementRecord) => Geometry | undefined): SpatialIndex;
@@ -1220,6 +1231,19 @@ export function groupSelection(board: Board): Readonly<ElementRecord> | undefine
 export const HAND_TOOL_ID = "hand";
 
 // @public
+export interface HistoryApi {
+    readonly canRedo: boolean;
+    readonly canUndo: boolean;
+    clear(): void;
+    on?(event: 'change', listener: (state: {
+        canUndo: boolean;
+        canRedo: boolean;
+    }) => void): () => void;
+    redo(): boolean;
+    undo(): boolean;
+}
+
+// @public
 export interface HistoryEvent {
     // (undocumented)
     readonly canRedo: boolean;
@@ -1367,6 +1391,20 @@ export const MAX_SCHEMA_ISSUES = 20;
 
 // @public
 export const MAX_URL_LENGTH = 2048;
+
+// @public
+export interface MemorySyncAdapterOptions {
+    bus?: MemorySyncBus;
+    channel?: string;
+    history?: HistoryApi;
+    user?: PresenceUser;
+}
+
+// @public
+export interface MemorySyncBus {
+    publish(channel: string, message: unknown): void;
+    subscribe(channel: string, listener: (message: unknown) => void): () => void;
+}
 
 // @public
 export function migrateSchema(doc: BoardDocument, migrations?: SchemaMigrations, targetVersion?: number): BoardDocument;
@@ -1664,6 +1702,39 @@ export interface PreparedDocument {
         readonly errors: readonly string[];
     }[];
     readonly tooNew: DocumentTooNewReason | null;
+}
+
+// @public
+export interface PresenceApi {
+    getLocalState(): Partial<PresencePeerState> | undefined;
+    on(event: 'change' | 'peer-join' | 'peer-leave', listener: (peerId: string, state?: PresencePeerState) => void): () => void;
+    readonly peers: ReadonlyMap<string, PresencePeerState>;
+    setLocalState(patch: Partial<PresencePeerState>): void;
+}
+
+// @public
+export interface PresencePeerState {
+    [key: string]: unknown;
+    camera?: {
+        x: number;
+        y: number;
+        zoom: number;
+    };
+    cursor?: {
+        x: number;
+        y: number;
+    } | null;
+    selection?: readonly string[];
+    tool?: string;
+    user: PresenceUser;
+}
+
+// @public
+export interface PresenceUser {
+    avatar?: string;
+    color: string;
+    id: string;
+    name: string;
 }
 
 // @internal
@@ -2065,6 +2136,39 @@ export type StrokePoint = Point | readonly number[];
 
 // @public
 export const SUPPORTED_LOCALES: readonly BoardLocale[];
+
+// @public
+export interface SyncAdapter {
+    connect(board: Board): Promise<void> | void;
+    disconnect(): void;
+    readonly history?: HistoryApi;
+    on<K extends keyof SyncEventMap>(event: K, listener: (data: SyncEventMap[K]) => void): () => void;
+    readonly presence?: PresenceApi;
+    readonly status: SyncStatus;
+}
+
+// @public
+export interface SyncAttachment {
+    readonly adapter: SyncAdapter;
+    disconnect(): void;
+}
+
+// @public
+export interface SyncEventMap {
+    'peer-join': {
+        peerId: string;
+        user: PresenceUser;
+    };
+    'peer-leave': {
+        peerId: string;
+        user?: PresenceUser;
+    };
+    error: Error | unknown;
+    status: SyncStatus;
+}
+
+// @public
+export type SyncStatus = 'offline' | 'connecting' | 'synced' | 'error';
 
 // @public
 export interface ThemeCanvasTokens {

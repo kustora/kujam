@@ -4,23 +4,41 @@
 
 ```ts
 
-import { Board } from '@kujam/core';
+import { BoardRecord } from '@kujam/core';
+import { SyncAdapter } from '@kujam/core';
+import { SyncEventMap } from '@kujam/core';
+import { SyncStatus } from '@kujam/core';
+import * as Y from 'yjs';
 
 // @public
-export function createYjsSyncAdapter(): SyncAdapter;
+export function createYjsSyncAdapter(options?: YjsSyncOptions): YjsSyncAdapter;
 
 // @public
-export interface SyncAdapter {
-    // (undocumented)
-    connect(board: Board): void;
-    // (undocumented)
-    disconnect(): void;
-    // (undocumented)
-    readonly status: SyncStatus;
+export function isValidBoardRecord(value: unknown): value is BoardRecord;
+
+// @public
+export function recordToYMap(record: BoardRecord, yMap: Y.Map<unknown>): void;
+
+export { SyncAdapter }
+
+export { SyncEventMap }
+
+export { SyncStatus }
+
+// @public
+export interface YjsSyncAdapter extends SyncAdapter {
+    readonly doc: Y.Doc;
 }
 
 // @public
-export type SyncStatus = 'offline' | 'connecting' | 'synced';
+export interface YjsSyncOptions {
+    clientOrigin?: unknown;
+    doc?: Y.Doc;
+    validateRecord?: (record: unknown) => record is BoardRecord;
+}
+
+// @public
+export function yMapToRecord(yMap: Y.Map<unknown>): BoardRecord | null;
 
 // (No @packageDocumentation comment for this package)
 

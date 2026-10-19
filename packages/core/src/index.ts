@@ -30,6 +30,11 @@ import {
   type BoardHistory,
   type HistoryOptions,
 } from './history/history.js';
+import {
+  BOARD_SYNC_HISTORY_DELEGATE,
+  type BoardSyncHistoryDelegateHook,
+  type HistoryApi,
+} from './sync/sync.js';
 import { createId as createRandomId, type IdGenerator } from './utils/ids.js';
 import { createInteraction } from './tools/interaction.js';
 import { createToolStyles, type ToolStyles } from './tools/tool-styles.js';
@@ -387,6 +392,21 @@ export {
   type StorageEventMap,
   type StorageStatus,
 } from './storage/storage.js';
+export {
+  attachSync,
+  createMemorySyncAdapter,
+  createMemorySyncBus,
+  type HistoryApi,
+  type MemorySyncAdapterOptions,
+  type MemorySyncBus,
+  type PresenceApi,
+  type PresencePeerState,
+  type PresenceUser,
+  type SyncAdapter,
+  type SyncAttachment,
+  type SyncEventMap,
+  type SyncStatus,
+} from './sync/sync.js';
 export {
   COLOR_KEYS,
   createTheme,
@@ -1136,6 +1156,12 @@ export interface Board {
    * `redo`, `run`, `setTool`, and `dispatch` throw.
    */
   dispose(): void;
+  /**
+   * Internal hook for sync adapter history delegation.
+   *
+   * @internal
+   */
+  readonly [BOARD_SYNC_HISTORY_DELEGATE]?: BoardSyncHistoryDelegateHook;
 }
 
 /**
@@ -1652,10 +1678,40 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       (r): r is ElementRecord => r.kind === 'element',
     ),
   );
+  let historyDelegate: HistoryApi | null = null;
+  let historyDelegateUnsubscribe: (() => void) | null = null;
+
+  function setHistoryDelegate(delegate: HistoryApi | null): () => void {
+    if (historyDelegateUnsubscribe) {
+      historyDelegateUnsubscribe();
+      historyDelegateUnsubscribe = null;
+    }
+    historyDelegate = delegate;
+    if (delegate) {
+      if (typeof delegate.on === 'function') {
+        historyDelegateUnsubscribe = delegate.on('change', (state) => {
+          events.emit('history', state);
+        });
+      }
+      events.emit('history', { canUndo: delegate.canUndo, canRedo: delegate.canRedo });
+    } else {
+      events.emit('history', { canUndo: history.api.canUndo, canRedo: history.api.canRedo });
+    }
+    return () => {
+      if (historyDelegate === delegate) {
+        setHistoryDelegate(null);
+      }
+    };
+  }
+
   const history = createLocalHistory(store, {
     limit: historyLimit,
     mergeWindowMs,
-    onStateChange: (state) => events.emit('history', state),
+    onStateChange: (state) => {
+      if (!historyDelegate) {
+        events.emit('history', state);
+      }
+    },
   });
   const camera = createCamera({
     zoomRange,
@@ -2022,6 +2078,9 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       // The diff of an in-progress interaction does not apply to the new document.
       tools.reset();
       history.api.clear();
+      if (historyDelegate) {
+        historyDelegate.clear();
+      }
       tooNew = reason;
       store.replaceDocument(owned, 'load');
       if (migrated && migrated.document !== owned) {
@@ -2103,17 +2162,56 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       }
       return id;
     },
+    [BOARD_SYNC_HISTORY_DELEGATE]: {
+      setHistoryDelegate,
+      getHistoryDelegate: () => historyDelegate,
+    },
     undo(): boolean {
       assertUsable();
       if (tools.busy) return tools.cancel();
+      if (historyDelegate) {
+        return historyDelegate.undo();
+      }
       return history.undo();
     },
     redo(): boolean {
       assertUsable();
       tools.cancel();
+      if (historyDelegate) {
+        return historyDelegate.redo();
+      }
       return history.redo();
     },
-    history: history.api,
+    history: {
+      get canUndo(): boolean {
+        return historyDelegate ? historyDelegate.canUndo : history.api.canUndo;
+      },
+      get canRedo(): boolean {
+        return historyDelegate ? historyDelegate.canRedo : history.api.canRedo;
+      },
+      get limit(): number {
+        return history.api.limit;
+      },
+      get mergeWindowMs(): number {
+        return history.api.mergeWindowMs;
+      },
+      clear(): void {
+        if (historyDelegate) {
+          historyDelegate.clear();
+        } else {
+          history.api.clear();
+        }
+      },
+      batch<T>(key: string, fn: () => T): T {
+        return history.api.batch(key, fn);
+      },
+      get undoStack() {
+        return history.api.undoStack;
+      },
+      get redoStack() {
+        return history.api.redoStack;
+      },
+    },
     run(id: string, args?: unknown): boolean {
       assertUsable();
       return commands.run(id, args);
@@ -2215,6 +2313,11 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
         tools.clear();
         brushes.clear();
         toolStyles.clear();
+        if (historyDelegateUnsubscribe) {
+          historyDelegateUnsubscribe();
+          historyDelegateUnsubscribe = null;
+        }
+        historyDelegate = null;
         history.dispose();
         store.dispose();
       }
