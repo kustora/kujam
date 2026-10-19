@@ -356,10 +356,18 @@ describe('BOARD-1402: mountDefaultUi', () => {
     expect(ui.zoom.style.right).toBe('20px');
     expect(ui.history.style.left).toBe('20px');
     expect(ui.zoom.board).toBe(board);
+    expect(ui.minimap.parentElement).toBe(container);
+    expect(ui.minimap.style.bottom).toBe('80px');
+    expect(ui.minimap.style.right).toBe('20px');
+    expect(ui.minimap.board).toBe(board);
+    expect(ui.commandPalette.parentElement).toBe(container);
+    expect(ui.commandPalette.board).toBe(board);
 
     ui.unmount();
     ui.unmount();
     expect(container.contains(ui.toolbar)).toBe(false);
+    expect(container.contains(ui.minimap)).toBe(false);
+    expect(container.contains(ui.commandPalette)).toBe(false);
     expect(container.childElementCount).toBe(0);
   });
 });

@@ -61,6 +61,15 @@ export interface RendererOptions {
    */
   readonly onClipboardError?: (error: unknown) => void;
   /**
+   * Maximum character length for short plain text to become a sticky note (BOARD-907).
+   * Defaults to 120.
+   */
+  readonly shortTextThreshold?: number;
+  /**
+   * Hook called when a URL is pasted (BOARD-907). When returning `true`, the URL is treated as handled.
+   */
+  readonly onPasteUrl?: (url: string, point: Point, board: Board) => boolean | Promise<boolean>;
+  /**
    * Overrides the OS `prefers-reduced-motion` setting for camera animations and UI transitions
    * (BOARD-1905). When omitted, follows `window.matchMedia('(prefers-reduced-motion: reduce)')`.
    */
@@ -346,7 +355,11 @@ export function mountRenderer(
     filterKey: (e) => a11yTree.filterKey(e),
     afterKey: (e) => a11yTree.afterKey(e),
   });
-  const detachClipboard = attachClipboard(board, root, { onError: options.onClipboardError });
+  const detachClipboard = attachClipboard(board, root, {
+    onError: options.onClipboardError,
+    shortTextThreshold: options.shortTextThreshold,
+    onPasteUrl: options.onPasteUrl,
+  });
   const detachDragDrop = attachDragDrop(board, root, {
     acceptDrop: options.acceptDrop,
     onDropRejected: options.onDropRejected,

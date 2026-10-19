@@ -12,6 +12,34 @@ import { ZOOM_STEPS } from '@kujam/core';
 export function buildToolbarItems(board: Board): ToolbarItem[];
 
 // @public
+export interface CommandPaletteItem {
+    // (undocumented)
+    readonly category?: string;
+    // (undocumented)
+    readonly disabled?: boolean;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly label: string;
+    // (undocumented)
+    run(board: Board): void;
+    // (undocumented)
+    readonly shortcut?: string;
+}
+
+// @public
+export interface CommandPaletteSource {
+    // (undocumented)
+    getItems(board: Board, query: string): readonly CommandPaletteItem[] | Promise<readonly CommandPaletteItem[]>;
+}
+
+// @internal
+export function createCommandPaletteClass(win: UiWindow): new () => KujamUiElement;
+
+// @internal
+export function createMinimapClass(win: UiWindow): new () => KujamUiElement;
+
+// @public
 export function defineUiElements(win?: Window): void;
 
 // @public
@@ -20,11 +48,19 @@ export interface KujamUiElement extends HTMLElement {
 }
 
 // @public
+export const MINIMAP_SIZE: Readonly<{
+    width: 180;
+    height: 120;
+}>;
+
+// @public
 export function mountDefaultUi(options: MountUiOptions): MountedUi;
 
 // @public
 export interface MountedUi {
+    readonly commandPalette: KujamUiElement;
     readonly history: KujamUiElement;
+    readonly minimap: KujamUiElement;
     readonly selection: KujamUiElement;
     readonly toolbar: KujamUiElement;
     unmount(): void;
@@ -98,6 +134,8 @@ export const UI_TAGS: Readonly<{
     readonly zoom: "kujam-zoom-control";
     readonly history: "kujam-history-control";
     readonly selection: "kujam-selection-toolbar";
+    readonly commandPalette: "kujam-command-palette";
+    readonly minimap: "kujam-minimap";
 }>;
 
 // @public

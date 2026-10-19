@@ -19,10 +19,12 @@
 import {
   CLIPBOARD_MIME_TYPE,
   insertContent,
+  isSafeUrl,
   parseClipboard,
   serializeClipboard,
   type Board,
   type BoardDocument,
+  type ElementRecord,
   type Point,
 } from '@kujam/core';
 import { insertImageFiles, isImageFile } from './drag-drop.js';
@@ -39,6 +41,15 @@ const HTML_PATTERN = new RegExp(`${HTML_ATTRIBUTE}="([A-Za-z0-9+/=]*)"`);
 export interface ClipboardOptions {
   /** Called when pasted board content is rejected (read-only, limits, permission, invalid). */
   readonly onError?: (error: unknown) => void;
+  /**
+   * Maximum character length for short plain text to become a sticky note (BOARD-907).
+   * Defaults to 120.
+   */
+  readonly shortTextThreshold?: number;
+  /**
+   * Hook called when a URL is pasted (BOARD-907). When returning `true`, the URL is treated as handled.
+   */
+  readonly onPasteUrl?: (url: string, point: Point, board: Board) => boolean | Promise<boolean>;
 }
 
 function isTextInput(target: EventTarget | null): boolean {
@@ -176,6 +187,100 @@ export function attachClipboard(
       e.preventDefault();
       insertImageFiles(board, imageFiles, pasteTarget()).catch((error) => {
         options.onError?.(error);
+      });
+      return;
+    }
+
+    const text = e.clipboardData?.getData('text/plain');
+    if (!text || text.trim() === '' || board.readOnly) {
+      return;
+    }
+
+    e.preventDefault();
+    const target = pasteTarget();
+    const trimmed = text.trim();
+
+    function insertElement(params: {
+      type: string;
+      w: number;
+      h: number;
+      props: Record<string, unknown>;
+    }): void {
+      try {
+        let newEl: ElementRecord | undefined;
+        board.history.batch('clipboard.paste', () => {
+          newEl = board.create({
+            type: params.type,
+            x: target.x,
+            y: target.y,
+            w: params.w,
+            h: params.h,
+            props: params.props,
+          });
+        });
+        if (newEl) {
+          board.select([newEl.id]);
+        }
+      } catch (error) {
+        options.onError?.(error);
+      }
+    }
+
+    if (isSafeUrl(trimmed, ['https:', 'http:'])) {
+      if (options.onPasteUrl) {
+        try {
+          const handled = options.onPasteUrl(trimmed, target, board);
+          if (handled instanceof Promise) {
+            handled
+              .then((resolved) => {
+                if (!resolved && !board.disposed && !board.readOnly) {
+                  insertElement({
+                    type: 'text',
+                    w: 280,
+                    h: 100,
+                    props: { text: trimmed },
+                  });
+                }
+              })
+              .catch((error) => {
+                options.onError?.(error);
+              });
+            return;
+          }
+          if (handled) {
+            return;
+          }
+        } catch (error) {
+          options.onError?.(error);
+          return;
+        }
+      }
+      insertElement({
+        type: 'text',
+        w: 280,
+        h: 100,
+        props: { text: trimmed },
+      });
+      return;
+    }
+
+    const isMultiLine = trimmed.includes('\n');
+    const threshold = options.shortTextThreshold ?? 120;
+    const isShort = !isMultiLine && trimmed.length <= threshold;
+
+    if (isShort) {
+      insertElement({
+        type: 'sticky',
+        w: 200,
+        h: 200,
+        props: { text: trimmed, color: 'yellow' },
+      });
+    } else {
+      insertElement({
+        type: 'text',
+        w: 280,
+        h: 100,
+        props: { text: trimmed },
       });
     }
   }

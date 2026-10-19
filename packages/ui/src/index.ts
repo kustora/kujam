@@ -6,11 +6,19 @@
 
 import type { Board } from '@kujam/core';
 import type { KujamUiElement, UiWindow } from './base.js';
+import { createCommandPaletteClass } from './command-palette.js';
+import { createMinimapClass } from './minimap.js';
 import { createSelectionToolbarClass } from './selection-toolbar.js';
 import { createToolbarClass } from './toolbar.js';
 import { createHistoryControlClass, createZoomControlClass } from './zoom.js';
 
 export type { KujamUiElement } from './base.js';
+export {
+  createCommandPaletteClass,
+  type CommandPaletteItem,
+  type CommandPaletteSource,
+} from './command-palette.js';
+export { createMinimapClass, MINIMAP_SIZE } from './minimap.js';
 export {
   buildToolbarItems,
   type ToolbarItem,
@@ -32,6 +40,8 @@ export const UI_TAGS = Object.freeze({
   zoom: 'kujam-zoom-control',
   history: 'kujam-history-control',
   selection: 'kujam-selection-toolbar',
+  commandPalette: 'kujam-command-palette',
+  minimap: 'kujam-minimap',
 } as const);
 
 /**
@@ -44,7 +54,8 @@ export const UI_TAGS = Object.freeze({
  */
 export function defineUiElements(win?: Window): void {
   const target = (win ?? (typeof window === 'undefined' ? undefined : window)) as
-    UiWindow | undefined;
+    | UiWindow
+    | undefined;
   if (!target?.customElements || !target.HTMLElement) {
     throw new Error('defineUiElements membutuhkan window dengan customElements.');
   }
@@ -53,6 +64,8 @@ export function defineUiElements(win?: Window): void {
     [UI_TAGS.zoom]: createZoomControlClass,
     [UI_TAGS.history]: createHistoryControlClass,
     [UI_TAGS.selection]: createSelectionToolbarClass,
+    [UI_TAGS.commandPalette]: createCommandPaletteClass,
+    [UI_TAGS.minimap]: createMinimapClass,
   };
   for (const [tag, create] of Object.entries(factories)) {
     if (!target.customElements.get(tag)) target.customElements.define(tag, create(target));
@@ -87,14 +100,19 @@ export interface MountedUi {
   readonly history: KujamUiElement;
   /** Contextual selection toolbar floating above the selection (BOARD-1403). */
   readonly selection: KujamUiElement;
+  /** The minimap element, at the bottom right above zoom control (BOARD-1406). */
+  readonly minimap: KujamUiElement;
+  /** The command palette overlay element (BOARD-1405). */
+  readonly commandPalette: KujamUiElement;
   /** Removes the UI elements. Safe to call more than once. */
   unmount(): void;
 }
 
 /**
  * Mounts the default UI over a board: the main toolbar at the bottom center (BOARD-1402), the
- * zoom control at the bottom right, undo/redo at the bottom left (BOARD-1404), and the
- * contextual selection toolbar above the active selection (BOARD-1403).
+ * zoom control at the bottom right, undo/redo at the bottom left (BOARD-1404), the
+ * contextual selection toolbar above the active selection (BOARD-1403), the minimap above the
+ * zoom control (BOARD-1406), and the command palette dialog overlay (BOARD-1405).
  *
  * @example
  * ```ts
@@ -126,16 +144,29 @@ export function mountDefaultUi(options: MountUiOptions): MountedUi {
   };
   const toolbar = place(UI_TAGS.toolbar, { left: '50%', transform: 'translateX(-50%)' });
   const zoom = place(UI_TAGS.zoom, { right: '20px' });
+  const minimap = place(UI_TAGS.minimap, { bottom: '80px', right: '20px' });
   const history = place(UI_TAGS.history, { left: '20px' });
   const selection = place(UI_TAGS.selection, { bottom: 'auto', zIndex: '25' });
+  const commandPalette = place(UI_TAGS.commandPalette, {
+    position: 'fixed',
+    inset: '0',
+    bottom: 'auto',
+    left: 'auto',
+    right: 'auto',
+    top: 'auto',
+    pointerEvents: 'none',
+    zIndex: '1000',
+  });
 
   return {
     toolbar,
     zoom,
     history,
     selection,
+    minimap,
+    commandPalette,
     unmount() {
-      for (const el of [toolbar, zoom, history, selection]) {
+      for (const el of [toolbar, zoom, history, selection, minimap, commandPalette]) {
         el.board = null;
         el.remove();
       }
@@ -149,6 +180,7 @@ declare global {
     'kujam-zoom-control': KujamUiElement;
     'kujam-history-control': KujamUiElement;
     'kujam-selection-toolbar': KujamUiElement;
+    'kujam-command-palette': KujamUiElement;
+    'kujam-minimap': KujamUiElement;
   }
 }
-

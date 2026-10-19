@@ -193,8 +193,10 @@ export interface RendererOptions {
     readonly debug?: boolean;
     readonly onClipboardError?: (error: unknown) => void;
     readonly onDropRejected?: (files: readonly File[], reason: string) => void;
+    readonly onPasteUrl?: (url: string, point: Point, board: Board) => boolean | Promise<boolean>;
     readonly pixelRatio?: number;
     readonly reducedMotion?: boolean;
+    readonly shortTextThreshold?: number;
     readonly theme?: ThemeMode | ThemeDefinition;
 }
 
