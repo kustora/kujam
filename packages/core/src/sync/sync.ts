@@ -7,6 +7,7 @@
 import type { Board } from '../index.js';
 import { createEmitter, reportUnhandled, type Unsubscribe } from '../events/events.js';
 import type { RecordsDiff } from '../document/store.js';
+import type { HistoryStep } from '../history/history.js';
 import { createId } from '../utils/ids.js';
 
 /**
@@ -134,6 +135,14 @@ export interface HistoryApi {
   redo(): boolean;
   /** Clears the history stacks. */
   clear(): void;
+  /**
+   * Optional batch execution to fold multiple local transactions into a single undo step.
+   */
+  batch?<T>(key: string, fn: () => T): T;
+  /** Optional inspection view of the undo stack. */
+  readonly undoStack?: readonly HistoryStep[];
+  /** Optional inspection view of the redo stack. */
+  readonly redoStack?: readonly HistoryStep[];
   /** Optional change listener notified when `canUndo` or `canRedo` changes. */
   on?(
     event: 'change',

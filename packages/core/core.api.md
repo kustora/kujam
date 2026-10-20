@@ -540,6 +540,8 @@ export const CHANGE_ORIGINS: readonly ChangeOrigin[];
 export interface ChangeEvent extends RecordsDiff {
     readonly label: string | undefined;
     readonly mergeKey?: string;
+    readonly onRedoHooks?: readonly UndoHook[];
+    readonly onUndoHooks?: readonly UndoHook[];
     // (undocumented)
     readonly origin: ChangeOrigin;
 }
@@ -1255,6 +1257,7 @@ export const HAND_TOOL_ID = "hand";
 
 // @public
 export interface HistoryApi {
+    batch?<T>(key: string, fn: () => T): T;
     readonly canRedo: boolean;
     readonly canUndo: boolean;
     clear(): void;
@@ -1263,7 +1266,9 @@ export interface HistoryApi {
         canRedo: boolean;
     }) => void): () => void;
     redo(): boolean;
+    readonly redoStack?: readonly HistoryStep[];
     undo(): boolean;
+    readonly undoStack?: readonly HistoryStep[];
 }
 
 // @public
@@ -2409,6 +2414,8 @@ export interface Transaction {
     get(id: string): Readonly<BoardRecord> | undefined;
     has(id: string): boolean;
     readonly label: string | undefined;
+    onRedo(hook: UndoHook): void;
+    onUndo(hook: UndoHook): void;
     readonly origin: ChangeOrigin;
     put(record: BoardRecord): void;
     remove(id: string): boolean;
@@ -2466,6 +2473,14 @@ export function translate(key: string, locale?: string, params?: TranslationPara
 
 // @public
 export type TranslationParams = Readonly<Record<string, string | number>>;
+
+// @public
+export interface UndoContext {
+    readonly label?: string;
+}
+
+// @public
+export type UndoHook = (context: UndoContext) => void | Promise<void>;
 
 // @beta
 export function ungroupSelection(board: Board): readonly string[];

@@ -27,7 +27,14 @@
  */
 
 import { deepEqual } from '../utils/clone.js';
-import type { ChangeEvent, RecordsDiff, RecordStore, RecordUpdate, Transaction } from '../document/store.js';
+import { reportUnhandled } from '../events/events.js';
+import type {
+  ChangeEvent,
+  RecordsDiff,
+  RecordStore,
+  RecordUpdate,
+  Transaction,
+} from '../document/store.js';
 import type { BoardRecord } from '../types.js';
 
 /**
@@ -179,6 +186,7 @@ interface Capture {
   readonly origin: 'undo' | 'redo';
   readonly target: Entry[];
   applied: boolean;
+  sourceEntry?: Entry;
 }
 
 /**
@@ -259,6 +267,16 @@ export function composeDiffs(first: ChangeEvent, next: ChangeEvent): ChangeEvent
     origin: first.origin,
     label: first.label ?? next.label,
     ...(next.mergeKey !== undefined ? { mergeKey: next.mergeKey } : {}),
+    ...(first.onUndoHooks !== undefined || next.onUndoHooks !== undefined
+      ? {
+          onUndoHooks: Object.freeze([...(first.onUndoHooks ?? []), ...(next.onUndoHooks ?? [])]),
+        }
+      : {}),
+    ...(first.onRedoHooks !== undefined || next.onRedoHooks !== undefined
+      ? {
+          onRedoHooks: Object.freeze([...(first.onRedoHooks ?? []), ...(next.onRedoHooks ?? [])]),
+        }
+      : {}),
   });
 }
 
@@ -364,7 +382,7 @@ export function createLocalHistory(store: RecordStore, options: LocalHistoryOpti
     let applied = false;
     while (!applied && from.length > 0) {
       const entry = from.pop() as Entry;
-      const token: Capture = { origin, target: to, applied: false };
+      const token: Capture = { origin, target: to, applied: false, sourceEntry: entry };
       // Records touched by another party after this step was recorded are not reversed.
       const keep = (id: string): boolean => (foreign.get(id) ?? 0) < entry.seq;
       capture = token;
@@ -378,6 +396,34 @@ export function createLocalHistory(store: RecordStore, options: LocalHistoryOpti
       }
       // When every record has been changed by another party, this step is dropped (not added to `to`).
       applied = token.applied;
+      if (applied) {
+        const hooks = origin === 'undo' ? entry.diff.onUndoHooks : entry.diff.onRedoHooks;
+        if (hooks && hooks.length > 0) {
+          const ctx = { label: entry.diff.label };
+          for (const hook of hooks) {
+            try {
+              const res = hook(ctx);
+              if (
+                res !== null &&
+                typeof res === 'object' &&
+                typeof (res as { then?: unknown }).then === 'function'
+              ) {
+                (res as Promise<void>).catch((err) => {
+                  reportUnhandled(
+                    `[kujam/history] Error in tx.on${origin === 'undo' ? 'Undo' : 'Redo'} hook`,
+                    err,
+                  );
+                });
+              }
+            } catch (err) {
+              reportUnhandled(
+                `[kujam/history] Error in tx.on${origin === 'undo' ? 'Undo' : 'Redo'} hook`,
+                err,
+              );
+            }
+          }
+        }
+      }
     }
     if (undoStack.length === 0 && redoStack.length === 0) foreign.clear();
     flush();
@@ -437,7 +483,15 @@ export function createLocalHistory(store: RecordStore, options: LocalHistoryOpti
       // use the `undo`/`redo` origin manually are treated like non-local changes.
       if (capture && event.origin === capture.origin) {
         capture.applied = true;
-        push(capture.target, event);
+        const source = capture.sourceEntry;
+        const eventWithHooks: ChangeEvent = source
+          ? {
+              ...event,
+              ...(source.diff.onUndoHooks ? { onUndoHooks: source.diff.onUndoHooks } : {}),
+              ...(source.diff.onRedoHooks ? { onRedoHooks: source.diff.onRedoHooks } : {}),
+            }
+          : event;
+        push(capture.target, eventWithHooks);
         capture = null;
         mergeable = null;
         return;

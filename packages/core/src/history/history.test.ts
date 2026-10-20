@@ -551,4 +551,63 @@ describe('property-based (BOARD-301)', () => {
       { numRuns: 200 },
     );
   });
+
+  describe('BOARD-303: tx.onUndo and tx.onRedo hooks', () => {
+    it('calls tx.onUndo with transaction context when step is undone', () => {
+      const board = createBoard();
+      const undoCalls: { label?: string }[] = [];
+
+      board.transact(
+        (tx) => {
+          tx.put(recordFor('elem-1', 10));
+          tx.onUndo((ctx) => {
+            undoCalls.push(ctx);
+          });
+        },
+        { label: 'create-elem-1' },
+      );
+
+      expect(undoCalls).toHaveLength(0);
+      expect(board.undo()).toBe(true);
+      expect(undoCalls).toEqual([{ label: 'create-elem-1' }]);
+    });
+
+    it('calls tx.onRedo when step is redone', () => {
+      const board = createBoard();
+      const redoCalls: { label?: string }[] = [];
+
+      board.transact(
+        (tx) => {
+          tx.put(recordFor('elem-2', 20));
+          tx.onRedo((ctx) => {
+            redoCalls.push(ctx);
+          });
+        },
+        { label: 'create-elem-2' },
+      );
+
+      board.undo();
+      expect(redoCalls).toHaveLength(0);
+      expect(board.redo()).toBe(true);
+      expect(redoCalls).toEqual([{ label: 'create-elem-2' }]);
+    });
+
+    it('handles async hooks gracefully without blocking undo', async () => {
+      const board = createBoard();
+      let asyncRan = false;
+
+      board.transact((tx) => {
+        tx.put(recordFor('elem-3', 30));
+        tx.onUndo(async () => {
+          await Promise.resolve();
+          asyncRan = true;
+        });
+      });
+
+      expect(board.undo()).toBe(true);
+      expect(board.getDocument().records['elem-3']).toBeUndefined();
+      await Promise.resolve();
+      expect(asyncRan).toBe(true);
+    });
+  });
 });

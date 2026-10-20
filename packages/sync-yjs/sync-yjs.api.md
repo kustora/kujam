@@ -5,16 +5,23 @@
 ```ts
 
 import { Awareness } from 'y-protocols/awareness.js';
+import { Board } from '@kujam/core';
 import { BoardRecord } from '@kujam/core';
+import { HistoryApi } from '@kujam/core';
+import { HistoryStep } from '@kujam/core';
 import { PresenceApi } from '@kujam/core';
 import { PresenceLiveStroke } from '@kujam/core';
 import { PresenceUser } from '@kujam/core';
 import { SyncAdapter } from '@kujam/core';
 import { SyncEventMap } from '@kujam/core';
 import { SyncStatus } from '@kujam/core';
+import { UndoHook } from '@kujam/core';
 import * as Y from 'yjs';
 
 export { Awareness }
+
+// @public
+export function createYjsHistory(options: YjsHistoryOptions): YjsHistory;
 
 // @public
 export function createYjsPresence(options?: YjsPresenceOptions): YjsPresence;
@@ -41,6 +48,30 @@ export function syncRichTextToYText(delta: unknown[], yText: Y.Text): void;
 export { SyncStatus }
 
 // @public
+export interface YjsHistory extends HistoryApi {
+    batch<T>(key: string, fn: () => T): T;
+    destroy(): void;
+    // @internal
+    finalizeTransaction(): void;
+    // @internal
+    prepareTransaction(meta: LocalTransactionMeta): void;
+    readonly redoStack?: readonly HistoryStep[];
+    stopCapturing(): void;
+    readonly undoManager: Y.UndoManager;
+    readonly undoStack?: readonly HistoryStep[];
+}
+
+// @public
+export interface YjsHistoryOptions {
+    captureTimeout?: number;
+    clientOrigin: unknown;
+    doc: Y.Doc;
+    getBoard?: () => Board | null;
+    limit?: number;
+    scope?: Y.AbstractType<unknown> | Y.AbstractType<unknown>[];
+}
+
+// @public
 export interface YjsPresence extends PresenceApi {
     readonly awareness: Awareness;
     destroy(): void;
@@ -64,6 +95,7 @@ export interface YjsPresenceOptions {
 export interface YjsSyncAdapter extends SyncAdapter {
     readonly awareness: Awareness;
     readonly doc: Y.Doc;
+    readonly history?: YjsHistory;
     readonly presence: YjsPresence;
 }
 
@@ -73,6 +105,7 @@ export interface YjsSyncOptions {
     clientOrigin?: unknown;
     cursorThrottleMs?: number;
     doc?: Y.Doc;
+    history?: boolean | Omit<YjsHistoryOptions, 'doc' | 'clientOrigin'>;
     strokeThrottleMs?: number;
     user?: PresenceUser;
     validateRecord?: (record: unknown) => record is BoardRecord;

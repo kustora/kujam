@@ -303,6 +303,8 @@ export {
   type RecordsDiff,
   type TransactOptions,
   type Transaction,
+  type UndoContext,
+  type UndoHook,
 } from './document/store.js';
 export {
   type DeleteOptions,
@@ -2279,13 +2281,16 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
         }
       },
       batch<T>(key: string, fn: () => T): T {
+        if (historyDelegate && typeof historyDelegate.batch === 'function') {
+          return historyDelegate.batch(key, fn);
+        }
         return history.api.batch(key, fn);
       },
       get undoStack() {
-        return history.api.undoStack;
+        return historyDelegate?.undoStack ?? history.api.undoStack;
       },
       get redoStack() {
-        return history.api.redoStack;
+        return historyDelegate?.redoStack ?? history.api.redoStack;
       },
     },
     run(id: string, args?: unknown): boolean {

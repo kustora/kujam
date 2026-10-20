@@ -10,6 +10,7 @@ import type {
   Board,
   BoardInputEvent,
   BoardRecord,
+  ChangeOrigin,
   PresenceUser,
   SyncAdapter,
   SyncStatus,
@@ -22,10 +23,19 @@ import {
   type YjsPresence,
   type YjsPresenceOptions,
 } from './presence.js';
+import { createYjsHistory, type YjsHistory, type YjsHistoryOptions } from './history.js';
 
 export { recordToYMap, yMapToRecord, isValidBoardRecord, syncRichTextToYText };
-export { createYjsPresence, Awareness, type LiveStroke };
-export type { SyncAdapter, SyncStatus, SyncEventMap, YjsPresence, YjsPresenceOptions };
+export { createYjsPresence, createYjsHistory, Awareness, type LiveStroke };
+export type {
+  SyncAdapter,
+  SyncStatus,
+  SyncEventMap,
+  YjsPresence,
+  YjsPresenceOptions,
+  YjsHistory,
+  YjsHistoryOptions,
+};
 
 type SyncListener<T> = (data: T) => void;
 
@@ -107,6 +117,12 @@ export interface YjsSyncOptions {
    * Optional custom validator for incoming records. Return false to reject and drop malformed records.
    */
   validateRecord?: (record: unknown) => record is BoardRecord;
+
+  /**
+   * History options for per-user UndoManager tracking (BOARD-1507).
+   * Set to `false` to disable Yjs history delegation.
+   */
+  history?: boolean | Omit<YjsHistoryOptions, 'doc' | 'clientOrigin'>;
 }
 
 /**
@@ -125,6 +141,9 @@ export interface YjsSyncAdapter extends SyncAdapter {
 
   /** Presence awareness API for collaborator cursors, selection, and camera. */
   readonly presence: YjsPresence;
+
+  /** History API backed by Yjs UndoManager for per-user undo/redo (BOARD-1507). */
+  readonly history?: YjsHistory;
 }
 
 /**
@@ -171,6 +190,19 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
   let unlistenCamera: (() => void) | null = null;
   let unlistenTool: (() => void) | null = null;
   let origDispatch: ((event: BoardInputEvent) => boolean) | null = null;
+  let isApplyingUndoRedo = false;
+
+  let history: YjsHistory | undefined;
+  if (options.history !== false) {
+    const historyOpts = typeof options.history === 'object' ? options.history : {};
+    history = createYjsHistory({
+      doc,
+      clientOrigin,
+      captureTimeout: historyOpts.captureTimeout,
+      limit: historyOpts.limit,
+      getBoard: () => currentBoard,
+    });
+  }
 
   function syncActiveStroke(): void {
     if (!currentBoard) return;
@@ -245,6 +277,10 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
       return presence;
     },
 
+    get history(): YjsHistory | undefined {
+      return history;
+    },
+
     connect(board: Board): void {
       if (currentBoard === board && currentStatus === 'synced') {
         return;
@@ -270,7 +306,7 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
             }
             recordToYMap(record, yMap);
           }
-        }, clientOrigin);
+        }, Symbol.for('kujam.sync.yjs.init'));
       } else {
         board.transact(
           (tx) => {
@@ -359,17 +395,38 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
           return;
         }
 
-        currentBoard.transact(
-          (tx) => {
-            for (const record of validUpdates) {
-              tx.put(record);
-            }
-            for (const id of validDeletes) {
-              tx.remove(id);
-            }
-          },
-          { origin: 'remote', label: 'sync.remote' },
-        );
+        const isFromUndoManager =
+          history !== undefined &&
+          (transaction.origin === history.undoManager ||
+            history.undoManager.undoing ||
+            history.undoManager.redoing);
+
+        let targetOrigin: ChangeOrigin = 'remote';
+        let targetLabel: string | undefined = 'sync.remote';
+
+        if (isFromUndoManager && history) {
+          targetOrigin = history.undoManager.undoing ? 'undo' : 'redo';
+          targetLabel = undefined;
+        } else {
+          history?.stopCapturing();
+        }
+
+        isApplyingUndoRedo = Boolean(isFromUndoManager);
+        try {
+          currentBoard.transact(
+            (tx) => {
+              for (const record of validUpdates) {
+                tx.put(record);
+              }
+              for (const id of validDeletes) {
+                tx.remove(id);
+              }
+            },
+            { origin: targetOrigin, label: targetLabel },
+          );
+        } finally {
+          isApplyingUndoRedo = false;
+        }
       };
 
       recordsMap.observeDeep(deepObserver);
@@ -377,9 +434,11 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
         recordsMap.unobserveDeep(deepObserver);
       };
 
+      let lastSelection = board.selection;
+
       // Local -> Remote: listen for local board changes
       unlistenBoard = board.on('change', (event) => {
-        if (event.origin === 'remote') {
+        if (event.origin === 'remote' || isApplyingUndoRedo) {
           return; // Skip echo
         }
         const hasAdded = event.added && Object.keys(event.added).length > 0;
@@ -390,34 +449,52 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
           return;
         }
 
-        doc.transact(() => {
-          if (event.added) {
-            for (const record of Object.values(event.added)) {
-              let yMap = recordsMap.get(record.id);
-              if (!(yMap instanceof Y.Map)) {
-                yMap = new Y.Map<unknown>();
-                recordsMap.set(record.id, yMap);
+        if (history) {
+          history.prepareTransaction({
+            label: event.label,
+            mergeKey: event.mergeKey,
+            selectionBefore: lastSelection,
+            selectionAfter: board.selection,
+            undoHooks: event.onUndoHooks,
+            redoHooks: event.onRedoHooks,
+          });
+        }
+
+        try {
+          doc.transact(() => {
+            if (event.added) {
+              for (const record of Object.values(event.added)) {
+                let yMap = recordsMap.get(record.id);
+                if (!(yMap instanceof Y.Map)) {
+                  yMap = new Y.Map<unknown>();
+                  recordsMap.set(record.id, yMap);
+                }
+                recordToYMap(record, yMap);
               }
-              recordToYMap(record, yMap);
             }
-          }
-          if (event.updated) {
-            for (const update of Object.values(event.updated)) {
-              const record = update.after;
-              let yMap = recordsMap.get(record.id);
-              if (!(yMap instanceof Y.Map)) {
-                yMap = new Y.Map<unknown>();
-                recordsMap.set(record.id, yMap);
+            if (event.updated) {
+              for (const update of Object.values(event.updated)) {
+                const record = update.after;
+                let yMap = recordsMap.get(record.id);
+                if (!(yMap instanceof Y.Map)) {
+                  yMap = new Y.Map<unknown>();
+                  recordsMap.set(record.id, yMap);
+                }
+                recordToYMap(record, yMap);
               }
-              recordToYMap(record, yMap);
             }
-          }
-          if (event.removed) {
-            for (const id of Object.keys(event.removed)) {
-              recordsMap.delete(id);
+            if (event.removed) {
+              for (const id of Object.keys(event.removed)) {
+                recordsMap.delete(id);
+              }
             }
+          }, clientOrigin);
+        } finally {
+          if (history) {
+            history.finalizeTransaction();
           }
-        }, clientOrigin);
+          lastSelection = board.selection;
+        }
       });
 
       unlistenDispose = board.on('dispose', () => {
@@ -438,6 +515,7 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
       unlistenSelection = board.on('selection', (e) => {
         const selection =
           (e as unknown as { ids?: readonly string[] }).ids ?? (e as unknown as readonly string[]);
+        lastSelection = selection;
         presence.setLocalState({ selection });
       });
 
@@ -478,6 +556,13 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
         ) {
           syncActiveStroke();
         }
+        if (
+          event.type === 'pointer-up' ||
+          event.type === 'pointer-cancel' ||
+          (event.type === 'key-down' && event.key === 'Escape')
+        ) {
+          history?.stopCapturing();
+        }
         return result;
       };
 
@@ -486,6 +571,10 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
 
     disconnect(): void {
       if (currentStatus === 'offline') return;
+
+      if (history) {
+        history.destroy();
+      }
 
       if (origDispatch && currentBoard) {
         currentBoard.dispatch = origDispatch;

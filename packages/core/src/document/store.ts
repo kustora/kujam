@@ -80,7 +80,32 @@ export interface ChangeEvent extends RecordsDiff {
    * transaction was given one.
    */
   readonly mergeKey?: string;
+  /**
+   * Callbacks registered via `tx.onUndo` to run when this transaction is undone (BOARD-303).
+   */
+  readonly onUndoHooks?: readonly UndoHook[];
+  /**
+   * Callbacks registered via `tx.onRedo` to run when this transaction is redone (BOARD-303).
+   */
+  readonly onRedoHooks?: readonly UndoHook[];
 }
+
+/**
+ * Context passed to {@link UndoHook} callbacks (BOARD-303).
+ *
+ * @public
+ */
+export interface UndoContext {
+  /** Label of the transaction being reversed. */
+  readonly label?: string;
+}
+
+/**
+ * Hook invoked when a transaction step is reversed by undo or redone by redo (BOARD-303).
+ *
+ * @public
+ */
+export type UndoHook = (context: UndoContext) => void | Promise<void>;
 
 /**
  * Options for `board.transact`.
@@ -130,6 +155,18 @@ export interface Transaction {
   put(record: BoardRecord): void;
   /** Removes a record. Returns `false` when the record does not exist. */
   remove(id: string): boolean;
+  /**
+   * Registers a callback invoked after this transaction's changes are reversed by undo (BOARD-303).
+   *
+   * @param hook - Callback receiving the transaction context.
+   */
+  onUndo(hook: UndoHook): void;
+  /**
+   * Registers a callback invoked after this transaction's changes are reapplied by redo (BOARD-303).
+   *
+   * @param hook - Callback receiving the transaction context.
+   */
+  onRedo(hook: UndoHook): void;
 }
 
 /**
@@ -179,6 +216,8 @@ interface ActiveTransaction {
   readonly mergeKey: string | undefined;
   pending: Pending;
   closed: boolean;
+  readonly undoHooks: UndoHook[];
+  readonly redoHooks: UndoHook[];
   readonly tx: Transaction;
 }
 
@@ -277,12 +316,16 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
       check();
       return state.pending.has(id) ? state.pending.get(id) : records.get(id);
     }
+    const undoHooks: UndoHook[] = [];
+    const redoHooks: UndoHook[] = [];
     const state: ActiveTransaction = {
       origin,
       label,
       mergeKey,
       pending: new Map(),
       closed: false,
+      undoHooks,
+      redoHooks,
       tx: {
         origin,
         label,
@@ -299,6 +342,16 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
           state.pending.set(id, undefined);
           return true;
         },
+        onUndo(hook) {
+          check();
+          if (typeof hook !== 'function') throw new TypeError('onUndo hook wajib berupa fungsi.');
+          undoHooks.push(hook);
+        },
+        onRedo(hook) {
+          check();
+          if (typeof hook !== 'function') throw new TypeError('onRedo hook wajib berupa fungsi.');
+          redoHooks.push(hook);
+        },
       },
     };
     return state;
@@ -311,6 +364,8 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
     updated: Record<string, RecordUpdate>,
     removed: Record<string, BoardRecord>,
     mergeKey?: string,
+    onUndoHooks?: readonly UndoHook[],
+    onRedoHooks?: readonly UndoHook[],
   ): ChangeEvent {
     return sealShallow({
       added: sealShallow(added),
@@ -319,6 +374,8 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
       origin,
       label,
       ...(mergeKey !== undefined ? { mergeKey } : {}),
+      ...(onUndoHooks !== undefined && onUndoHooks.length > 0 ? { onUndoHooks } : {}),
+      ...(onRedoHooks !== undefined && onRedoHooks.length > 0 ? { onRedoHooks } : {}),
     });
   }
 
@@ -357,7 +414,16 @@ export function createRecordStore(initial: BoardDocument, options: StoreOptions)
       }
     }
     snapshot = null;
-    return buildEvent(state.origin, state.label, added, updated, removed, state.mergeKey);
+    return buildEvent(
+      state.origin,
+      state.label,
+      added,
+      updated,
+      removed,
+      state.mergeKey,
+      state.undoHooks.length > 0 ? sealShallow([...state.undoHooks]) : undefined,
+      state.redoHooks.length > 0 ? sealShallow([...state.redoHooks]) : undefined,
+    );
   }
 
   function runNested<T>(state: ActiveTransaction, fn: (tx: Transaction) => T): T {
