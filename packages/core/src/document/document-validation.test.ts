@@ -11,6 +11,7 @@ import {
   number,
   object,
   string,
+  validateBoardRecord,
   validateDocument,
   type BoardDocument,
   type BoardErrorEvent,
@@ -291,5 +292,51 @@ describe('BOARD-210: invalid incoming records are rejected one by one', () => {
     board.loadDocument(doc);
     expect(Object.keys(board.getDocument().records).sort()).toEqual(['__proto__', 'page:main']);
     expect(board.getElement('__proto__')).toMatchObject({ kind: 'element' });
+  });
+});
+
+describe('BOARD-2004: validateBoardRecord(record, registry)', () => {
+  it('accepts a valid record and matches validateDocument per record', () => {
+    expect(validateBoardRecord(el('a'), registry)).toEqual([]);
+    const bad = el('b', { props: { text: 123 } as never, opacity: 2 });
+    expect(validateBoardRecord(bad, registry)).toEqual(
+      validateDocument(docOf(bad), registry).invalidRecords['b'],
+    );
+  });
+
+  it.each([
+    ['not an object', 'x'],
+    ['an array', []],
+    ['an empty id', { ...el('a'), id: '' }],
+    ['a missing meta', { ...el('a'), meta: undefined }],
+    ['an unknown kind', { id: 'a', kind: 'evil' }],
+    ['NaN coordinates', el('a', { x: Number.NaN })],
+  ])('rejects %s', (_label, record) => {
+    expect(validateBoardRecord(record, registry).length).toBeGreaterThan(0);
+  });
+
+  it('checks props against the registered schema only with a registry', () => {
+    const bad = el('a', { props: { text: 'x'.repeat(50) } });
+    expect(validateBoardRecord(bad)).toEqual([]);
+    expect(validateBoardRecord(bad, registry)[0]).toContain('props tidak lolos skema tipe "note"');
+  });
+
+  it('skips props of unregistered types and of other type versions', () => {
+    expect(validateBoardRecord(el('a', { type: 'custom', props: { any: 1 } }), registry)).toEqual(
+      [],
+    );
+    const migrating = el('a', { typeVersion: 2, props: { text: 1 } as never });
+    expect(validateBoardRecord(migrating, registry)).toEqual([]);
+    // Without `get`, the type version cannot be compared, so props are checked.
+    const propsOnly = { validateElementProps: registry.validateElementProps };
+    expect(validateBoardRecord(migrating, propsOnly).length).toBe(1);
+  });
+
+  it('enforces the stroke point limit', () => {
+    const stroke = el('s', { type: 'stroke', props: { points: points(11) } });
+    expect(validateBoardRecord(stroke, registry, { limits: { maxDrawPoints: 10 } })[0]).toContain(
+      'melebihi batas maksimum (10)',
+    );
+    expect(validateBoardRecord(stroke, registry, { limits: { maxDrawPoints: 11 } })).toEqual([]);
   });
 });

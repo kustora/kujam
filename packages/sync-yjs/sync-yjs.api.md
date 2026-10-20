@@ -7,6 +7,7 @@
 import { Awareness } from 'y-protocols/awareness.js';
 import { Board } from '@kujam/core';
 import { BoardDocument } from '@kujam/core';
+import { BoardLimits } from '@kujam/core';
 import { BoardRecord } from '@kujam/core';
 import { HistoryApi } from '@kujam/core';
 import { HistoryStep } from '@kujam/core';
@@ -14,6 +15,7 @@ import { IndexeddbPersistence } from 'y-indexeddb';
 import { PresenceApi } from '@kujam/core';
 import { PresenceLiveStroke } from '@kujam/core';
 import { PresenceUser } from '@kujam/core';
+import { RecordPropsValidator } from '@kujam/core';
 import { SyncAdapter } from '@kujam/core';
 import { SyncErrorDetail } from '@kujam/core';
 import { SyncEventMap } from '@kujam/core';
@@ -57,6 +59,12 @@ export interface DocumentToYDocOptions {
 }
 
 export { IndexeddbPersistence }
+
+// @public
+export class InvalidUpdateError extends Error {
+    // (undocumented)
+    readonly name = "InvalidUpdateError";
+}
 
 // @public
 export function isAuthError(error: unknown): boolean;
@@ -127,10 +135,20 @@ export function syncRichTextToYText(delta: unknown[], yText: Y.Text): void;
 export { SyncStatus }
 
 // @public
-export function updateToDocument(update: Uint8Array, options?: YDocToDocumentOptions): BoardDocument;
+export function updateToDocument(update: Uint8Array, options?: UpdateToDocumentOptions): BoardDocument;
 
 // @public
-export function updateToYDoc(update: Uint8Array, options?: DocumentToYDocOptions): Y.Doc;
+export interface UpdateToDocumentOptions extends YDocToDocumentOptions {
+    maxUpdateBytes?: number;
+}
+
+// @public
+export function updateToYDoc(update: Uint8Array, options?: UpdateToYDocOptions): Y.Doc;
+
+// @public
+export interface UpdateToYDocOptions extends DocumentToYDocOptions {
+    maxUpdateBytes?: number;
+}
 
 // @public
 export interface WhenLoadedPromise extends Promise<void> {
@@ -144,6 +162,8 @@ export function yDocToDocument(ydoc: Y.Doc, options?: YDocToDocumentOptions): Bo
 // @public
 export interface YDocToDocumentOptions {
     defaultSchemaVersion?: number;
+    limits?: Partial<BoardLimits>;
+    registry?: RecordPropsValidator;
     validateRecord?: (record: unknown) => record is BoardRecord;
 }
 

@@ -328,6 +328,49 @@ export function validateDocument(
 }
 
 /**
+ * Element type registry, or the part {@link validateBoardRecord} needs. With `get`, props of an
+ * element whose `typeVersion` differs from the registered version are not checked, as on load:
+ * older props are only valid after element migrations (BOARD-702), newer ones stay untouched
+ * (BOARD-703).
+ *
+ * @beta
+ */
+export type RecordPropsValidator = DocumentPropsValidator & Partial<Pick<ElementRegistry, 'get'>>;
+
+/**
+ * Validates a single record from an untrusted source, for example a record a peer wrote to a shared
+ * Yjs document (BOARD-2004). Applies the same record-level rules as {@link validateDocument}:
+ * structure, element props against the registered type schema (unregistered types are skipped,
+ * BOARD-209), and the stroke point limit. Document-level limits (byte size, element count) are the
+ * caller's job.
+ *
+ * @param record - Untrusted record.
+ * @param registry - Element type registry used to validate props; omit to check structure only.
+ * @param options - Limits to enforce; defaults to {@link DEFAULT_BOARD_LIMITS}.
+ * @returns Problem messages; empty when the record is valid.
+ * @beta
+ */
+export function validateBoardRecord(
+  record: unknown,
+  registry?: RecordPropsValidator,
+  options?: ValidateDocumentOptions,
+): string[] {
+  const limits = resolveLimits(options?.limits);
+  const id = isPlainObject(record) && typeof record.id === 'string' ? record.id : '';
+  const errors: string[] = [];
+  if (isPlainObject(record) && id === '') {
+    errors.push('Record wajib memiliki id berupa string tidak kosong.');
+  }
+  validateRecord(id, record, errors);
+  if (errors.length > 0 || (record as { kind: unknown }).kind !== 'element') return errors;
+  const element = record as Record<string, unknown>;
+  const def = registry?.get?.(element.type as string);
+  const checkProps = def === undefined || (element.typeVersion ?? 1) === def.version;
+  checkElementContent(id, element, checkProps ? registry : undefined, limits, errors);
+  return errors;
+}
+
+/**
  * Error thrown when a document fails {@link validateDocument}.
  *
  * @public

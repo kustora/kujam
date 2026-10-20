@@ -6,16 +6,18 @@
 
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness.js';
-import type {
-  Board,
-  BoardInputEvent,
-  BoardRecord,
-  ChangeOrigin,
-  PresenceUser,
-  SyncAdapter,
-  SyncErrorDetail,
-  SyncStatus,
-  SyncEventMap,
+import {
+  validateBoardRecord,
+  type Board,
+  type BoardInputEvent,
+  type BoardRecord,
+  type ChangeOrigin,
+  type PresenceUser,
+  type SyncAdapter,
+  type SyncErrorDetail,
+  type SyncStatus,
+  type SyncEventMap,
+  type Transaction,
 } from '@kujam/core';
 import { recordToYMap, yMapToRecord, isValidBoardRecord, syncRichTextToYText } from './binding.js';
 import {
@@ -51,7 +53,10 @@ import {
   updateToYDoc,
   yDocToDocument,
   yDocToUpdate,
+  InvalidUpdateError,
   type DocumentToYDocOptions,
+  type UpdateToDocumentOptions,
+  type UpdateToYDocOptions,
   type YDocToDocumentOptions,
 } from './document.js';
 
@@ -78,12 +83,15 @@ export {
   updateToYDoc,
   yDocToDocument,
   yDocToUpdate,
+  InvalidUpdateError,
   type LiveStroke,
   type WhenLoadedPromise,
   type YjsIndexedDbOptions,
   type ReconnectOptions,
   type ReconnectControllerOptions,
   type DocumentToYDocOptions,
+  type UpdateToDocumentOptions,
+  type UpdateToYDocOptions,
   type YDocToDocumentOptions,
 };
 export type {
@@ -175,6 +183,8 @@ export interface YjsSyncOptions {
 
   /**
    * Optional custom validator for incoming records. Return false to reject and drop malformed records.
+   * Runs after the built-in checks: record structure, element props against the board's element
+   * registry, and the board's stroke point and element limits (BOARD-2004).
    */
   validateRecord?: (record: unknown) => record is BoardRecord;
 
@@ -406,25 +416,99 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
     syncEmitter.emit('status', next);
   }
 
-  function isRecordValid(record: unknown): record is BoardRecord {
+  /**
+   * Problems of a record received from a peer: the same record-level rules as `loadDocument`
+   * (structure, props against the board's element registry, stroke points), then `validateRecord`.
+   */
+  function recordProblems(record: unknown): string[] {
     if (!isValidBoardRecord(record)) {
-      return false;
+      return ['Record has an invalid structure.'];
     }
-    if (customValidate && !customValidate(record)) {
-      return false;
+    const problems = validateBoardRecord(record, currentBoard?.elements, {
+      limits: currentBoard?.limits,
+    });
+    if (problems.length === 0 && customValidate && !customValidate(record)) {
+      problems.push('Record was rejected by validateRecord.');
     }
-    return true;
+    return problems;
   }
 
-  function reportInvalidRecord(id: string, raw: unknown): void {
+  function reportInvalidRecord(id: string, raw: unknown, errors?: readonly string[]): void {
     const error = new Error(`Malformed record dropped during sync: "${id}"`);
     if (currentBoard && typeof currentBoard.reportError === 'function') {
       currentBoard.reportError('invalid-record', `Record "${id}" is malformed and was dropped.`, {
         id,
         raw,
+        ...(errors ? { errors } : {}),
       });
     }
     syncEmitter.emit('error', error);
+  }
+
+  /**
+   * Reads and validates a remote record. Returns `null` (after reporting it) when the record is
+   * invalid, so the board keeps its last valid value for that ID.
+   */
+  function readRemoteRecord(id: string, yRecord: unknown): BoardRecord | null {
+    if (!(yRecord instanceof Y.Map)) {
+      reportInvalidRecord(id, yRecord);
+      return null;
+    }
+    const record = yMapToRecord(yRecord);
+    const problems = record ? recordProblems(record) : ['Record could not be read.'];
+    if (!record || problems.length > 0 || record.id !== id) {
+      reportInvalidRecord(
+        id,
+        yRecord,
+        record && record.id !== id ? ['Record id differs from its key.'] : problems,
+      );
+      return null;
+    }
+    return record;
+  }
+
+  /**
+   * Drops new remote elements beyond the board's `maxElements` (BOARD-2004). Updates to elements the
+   * board already has are always kept. `baseCount` is the number of elements that remain.
+   */
+  function capNewElements(
+    records: BoardRecord[],
+    isNew: (id: string) => boolean,
+    baseCount: number,
+  ): BoardRecord[] {
+    const board = currentBoard;
+    if (!board) return records;
+    const max = board.limits.maxElements;
+    let count = baseCount;
+    let dropped = 0;
+    const kept = records.filter((record) => {
+      if (record.kind !== 'element' || !isNew(record.id)) return true;
+      if (count < max) {
+        count++;
+        return true;
+      }
+      dropped++;
+      return false;
+    });
+    if (dropped > 0) {
+      board.reportError(
+        'limit-exceeded',
+        `${dropped} remote elements were dropped: the board reached its element limit (${max}).`,
+        { limit: max, current: count, dropped },
+      );
+    }
+    return kept;
+  }
+
+  /** Puts a remote record, dropping (and reporting) only that record when the store rejects it. */
+  function putRemote(tx: Transaction, record: BoardRecord): void {
+    try {
+      tx.put(record);
+    } catch (error) {
+      reportInvalidRecord(record.id, record, [
+        error instanceof Error ? error.message : String(error),
+      ]);
+    }
   }
 
   function initSyncState(board: Board): void {
@@ -457,18 +541,16 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
       board.transact(
         (tx) => {
           const remoteIds = new Set<string>();
+          const remoteRecords: BoardRecord[] = [];
           for (const [id, yRecordMap] of recordsMap.entries()) {
-            if (yRecordMap instanceof Y.Map) {
-              const record = yMapToRecord(yRecordMap);
-              if (record && isRecordValid(record)) {
-                remoteIds.add(id);
-                tx.put(record);
-              } else {
-                reportInvalidRecord(id, yRecordMap);
-              }
-            } else {
-              reportInvalidRecord(id, yRecordMap);
-            }
+            // An invalid record is still a remote ID: the local copy is kept, not removed.
+            remoteIds.add(id);
+            const record = readRemoteRecord(id, yRecordMap);
+            if (record) remoteRecords.push(record);
+          }
+          // Local elements missing from the remote state are removed below, so all are new.
+          for (const record of capNewElements(remoteRecords, () => true, 0)) {
+            putRemote(tx, record);
           }
           if (remoteIds.size > 0) {
             const localRecords = board.getDocument().records;
@@ -484,8 +566,7 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
     }
   }
 
-  const reconnectOpts =
-    typeof options.reconnect === 'object' ? options.reconnect : undefined;
+  const reconnectOpts = typeof options.reconnect === 'object' ? options.reconnect : undefined;
   const autoReconnect = options.reconnect !== false;
 
   const reconnectController = new ReconnectController({
@@ -610,22 +691,27 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
             validDeletes.push(id);
             continue;
           }
-          const yRecord = recordsMap.get(id);
-          if (!(yRecord instanceof Y.Map)) {
-            reportInvalidRecord(id, yRecord);
-            continue;
-          }
-          const record = yMapToRecord(yRecord);
-          if (!record || !isRecordValid(record)) {
-            reportInvalidRecord(id, yRecord);
-            continue;
-          }
-          validUpdates.push(record);
+          const record = readRemoteRecord(id, recordsMap.get(id));
+          if (record) validUpdates.push(record);
         }
 
         for (const id of deletedIds) {
           validDeletes.push(id);
         }
+
+        const localRecords = currentBoard.getDocument().records;
+        const deleting = new Set(validDeletes);
+        let remainingElements = 0;
+        for (const record of Object.values(localRecords)) {
+          if (record.kind === 'element' && !deleting.has(record.id)) remainingElements++;
+        }
+        const acceptedUpdates = capNewElements(
+          validUpdates,
+          (id) => !Object.hasOwn(localRecords, id),
+          remainingElements,
+        );
+        validUpdates.length = 0;
+        validUpdates.push(...acceptedUpdates);
 
         if (validUpdates.length === 0 && validDeletes.length === 0) {
           return;
@@ -652,7 +738,7 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
           currentBoard.transact(
             (tx) => {
               for (const record of validUpdates) {
-                tx.put(record);
+                putRemote(tx, record);
               }
               for (const id of validDeletes) {
                 tx.remove(id);

@@ -10,8 +10,13 @@
 import * as Y from 'yjs';
 import {
   CURRENT_SCHEMA_VERSION,
+  DEFAULT_BOARD_LIMITS,
+  InvalidDocumentError,
+  validateBoardRecord,
   type BoardDocument,
+  type BoardLimits,
   type BoardRecord,
+  type RecordPropsValidator,
 } from '@kujam/core';
 import { isValidBoardRecord, recordToYMap, yMapToRecord } from './binding.js';
 
@@ -45,10 +50,94 @@ export interface YDocToDocumentOptions {
   validateRecord?: (record: unknown) => record is BoardRecord;
 
   /**
+   * Element type registry (for example `board.elements` or `createElementRegistry(...)`). When
+   * `registry` or `limits` is given, records are also checked with `validateBoardRecord` from
+   * `@kujam/core` (the rules `loadDocument` applies: full structure, props against their schema,
+   * stroke points) and dropped when they fail (BOARD-2004). Leave both out to keep such records,
+   * for example to report them with `validateDocument` afterwards.
+   */
+  registry?: RecordPropsValidator;
+
+  /**
+   * Size limits; giving them turns on the record checks described at `registry`. Omitted values
+   * fall back to `DEFAULT_BOARD_LIMITS`.
+   */
+  limits?: Partial<BoardLimits>;
+
+  /**
    * Fallback schema version if not present in the Y.Doc metadata.
    * Defaults to {@link CURRENT_SCHEMA_VERSION}.
    */
   defaultSchemaVersion?: number;
+}
+
+/**
+ * Options for {@link updateToYDoc}.
+ *
+ * @public
+ */
+export interface UpdateToYDocOptions extends DocumentToYDocOptions {
+  /**
+   * Largest accepted update in bytes, checked before decoding (BOARD-2004). Defaults to
+   * `DEFAULT_BOARD_LIMITS.maxDocumentBytes` (10 MB).
+   */
+  maxUpdateBytes?: number;
+}
+
+/**
+ * Options for {@link updateToDocument}.
+ *
+ * @public
+ */
+export interface UpdateToDocumentOptions extends YDocToDocumentOptions {
+  /**
+   * Largest accepted update in bytes, checked before decoding (BOARD-2004). Defaults to
+   * `limits.maxDocumentBytes`, then `DEFAULT_BOARD_LIMITS.maxDocumentBytes` (10 MB).
+   */
+  maxUpdateBytes?: number;
+}
+
+/**
+ * Error thrown when a binary Yjs update is too large or cannot be decoded (BOARD-2004). The error
+ * from Yjs, if any, is kept as `cause`.
+ *
+ * @public
+ */
+export class InvalidUpdateError extends Error {
+  override readonly name = 'InvalidUpdateError';
+}
+
+function assertUpdateSize(update: unknown, maxUpdateBytes: number | undefined): void {
+  if (!(update instanceof Uint8Array)) {
+    throw new TypeError('update wajib berupa Uint8Array.');
+  }
+  const max = maxUpdateBytes ?? DEFAULT_BOARD_LIMITS.maxDocumentBytes;
+  if (!Number.isInteger(max) || max < 1) {
+    throw new RangeError('maxUpdateBytes wajib berupa bilangan bulat positif.');
+  }
+  if (update.byteLength > max) {
+    throw new InvalidUpdateError(
+      `Ukuran update Yjs (${update.byteLength} byte) melebihi batas maksimum (${max} byte).`,
+    );
+  }
+}
+
+function assertDocumentLimits(
+  document: BoardDocument,
+  limits: Partial<BoardLimits> | undefined,
+): void {
+  const maxElements = limits?.maxElements ?? DEFAULT_BOARD_LIMITS.maxElements;
+  const maxBytes = limits?.maxDocumentBytes ?? DEFAULT_BOARD_LIMITS.maxDocumentBytes;
+  const errors: string[] = [];
+  const elements = Object.values(document.records).filter((r) => r.kind === 'element').length;
+  if (elements > maxElements) {
+    errors.push(`Jumlah elemen (${elements}) melebihi batas maksimum (${maxElements}).`);
+  }
+  const bytes = new TextEncoder().encode(JSON.stringify(document)).byteLength;
+  if (bytes > maxBytes) {
+    errors.push(`Ukuran dokumen (${bytes} byte) melebihi batas maksimum (${maxBytes} byte).`);
+  }
+  if (errors.length > 0) throw new InvalidDocumentError(errors);
 }
 
 /**
@@ -65,10 +154,7 @@ export interface YDocToDocumentOptions {
  * @returns Populated Y.Doc instance.
  * @public
  */
-export function documentToYDoc(
-  doc: BoardDocument,
-  options: DocumentToYDocOptions = {},
-): Y.Doc {
+export function documentToYDoc(doc: BoardDocument, options: DocumentToYDocOptions = {}): Y.Doc {
   const ydoc = options.doc ?? new Y.Doc();
   const origin = options.origin ?? Symbol.for('kujam.sync.yjs.docToYDoc');
 
@@ -113,7 +199,8 @@ export function documentToYDoc(
  * Converts a Yjs `Y.Doc` into a canonical {@link BoardDocument} (BOARD-1513).
  *
  * Reads records from the `'records'` map and document metadata from the `'meta'` map.
- * Drops malformed or corrupt records using {@link isValidBoardRecord}.
+ * Drops malformed or corrupt records using {@link isValidBoardRecord}. With `options.registry` or
+ * `options.limits`, also drops records that fail `validateBoardRecord` from `@kujam/core`.
  *
  * Operates purely in memory without DOM dependencies, suitable for Node.js server pipelines.
  *
@@ -122,11 +209,9 @@ export function documentToYDoc(
  * @returns Valid canonical BoardDocument.
  * @public
  */
-export function yDocToDocument(
-  ydoc: Y.Doc,
-  options: YDocToDocumentOptions = {},
-): BoardDocument {
+export function yDocToDocument(ydoc: Y.Doc, options: YDocToDocumentOptions = {}): BoardDocument {
   const customValidate = options.validateRecord;
+  const checkRecords = options.registry !== undefined || options.limits !== undefined;
   const defaultVersion = options.defaultSchemaVersion ?? CURRENT_SCHEMA_VERSION;
 
   // 1. Read document metadata
@@ -172,6 +257,12 @@ export function yDocToDocument(
       if (!record || !isValidBoardRecord(record)) {
         continue;
       }
+      if (
+        checkRecords &&
+        validateBoardRecord(record, options.registry, { limits: options.limits }).length > 0
+      ) {
+        continue;
+      }
       if (customValidate && !customValidate(record)) {
         continue;
       }
@@ -203,17 +294,25 @@ export function yDocToUpdate(ydoc: Y.Doc): Uint8Array {
 /**
  * Applies a binary Yjs state update to a `Y.Doc` (BOARD-1513).
  *
+ * Untrusted bytes are safe to pass: updates larger than `maxUpdateBytes` are rejected before they
+ * are decoded, and corrupt updates reject with {@link InvalidUpdateError} instead of the raw Yjs
+ * error (BOARD-2004). A corrupt update may still have been partly applied to `options.doc`.
+ *
+ * @throws {@link InvalidUpdateError} when the update is too large or corrupt.
  * @param update - Binary Uint8Array containing Yjs update bytes.
  * @param options - Target Y.Doc options.
  * @returns Populated Y.Doc instance.
  * @public
  */
-export function updateToYDoc(
-  update: Uint8Array,
-  options: DocumentToYDocOptions = {},
-): Y.Doc {
+export function updateToYDoc(update: Uint8Array, options: UpdateToYDocOptions = {}): Y.Doc {
+  assertUpdateSize(update, options.maxUpdateBytes);
   const ydoc = options.doc ?? new Y.Doc();
-  Y.applyUpdate(ydoc, update, options.origin);
+  try {
+    Y.applyUpdate(ydoc, update, options.origin);
+  } catch (error) {
+    if (!options.doc) ydoc.destroy();
+    throw new InvalidUpdateError('Update Yjs rusak dan tidak bisa diterapkan.', { cause: error });
+  }
   return ydoc;
 }
 
@@ -243,7 +342,11 @@ export function documentToUpdate(
  * Decodes binary Yjs state update bytes directly into a canonical {@link BoardDocument} (BOARD-1513).
  *
  * Creates a transient Y.Doc, applies the update, extracts the document, and releases resources.
+ * Invalid records are dropped as in {@link yDocToDocument}; a result with more elements than
+ * `limits.maxElements` or larger than `limits.maxDocumentBytes` is rejected (BOARD-2004).
  *
+ * @throws {@link InvalidUpdateError} when the update is too large or corrupt, or
+ *   `InvalidDocumentError` when the decoded document exceeds the limits.
  * @param update - Binary Uint8Array update bytes.
  * @param options - Extraction options.
  * @returns Restored canonical BoardDocument.
@@ -251,11 +354,14 @@ export function documentToUpdate(
  */
 export function updateToDocument(
   update: Uint8Array,
-  options: YDocToDocumentOptions = {},
+  options: UpdateToDocumentOptions = {},
 ): BoardDocument {
-  const ydoc = updateToYDoc(update);
+  const maxUpdateBytes = options.maxUpdateBytes ?? options.limits?.maxDocumentBytes;
+  const ydoc = updateToYDoc(update, maxUpdateBytes === undefined ? {} : { maxUpdateBytes });
   try {
-    return yDocToDocument(ydoc, options);
+    const document = yDocToDocument(ydoc, options);
+    assertDocumentLimits(document, options.limits);
+    return document;
   } finally {
     ydoc.destroy();
   }

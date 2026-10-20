@@ -1820,6 +1820,9 @@ export class ReadOnlyBoardError extends Error {
 // @internal
 export function reconcileContainersInTransaction(tx: Transaction, pending: ReadonlyMap<string, BoardRecord | undefined>, records: ReadonlyMap<string, BoardRecord>, getElementAABB?: (el: ElementRecord) => BoxBounds): void;
 
+// @beta
+export type RecordPropsValidator = DocumentPropsValidator & Partial<Pick<ElementRegistry, 'get'>>;
+
 // @public
 export interface RecordsDiff {
     // (undocumented)
@@ -2518,6 +2521,9 @@ export interface UrlOptions {
 
 // @public
 export function validate<T>(s: Schema<T>, value: unknown): SchemaResult<T>;
+
+// @beta
+export function validateBoardRecord(record: unknown, registry?: RecordPropsValidator, options?: ValidateDocumentOptions): string[];
 
 // @public
 export function validateDocument(doc: unknown, registry?: DocumentPropsValidator, options?: ValidateDocumentOptions): ValidationResult;

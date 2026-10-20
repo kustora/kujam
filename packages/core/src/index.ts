@@ -166,8 +166,10 @@ export { deepClone } from './utils/clone.js';
 export { deprecate, isDevelopmentMode, resetDeprecationWarnings } from './utils/deprecate.js';
 export {
   InvalidDocumentError,
+  validateBoardRecord,
   validateDocument,
   type DocumentPropsValidator,
+  type RecordPropsValidator,
   type ValidateDocumentOptions,
   type ValidationResult,
 } from './document/validate.js';
