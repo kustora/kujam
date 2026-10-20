@@ -58,6 +58,14 @@ export default defineConfig({
           testTimeout: 20_000,
         },
       },
+      {
+        test: {
+          name: 'examples',
+          include: ['examples/*/src/**/*.test.ts'],
+          environment: 'node',
+          testTimeout: 20_000,
+        },
+      },
     ],
   },
 });

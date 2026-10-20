@@ -1,0 +1,32 @@
+{
+  "name": "@kujam/example-hocuspocus-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Contoh server kolaborasi Hocuspocus dengan otorisasi, mode baca-saja, persistensi SQLite, dan validasi dokumen",
+  "type": "module",
+  "scripts": {
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@hocuspocus/server": "^4.7.1",
+    "@kujam/core": "workspace:*",
+    "@kujam/sync-yjs": "workspace:*",
+    "better-sqlite3": "^12.6.2",
+    "yjs": "^13.6.24"
+  },
+  "devDependencies": {
+    "@hocuspocus/provider": "^4.7.1",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.13.5",
+    "@types/ws": "^8.5.14",
+    "tsup": "^8.4.0",
+    "tsx": "^4.19.3",
+    "vitest": "^3.0.7",
+    "ws": "^8.18.1"
+  }
+}

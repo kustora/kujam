@@ -27,5 +27,11 @@ test-results/
 !.vscode/extensions.json
 *.log
 
+# Database & runtime data
+data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
 # Claude Code (local settings, subagent worktrees)
 .claude/

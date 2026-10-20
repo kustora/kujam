@@ -1,0 +1,15 @@
+services:
+  kujam-hocuspocus:
+    build:
+      context: ../..
+      dockerfile: examples/hocuspocus-server/Dockerfile
+    container_name: kujam-hocuspocus-server
+    ports:
+      - '1234:1234'
+    environment:
+      - PORT=1234
+      - DATABASE_PATH=/app/data/kujam.sqlite
+      - DEBOUNCE_MS=2000
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
