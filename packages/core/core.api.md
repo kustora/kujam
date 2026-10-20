@@ -1716,8 +1716,18 @@ export interface PresenceApi {
 }
 
 // @public
+export interface PresenceLiveStroke {
+    readonly brush?: string;
+    readonly color: string;
+    readonly id?: string;
+    readonly points: readonly (readonly number[])[];
+    readonly thickness: number;
+}
+
+// @public
 export interface PresencePeerState {
     [key: string]: unknown;
+    activeStroke?: PresenceLiveStroke | null;
     camera?: {
         x: number;
         y: number;

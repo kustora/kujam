@@ -116,7 +116,13 @@ describe('BOARD-1002: Elemen coretan bebas dengan perfect-freehand', () => {
       };
 
       const { g, calls, ops } = fakeContext();
-      drawElement.render.canvas(g, el, undefined, { zoom: 1, compact: false }, board.elementContext);
+      drawElement.render.canvas(
+        g,
+        el,
+        undefined,
+        { zoom: 1, compact: false },
+        board.elementContext,
+      );
 
       expect(ops.fillStyle).toBe(COLOR_VALUES.blue);
       expect(ops.globalCompositeOperation).toBe('source-over');
@@ -153,7 +159,13 @@ describe('BOARD-1002: Elemen coretan bebas dengan perfect-freehand', () => {
       };
 
       const { g, ops } = fakeContext();
-      drawElement.render.canvas(g, el, undefined, { zoom: 1, compact: false }, board.elementContext);
+      drawElement.render.canvas(
+        g,
+        el,
+        undefined,
+        { zoom: 1, compact: false },
+        board.elementContext,
+      );
 
       expect(ops.fillStyle).toBe(COLOR_VALUES.yellow);
       expect(ops.globalCompositeOperation).toBe('multiply');
@@ -237,9 +249,15 @@ describe('BOARD-1002: Elemen coretan bebas dengan perfect-freehand', () => {
       expect(board.query()).toHaveLength(0);
 
       // Streamed active stroke exists on toolData
-      const toolData1 = board.toolData as { activeStroke: { points: number[][] } };
+      const toolData1 = board.toolData as {
+        activeStroke: { id?: string; points: number[][] };
+        elementId?: string | null;
+      };
       expect(toolData1.activeStroke).toBeDefined();
       expect(toolData1.activeStroke.points).toEqual([[10, 10, 0.5]]);
+      expect(toolData1.elementId).toBeDefined();
+      expect(toolData1.activeStroke.id).toBe(toolData1.elementId);
+      const preallocatedId = toolData1.elementId;
 
       // Pointer move
       board.dispatch({
@@ -287,6 +305,7 @@ describe('BOARD-1002: Elemen coretan bebas dengan perfect-freehand', () => {
       const elements = board.query();
       expect(elements).toHaveLength(1);
       const created = elements[0]!;
+      expect(created.id).toBe(preallocatedId);
       expect(created.type).toBe('draw');
       expect(created.x).toBe(10);
       expect(created.y).toBe(10);

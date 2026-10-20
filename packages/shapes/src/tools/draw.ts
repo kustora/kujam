@@ -20,6 +20,7 @@ import { handlePinch, handleWheel } from './navigation.js';
 
 /** In-progress stroke state rendered on the overlay layer while drawing. @public */
 export interface ActiveStroke {
+  readonly id?: string;
   readonly points: readonly (readonly number[])[];
   readonly color: string;
   readonly thickness: number;
@@ -112,7 +113,9 @@ export function createDrawTool(
           applyStyle(ctx.board, toolId, data, options);
           const pressure = e.pressure || 0.5;
           data.points = [[e.point.x, e.point.y, pressure]];
+          data.elementId = ctx.board.createId();
           data.activeStroke = {
+            id: data.elementId,
             points: data.points,
             color: COLOR_VALUES[data.color] ?? data.color,
             thickness: data.thickness,
@@ -131,6 +134,7 @@ export function createDrawTool(
           const pressure = e.pressure || 0.5;
           data.points.push([e.point.x, e.point.y, pressure]);
           data.activeStroke = {
+            id: data.elementId ?? undefined,
             points: data.points,
             color: COLOR_VALUES[data.color] ?? data.color,
             thickness: data.thickness,
@@ -155,7 +159,8 @@ export function createDrawTool(
             let lastIndex = highestIndex(board);
             const elements: ElementRecord[] = [];
 
-            for (const chunk of chunks) {
+            for (let i = 0; i < chunks.length; i++) {
+              const chunk = chunks[i]!;
               let minX = Infinity;
               let minY = Infinity;
               let maxX = -Infinity;
@@ -181,8 +186,10 @@ export function createDrawTool(
               const nextIndex = indexAbove(lastIndex);
               lastIndex = nextIndex;
 
+              const elementId = i === 0 && data.elementId ? data.elementId : board.createId();
+
               elements.push({
-                id: board.createId(),
+                id: elementId,
                 kind: 'element',
                 type: 'draw',
                 pageId: board.pages.current,
@@ -221,6 +228,7 @@ export function createDrawTool(
 
           data.points = [];
           data.activeStroke = null;
+          data.elementId = null;
           return 'idle';
         },
 
@@ -228,6 +236,7 @@ export function createDrawTool(
           const { data } = ctx;
           data.points = [];
           data.activeStroke = null;
+          data.elementId = null;
           return 'idle';
         },
       },

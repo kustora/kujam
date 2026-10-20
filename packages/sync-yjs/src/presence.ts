@@ -6,10 +6,23 @@
 
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness.js';
-import type { PresenceApi, PresencePeerState, PresenceUser, Unsubscribe } from '@kujam/core';
+import type {
+  PresenceApi,
+  PresenceLiveStroke,
+  PresencePeerState,
+  PresenceUser,
+  Unsubscribe,
+} from '@kujam/core';
 
 /**
- * Configuration options for Yjs awareness presence (BOARD-1504).
+ * Ephemeral active freehand stroke data transmitted via Yjs Awareness (BOARD-1505).
+ *
+ * @public
+ */
+export type LiveStroke = PresenceLiveStroke;
+
+/**
+ * Configuration options for Yjs awareness presence (BOARD-1504, BOARD-1505).
  *
  * @public
  */
@@ -30,12 +43,20 @@ export interface YjsPresenceOptions {
    * @defaultValue 33
    */
   cursorThrottleMs?: number;
+
+  /**
+   * Active live stroke throttling duration in milliseconds (default ~30 Hz / 33ms) (BOARD-1505).
+   *
+   * @defaultValue 33
+   */
+  strokeThrottleMs?: number;
 }
 
 /**
- * Yjs presence awareness API contract (BOARD-1504).
+ * Yjs presence awareness API contract (BOARD-1504, BOARD-1505).
  *
- * Extends {@link PresenceApi} with direct Awareness access, throttled cursor updates, and cleanup.
+ * Extends {@link PresenceApi} with direct Awareness access, throttled cursor updates,
+ * ephemeral live freehand stroke broadcasting, and cleanup.
  *
  * @public
  */
@@ -52,7 +73,26 @@ export interface YjsPresence extends PresenceApi {
   setCursor(cursor: { x: number; y: number } | null): void;
 
   /**
-   * Cleans up awareness event listeners and cancels pending cursor throttling timers.
+   * Updates the local active live stroke in awareness with throttling (default ~30 Hz / 33ms) (BOARD-1505).
+   * When null is provided (stroke finished or cancelled), awareness is updated immediately without throttling.
+   *
+   * @param stroke - Ephemeral live stroke or null to clear.
+   */
+  setLiveStroke(stroke: PresenceLiveStroke | null): void;
+
+  /**
+   * Returns active live strokes of all remote peers (BOARD-1505).
+   * Optionally accepts a predicate to suppress strokes that have already transitioned
+   * to permanent elements (deduplication).
+   *
+   * @param isElementCommitted - Function returning true if element with given ID already exists in the local board.
+   */
+  getLiveStrokes(
+    isElementCommitted?: (id: string) => boolean,
+  ): ReadonlyMap<string, PresenceLiveStroke>;
+
+  /**
+   * Cleans up awareness event listeners and cancels pending throttling timers.
    */
   destroy(): void;
 }
@@ -73,6 +113,7 @@ type PresenceListener = (peerId: string, state?: PresencePeerState) => void;
 export function createYjsPresence(options: YjsPresenceOptions = {}): YjsPresence {
   const awareness = options.awareness ?? new Awareness(new Y.Doc());
   const cursorThrottleMs = options.cursorThrottleMs ?? 33;
+  const strokeThrottleMs = options.strokeThrottleMs ?? 33;
   let destroyed = false;
 
   const peers = new Map<string, PresencePeerState>();
@@ -85,11 +126,11 @@ export function createYjsPresence(options: YjsPresenceOptions = {}): YjsPresence
   let lastCursorFlush = 0;
   let pendingCursor: { x: number; y: number } | null | undefined = undefined;
 
-  function emitPresence(
-    event: PresenceEventType,
-    peerId: string,
-    state?: PresencePeerState,
-  ): void {
+  let strokeThrottleTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastStrokeFlush = 0;
+  let pendingStroke: PresenceLiveStroke | null | undefined = undefined;
+
+  function emitPresence(event: PresenceEventType, peerId: string, state?: PresencePeerState): void {
     const set = listeners.get(event);
     if (!set || set.size === 0) return;
     for (const listener of [...set]) {
@@ -239,6 +280,46 @@ export function createYjsPresence(options: YjsPresenceOptions = {}): YjsPresence
     }
   }
 
+  function flushLiveStroke(): void {
+    if (destroyed || pendingStroke === undefined) return;
+    const strokeToSet = pendingStroke;
+    pendingStroke = undefined;
+    lastStrokeFlush = Date.now();
+    const current = (awareness.getLocalState() as Partial<PresencePeerState> | null) ?? {};
+    awareness.setLocalState({
+      ...current,
+      activeStroke: strokeToSet,
+    });
+  }
+
+  function setLiveStroke(stroke: PresenceLiveStroke | null): void {
+    if (destroyed) return;
+
+    if (stroke === null) {
+      if (strokeThrottleTimer) {
+        clearTimeout(strokeThrottleTimer);
+        strokeThrottleTimer = null;
+      }
+      pendingStroke = null;
+      flushLiveStroke();
+      return;
+    }
+
+    pendingStroke = stroke;
+    const now = Date.now();
+    const elapsed = now - lastStrokeFlush;
+
+    if (strokeThrottleMs <= 0 || (elapsed >= strokeThrottleMs && !strokeThrottleTimer)) {
+      flushLiveStroke();
+    } else if (!strokeThrottleTimer) {
+      const remaining = Math.max(0, strokeThrottleMs - elapsed);
+      strokeThrottleTimer = setTimeout(() => {
+        strokeThrottleTimer = null;
+        flushLiveStroke();
+      }, remaining);
+    }
+  }
+
   // Initialize local user if provided
   if (options.user) {
     const current = (awareness.getLocalState() as Partial<PresencePeerState> | null) ?? {};
@@ -260,16 +341,21 @@ export function createYjsPresence(options: YjsPresenceOptions = {}): YjsPresence
     setLocalState(patch: Partial<PresencePeerState>): void {
       if (destroyed) return;
       const current = (awareness.getLocalState() as Partial<PresencePeerState> | null) ?? {};
-      const { cursor, ...rest } = patch;
+      const { cursor, activeStroke, ...rest } = patch;
 
       if (cursor !== undefined) {
         setCursor(cursor);
+      }
+
+      if (activeStroke !== undefined) {
+        setLiveStroke(activeStroke);
       }
 
       if (Object.keys(rest).length > 0) {
         const next: Partial<PresencePeerState> = {
           ...current,
           ...(pendingCursor !== undefined ? { cursor: pendingCursor } : {}),
+          ...(pendingStroke !== undefined ? { activeStroke: pendingStroke } : {}),
           ...rest,
           ...(rest.user && current.user ? { user: { ...current.user, ...rest.user } } : {}),
         };
@@ -280,13 +366,34 @@ export function createYjsPresence(options: YjsPresenceOptions = {}): YjsPresence
     getLocalState(): Partial<PresencePeerState> | undefined {
       const state = awareness.getLocalState() as Partial<PresencePeerState> | null;
       if (!state) return undefined;
+      const result: Partial<PresencePeerState> = { ...state };
       if (pendingCursor !== undefined) {
-        return { ...state, cursor: pendingCursor };
+        result.cursor = pendingCursor;
       }
-      return { ...state };
+      if (pendingStroke !== undefined) {
+        result.activeStroke = pendingStroke;
+      }
+      return result;
     },
 
     setCursor,
+    setLiveStroke,
+
+    getLiveStrokes(
+      isElementCommitted?: (id: string) => boolean,
+    ): ReadonlyMap<string, PresenceLiveStroke> {
+      const liveStrokes = new Map<string, PresenceLiveStroke>();
+      for (const [peerId, peerState] of peers.entries()) {
+        const stroke = peerState.activeStroke;
+        if (!stroke || !stroke.points || stroke.points.length === 0) continue;
+        if (stroke.id && isElementCommitted && isElementCommitted(stroke.id)) {
+          // Suppress stroke that has already transitioned to a permanent document element
+          continue;
+        }
+        liveStrokes.set(peerId, stroke);
+      }
+      return liveStrokes;
+    },
 
     on(
       event: PresenceEventType,
@@ -316,7 +423,12 @@ export function createYjsPresence(options: YjsPresenceOptions = {}): YjsPresence
         clearTimeout(throttleTimer);
         throttleTimer = null;
       }
+      if (strokeThrottleTimer) {
+        clearTimeout(strokeThrottleTimer);
+        strokeThrottleTimer = null;
+      }
       pendingCursor = undefined;
+      pendingStroke = undefined;
       awareness.off('change', changeHandler);
       listeners.clear();
       peers.clear();

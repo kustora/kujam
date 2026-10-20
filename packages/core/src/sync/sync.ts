@@ -38,6 +38,27 @@ export interface PresenceUser {
 }
 
 /**
+ * Ephemeral active freehand stroke data transmitted via presence awareness (BOARD-1505).
+ *
+ * @public
+ */
+export interface PresenceLiveStroke {
+  /**
+   * Unique stroke identifier or pre-allocated element ID.
+   * Used for deduplication when transitioning to a permanent element.
+   */
+  readonly id?: string;
+  /** Sequence of stroke points: `[x, y, pressure?]`. */
+  readonly points: readonly (readonly number[])[];
+  /** Stroke color (hex or CSS color string). */
+  readonly color: string;
+  /** Stroke thickness in board coordinates. */
+  readonly thickness: number;
+  /** Brush identifier (e.g. 'pen', 'highlighter'). Defaults to 'pen'. */
+  readonly brush?: string;
+}
+
+/**
  * Real-time presence state of a remote peer.
  *
  * @public
@@ -53,6 +74,8 @@ export interface PresencePeerState {
   camera?: { x: number; y: number; zoom: number };
   /** Currently active tool ID used by this collaborator. */
   tool?: string;
+  /** Ephemeral active freehand stroke being drawn by this collaborator (BOARD-1505). */
+  activeStroke?: PresenceLiveStroke | null;
   /** Extensible peer metadata. */
   [key: string]: unknown;
 }
@@ -170,10 +193,7 @@ export interface SyncAdapter {
    * @param listener - Callback receiving the event payload.
    * @returns Unsubscribe function.
    */
-  on<K extends keyof SyncEventMap>(
-    event: K,
-    listener: (data: SyncEventMap[K]) => void,
-  ): () => void;
+  on<K extends keyof SyncEventMap>(event: K, listener: (data: SyncEventMap[K]) => void): () => void;
 }
 
 /**

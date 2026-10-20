@@ -42,6 +42,8 @@ export interface ActiveStroke {
     // (undocumented)
     readonly color: string;
     // (undocumented)
+    readonly id?: string;
+    // (undocumented)
     readonly points: readonly (readonly number[])[];
     // (undocumented)
     readonly thickness: number;

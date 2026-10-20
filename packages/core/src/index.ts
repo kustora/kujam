@@ -4,7 +4,11 @@
  * @packageDocumentation
  */
 
-import { createBrushRegistry, type BrushDefinition, type BrushRegistry } from './elements/brushes.js';
+import {
+  createBrushRegistry,
+  type BrushDefinition,
+  type BrushRegistry,
+} from './elements/brushes.js';
 import { deepClone } from './utils/clone.js';
 import { createCommandRegistry, type BoardCommands } from './tools/commands.js';
 import {
@@ -96,7 +100,12 @@ import {
   type BoxBounds,
   type SpatialIndex,
 } from './geometry/spatial.js';
-import { hitTestElements, queryElements, type HitTestOptions, type QueryFilter } from './geometry/query.js';
+import {
+  hitTestElements,
+  queryElements,
+  type HitTestOptions,
+  type QueryFilter,
+} from './geometry/query.js';
 import {
   localToBoard,
   resolveElementGeometry,
@@ -120,11 +129,7 @@ import {
   type BoardKeybindings,
   type KeyboardPlatform,
 } from './tools/keybindings.js';
-import {
-  resolveTheme,
-  type ThemeDefinition,
-  type ThemeMode,
-} from './theme/theme.js';
+import { resolveTheme, type ThemeDefinition, type ThemeMode } from './theme/theme.js';
 import {
   createI18nRuntime,
   DEFAULT_MESSAGES,
@@ -249,7 +254,13 @@ export {
   type BrushStrokeOptions,
 } from './elements/brushes.js';
 export { createId, DEFAULT_ID_LENGTH, type IdGenerator } from './utils/ids.js';
-export { compareIndex, indexAbove, indexBelow, indexBetween, indicesBetween } from './document/indexing.js';
+export {
+  compareIndex,
+  indexAbove,
+  indexBelow,
+  indexBetween,
+  indicesBetween,
+} from './document/indexing.js';
 export {
   CLIPBOARD_MIME_TYPE,
   ContentError,
@@ -403,6 +414,7 @@ export {
   type MemorySyncAdapterOptions,
   type MemorySyncBus,
   type PresenceApi,
+  type PresenceLiveStroke,
   type PresencePeerState,
   type PresenceUser,
   type SyncAdapter,

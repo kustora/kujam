@@ -7,6 +7,7 @@
 import { Awareness } from 'y-protocols/awareness.js';
 import { BoardRecord } from '@kujam/core';
 import { PresenceApi } from '@kujam/core';
+import { PresenceLiveStroke } from '@kujam/core';
 import { PresenceUser } from '@kujam/core';
 import { SyncAdapter } from '@kujam/core';
 import { SyncEventMap } from '@kujam/core';
@@ -25,6 +26,9 @@ export function createYjsSyncAdapter(options?: YjsSyncOptions): YjsSyncAdapter;
 export function isValidBoardRecord(value: unknown): value is BoardRecord;
 
 // @public
+export type LiveStroke = PresenceLiveStroke;
+
+// @public
 export function recordToYMap(record: BoardRecord, yMap: Y.Map<unknown>): void;
 
 export { SyncAdapter }
@@ -40,16 +44,19 @@ export { SyncStatus }
 export interface YjsPresence extends PresenceApi {
     readonly awareness: Awareness;
     destroy(): void;
+    getLiveStrokes(isElementCommitted?: (id: string) => boolean): ReadonlyMap<string, PresenceLiveStroke>;
     setCursor(cursor: {
         x: number;
         y: number;
     } | null): void;
+    setLiveStroke(stroke: PresenceLiveStroke | null): void;
 }
 
 // @public
 export interface YjsPresenceOptions {
     awareness?: Awareness;
     cursorThrottleMs?: number;
+    strokeThrottleMs?: number;
     user?: PresenceUser;
 }
 
@@ -66,6 +73,7 @@ export interface YjsSyncOptions {
     clientOrigin?: unknown;
     cursorThrottleMs?: number;
     doc?: Y.Doc;
+    strokeThrottleMs?: number;
     user?: PresenceUser;
     validateRecord?: (record: unknown) => record is BoardRecord;
 }

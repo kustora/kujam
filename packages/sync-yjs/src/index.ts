@@ -8,6 +8,7 @@ import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness.js';
 import type {
   Board,
+  BoardInputEvent,
   BoardRecord,
   PresenceUser,
   SyncAdapter,
@@ -17,19 +18,14 @@ import type {
 import { recordToYMap, yMapToRecord, isValidBoardRecord, syncRichTextToYText } from './binding.js';
 import {
   createYjsPresence,
+  type LiveStroke,
   type YjsPresence,
   type YjsPresenceOptions,
 } from './presence.js';
 
 export { recordToYMap, yMapToRecord, isValidBoardRecord, syncRichTextToYText };
-export { createYjsPresence, Awareness };
-export type {
-  SyncAdapter,
-  SyncStatus,
-  SyncEventMap,
-  YjsPresence,
-  YjsPresenceOptions,
-};
+export { createYjsPresence, Awareness, type LiveStroke };
+export type { SyncAdapter, SyncStatus, SyncEventMap, YjsPresence, YjsPresenceOptions };
 
 type SyncListener<T> = (data: T) => void;
 
@@ -97,6 +93,11 @@ export interface YjsSyncOptions {
   cursorThrottleMs?: number;
 
   /**
+   * Active live stroke throttling duration in milliseconds (default ~30 Hz / 33ms) (BOARD-1505).
+   */
+  strokeThrottleMs?: number;
+
+  /**
    * Origin token passed to `doc.transact` to distinguish local transactions from remote changes.
    * Defaults to a unique Symbol.
    */
@@ -146,6 +147,7 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
     awareness,
     user: options.user,
     cursorThrottleMs: options.cursorThrottleMs,
+    strokeThrottleMs: options.strokeThrottleMs,
   });
 
   const syncEmitter = new SyncEventEmitter();
@@ -168,6 +170,36 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
   let unlistenSelection: (() => void) | null = null;
   let unlistenCamera: (() => void) | null = null;
   let unlistenTool: (() => void) | null = null;
+  let origDispatch: ((event: BoardInputEvent) => boolean) | null = null;
+
+  function syncActiveStroke(): void {
+    if (!currentBoard) return;
+    const toolData = currentBoard.toolData as {
+      activeStroke?: {
+        id?: string;
+        points: readonly (readonly number[])[];
+        color: string;
+        thickness: number;
+        brush?: string;
+      } | null;
+    } | null;
+
+    if (
+      toolData?.activeStroke &&
+      toolData.activeStroke.points &&
+      toolData.activeStroke.points.length > 0
+    ) {
+      presence.setLiveStroke({
+        id: toolData.activeStroke.id,
+        points: toolData.activeStroke.points,
+        color: toolData.activeStroke.color,
+        thickness: toolData.activeStroke.thickness,
+        brush: toolData.activeStroke.brush,
+      });
+    } else {
+      presence.setLiveStroke(null);
+    }
+  }
 
   function setStatus(next: SyncStatus): void {
     if (currentStatus === next) return;
@@ -188,11 +220,10 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
   function reportInvalidRecord(id: string, raw: unknown): void {
     const error = new Error(`Malformed record dropped during sync: "${id}"`);
     if (currentBoard && typeof currentBoard.reportError === 'function') {
-      currentBoard.reportError(
-        'invalid-record',
-        `Record "${id}" is malformed and was dropped.`,
-        { id, raw },
-      );
+      currentBoard.reportError('invalid-record', `Record "${id}" is malformed and was dropped.`, {
+        id,
+        raw,
+      });
     }
     syncEmitter.emit('error', error);
   }
@@ -402,25 +433,53 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
       });
 
       unlistenSelection = board.on('selection', (e) => {
-        const selection = (e as unknown as { ids?: readonly string[] }).ids ?? (e as unknown as readonly string[]);
+        const selection =
+          (e as unknown as { ids?: readonly string[] }).ids ?? (e as unknown as readonly string[]);
         presence.setLocalState({ selection });
       });
 
       unlistenCamera = board.on('camera', (e) => {
-        const cam = (e as unknown as { camera?: { x: number; y: number; zoom: number } }).camera ?? (e as unknown as { x: number; y: number; zoom: number });
+        const cam =
+          (e as unknown as { camera?: { x: number; y: number; zoom: number } }).camera ??
+          (e as unknown as { x: number; y: number; zoom: number });
         presence.setLocalState({ camera: cam });
       });
 
       unlistenTool = board.on('tool', (e) => {
-        const tool = (e as unknown as { tool?: string; id?: string | null }).tool ?? (e as unknown as { id?: string | null }).id ?? undefined;
+        const tool =
+          (e as unknown as { tool?: string; id?: string | null }).tool ??
+          (e as unknown as { id?: string | null }).id ??
+          undefined;
         presence.setLocalState({ tool: tool ?? undefined });
+        syncActiveStroke();
       });
+
+      origDispatch = board.dispatch.bind(board);
+      board.dispatch = (event: BoardInputEvent): boolean => {
+        const result = origDispatch!(event);
+        if (
+          event.type === 'pointer-move' ||
+          event.type === 'pointer-down' ||
+          event.type === 'pointer-up' ||
+          event.type === 'pointer-cancel' ||
+          (event.type === 'key-down' && event.key === 'Escape')
+        ) {
+          syncActiveStroke();
+        }
+        return result;
+      };
 
       setStatus('synced');
     },
 
     disconnect(): void {
       if (currentStatus === 'offline') return;
+
+      if (origDispatch && currentBoard) {
+        currentBoard.dispatch = origDispatch;
+        origDispatch = null;
+      }
+      presence.setLiveStroke(null);
 
       if (unlistenBoard) {
         unlistenBoard();
