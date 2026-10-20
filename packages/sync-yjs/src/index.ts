@@ -44,6 +44,16 @@ import {
   type ReconnectControllerOptions,
   type ReconnectOptions,
 } from './reconnect.js';
+import {
+  documentToUpdate,
+  documentToYDoc,
+  updateToDocument,
+  updateToYDoc,
+  yDocToDocument,
+  yDocToUpdate,
+  type DocumentToYDocOptions,
+  type YDocToDocumentOptions,
+} from './document.js';
 
 export {
   recordToYMap,
@@ -62,11 +72,19 @@ export {
   isAuthError,
   ReconnectController,
   SyncAuthError,
+  documentToUpdate,
+  documentToYDoc,
+  updateToDocument,
+  updateToYDoc,
+  yDocToDocument,
+  yDocToUpdate,
   type LiveStroke,
   type WhenLoadedPromise,
   type YjsIndexedDbOptions,
   type ReconnectOptions,
   type ReconnectControllerOptions,
+  type DocumentToYDocOptions,
+  type YDocToDocumentOptions,
 };
 export type {
   SyncAdapter,
@@ -417,8 +435,15 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
       if (isReadOnly) {
         return;
       }
-      const docRecords = board.getDocument().records;
+      const boardDoc = board.getDocument();
+      const docRecords = boardDoc.records;
       doc.transact(() => {
+        const metaMap = doc.getMap<unknown>('meta');
+        metaMap.set('schemaVersion', boardDoc.schemaVersion);
+        metaMap.set('meta', boardDoc.meta ? JSON.parse(JSON.stringify(boardDoc.meta)) : {});
+        if (boardDoc.pluginVersions) {
+          metaMap.set('pluginVersions', JSON.parse(JSON.stringify(boardDoc.pluginVersions)));
+        }
         for (const record of Object.values(docRecords)) {
           let yMap = recordsMap.get(record.id);
           if (!(yMap instanceof Y.Map)) {

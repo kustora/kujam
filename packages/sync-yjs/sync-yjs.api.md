@@ -6,6 +6,7 @@
 
 import { Awareness } from 'y-protocols/awareness.js';
 import { Board } from '@kujam/core';
+import { BoardDocument } from '@kujam/core';
 import { BoardRecord } from '@kujam/core';
 import { HistoryApi } from '@kujam/core';
 import { HistoryStep } from '@kujam/core';
@@ -42,6 +43,18 @@ export function createYjsPresence(options?: YjsPresenceOptions): YjsPresence;
 
 // @public
 export function createYjsSyncAdapter(options?: YjsSyncOptions): YjsSyncAdapter;
+
+// @public
+export function documentToUpdate(doc: BoardDocument, options?: DocumentToYDocOptions): Uint8Array;
+
+// @public
+export function documentToYDoc(doc: BoardDocument, options?: DocumentToYDocOptions): Y.Doc;
+
+// @public
+export interface DocumentToYDocOptions {
+    doc?: Y.Doc;
+    origin?: unknown;
+}
 
 export { IndexeddbPersistence }
 
@@ -114,10 +127,28 @@ export function syncRichTextToYText(delta: unknown[], yText: Y.Text): void;
 export { SyncStatus }
 
 // @public
+export function updateToDocument(update: Uint8Array, options?: YDocToDocumentOptions): BoardDocument;
+
+// @public
+export function updateToYDoc(update: Uint8Array, options?: DocumentToYDocOptions): Y.Doc;
+
+// @public
 export interface WhenLoadedPromise extends Promise<void> {
     // (undocumented)
     (): Promise<void>;
 }
+
+// @public
+export function yDocToDocument(ydoc: Y.Doc, options?: YDocToDocumentOptions): BoardDocument;
+
+// @public
+export interface YDocToDocumentOptions {
+    defaultSchemaVersion?: number;
+    validateRecord?: (record: unknown) => record is BoardRecord;
+}
+
+// @public
+export function yDocToUpdate(ydoc: Y.Doc): Uint8Array;
 
 // @public
 export interface YjsHistory extends HistoryApi {
