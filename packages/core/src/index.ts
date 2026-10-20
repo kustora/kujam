@@ -194,6 +194,11 @@ export {
   type ElementDataEvent,
   type ElementDataState,
 } from './elements/element-data.js';
+export {
+  testElementContract,
+  type ElementContractIssue,
+  type ElementContractOptions,
+} from './elements/contract.js';
 export * from './geometry/geometry.js';
 export {
   definePlugin,

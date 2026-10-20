@@ -1019,6 +1019,25 @@ export interface ElementContext {
 }
 
 // @beta
+export interface ElementContractIssue {
+    readonly check: string;
+    // (undocumented)
+    readonly message: string;
+}
+
+// @beta
+export interface ElementContractOptions {
+    readonly createHost?: () => unknown;
+    readonly data?: unknown;
+    readonly props?: Readonly<Record<string, unknown>>;
+    readonly resolvers?: Readonly<Record<string, (id: string) => unknown>>;
+    readonly size?: {
+        readonly w: number;
+        readonly h: number;
+    };
+}
+
+// @beta
 export interface ElementDataEvent {
     // (undocumented)
     readonly ids: readonly string[];
@@ -2297,6 +2316,9 @@ export interface SyncEventMap {
 
 // @public
 export type SyncStatus = 'offline' | 'connecting' | 'synced' | 'error';
+
+// @beta
+export function testElementContract(definition: AnyElementDefinition, options?: ElementContractOptions): ElementContractIssue[];
 
 // @public
 export interface ThemeCanvasTokens {

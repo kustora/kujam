@@ -68,6 +68,9 @@ importers:
       '@kujam/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@kujam/example-contact-card':
+        specifier: workspace:*
+        version: link:../../examples/contact-card
       '@kujam/export':
         specifier: workspace:*
         version: link:../../packages/export
@@ -129,6 +132,12 @@ importers:
       vite:
         specifier: ^6.2.0
         version: 6.4.4(@types/node@22.20.5)(tsx@4.23.15)
+
+  examples/contact-card:
+    dependencies:
+      '@kujam/core':
+        specifier: workspace:*
+        version: link:../../packages/core
 
   examples/hocuspocus-server:
     dependencies:

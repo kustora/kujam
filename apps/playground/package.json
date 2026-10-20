@@ -14,6 +14,7 @@
   "dependencies": {
     "@hocuspocus/provider": "^4.7.1",
     "@kujam/core": "workspace:*",
+    "@kujam/example-contact-card": "workspace:*",
     "@kujam/export": "workspace:*",
     "@kujam/react": "workspace:*",
     "@kujam/renderer": "workspace:*",
