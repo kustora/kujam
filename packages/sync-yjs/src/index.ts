@@ -428,7 +428,10 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
       presence.setLocalState({
         ...(options.user ? { user: options.user } : {}),
         selection: board.selection,
-        camera: board.getCamera(),
+        camera: {
+          ...board.getCamera(),
+          viewport: board.camera.viewport,
+        },
         tool: board.tool ?? undefined,
       });
 
@@ -442,7 +445,16 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
         const cam =
           (e as unknown as { camera?: { x: number; y: number; zoom: number } }).camera ??
           (e as unknown as { x: number; y: number; zoom: number });
-        presence.setLocalState({ camera: cam });
+        presence.setLocalState({
+          camera: {
+            ...cam,
+            ...(board.camera.viewport &&
+            board.camera.viewport.width > 0 &&
+            board.camera.viewport.height > 0
+              ? { viewport: board.camera.viewport }
+              : {}),
+          },
+        });
       });
 
       unlistenTool = board.on('tool', (e) => {

@@ -17,6 +17,7 @@ import type {
   BindingRecord,
   Board,
   BoardCamera,
+  CameraFollowOptions,
   BrushBlendMode,
   BrushDefinition,
   BrushInput,
@@ -239,6 +240,11 @@ export type Tests = [
   Expect<Equal<ReturnType<BoardCamera['getViewportBounds']>, BoxBounds>>,
   Expect<Equal<Parameters<BoardCamera['zoomTo']>, [zoom: number, anchor?: Point]>>,
   Expect<Equal<Parameters<BoardCamera['zoomBy']>, [factor: number, anchor?: Point]>>,
+  Expect<Equal<BoardCamera['following'], string | null>>,
+  Expect<
+    Equal<Parameters<BoardCamera['follow']>, [userId: string | null, options?: CameraFollowOptions]>
+  >,
+  Expect<Equal<Parameters<BoardCamera['unfollow']>, []>>,
   // BOARD-405: selection type tests
   Expect<Equal<Board['selection'], readonly string[]>>,
   Expect<Equal<Board['selectionBounds'], Readonly<BoxBounds> | null>>,

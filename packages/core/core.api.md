@@ -227,6 +227,10 @@ export interface Board {
 export interface BoardCamera {
     readonly animating: boolean;
     boardToScreen(point: Point): Point;
+    // @public
+    follow(userId: string | null, options?: CameraFollowOptions): void;
+    // @public
+    readonly following: string | null;
     get(): Readonly<CameraState>;
     getViewportBounds(): BoxBounds;
     readonly reducedMotion: boolean;
@@ -236,6 +240,8 @@ export interface BoardCamera {
     setViewport(size: ViewportSize): void;
     setZoomRange(range: ZoomRange): void;
     stopAnimation(): void;
+    // @public
+    unfollow(): void;
     readonly viewport: Readonly<ViewportSize>;
     zoomBy(factor: number, anchor?: Point): void;
     readonly zoomRange: Readonly<ZoomRange>;
@@ -281,6 +287,7 @@ export interface BoardErrorEvent {
 
 // @public
 export interface BoardEventMap {
+    'camera-follow': CameraFollowEvent;
     // @beta
     'tool-style': ToolStyleEvent;
     // @beta
@@ -290,6 +297,7 @@ export interface BoardEventMap {
     // @beta
     dispose: undefined;
     error: BoardErrorEvent;
+    follow: CameraFollowEvent;
     history: HistoryEvent;
     // @beta
     page: PageEvent;
@@ -501,6 +509,18 @@ export interface CameraAnimation {
 export interface CameraEvent {
     readonly camera: Readonly<CameraState>;
     readonly previous: Readonly<CameraState>;
+}
+
+// @public
+export interface CameraFollowEvent {
+    readonly previous: string | null;
+    readonly userId: string | null;
+}
+
+// @public
+export interface CameraFollowOptions {
+    readonly animate?: boolean | CameraAnimation;
+    readonly syncZoom?: boolean;
 }
 
 // @public
@@ -1732,6 +1752,10 @@ export interface PresencePeerState {
         x: number;
         y: number;
         zoom: number;
+        viewport?: {
+            width: number;
+            height: number;
+        };
     };
     cursor?: {
         x: number;

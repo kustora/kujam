@@ -19,7 +19,7 @@
  * running animation. With `reducedMotion` on, animations jump straight to the target.
  */
 
-import type { CameraEvent } from '../events/events.js';
+import type { CameraEvent, CameraFollowEvent } from '../events/events.js';
 import type { Point } from '../geometry/geometry.js';
 import { normalizeBounds, type Bounds, type BoxBounds } from '../geometry/spatial.js';
 import type { CameraState } from '../types.js';
@@ -77,6 +77,24 @@ export interface CameraAnimation {
   readonly duration?: number;
   /** Easing from progress `0..1` to `0..1`. Defaults to an ease-in-out cubic curve. */
   readonly easing?: (t: number) => number;
+}
+
+/**
+ * Options for {@link BoardCamera.follow} (BOARD-1506).
+ *
+ * @public
+ */
+export interface CameraFollowOptions {
+  /**
+   * Whether to animate transitions to the peer's camera.
+   * Defaults to `true` (smooth animation). Ignored when `reducedMotion` is on.
+   */
+  readonly animate?: boolean | CameraAnimation;
+  /**
+   * Whether to also sync the follower camera's zoom level with the peer's zoom.
+   * Defaults to `true`.
+   */
+  readonly syncZoom?: boolean;
 }
 
 /**
@@ -230,22 +248,57 @@ export interface BoardCamera {
    * @throws `TypeError` when `value` is not a boolean.
    */
   setReducedMotion(value: boolean): void;
+  /**
+   * User ID of the collaborator currently being followed, or null if not following anyone (BOARD-1506).
+   *
+   * @public
+   */
+  readonly following: string | null;
+  /**
+   * Starts following a remote collaborator's camera viewport (BOARD-1506).
+   * Smoothly animates the camera to match the collaborator's viewport center.
+   * Pass null to stop following.
+   *
+   * @param userId - ID of the collaborator to follow, or null to unfollow.
+   * @param options - Configuration for animation and zoom synchronization.
+   * @public
+   */
+  follow(userId: string | null, options?: CameraFollowOptions): void;
+  /**
+   * Stops following the currently followed collaborator (BOARD-1506). Alias for `follow(null)`.
+   *
+   * @public
+   */
+  unfollow(): void;
 }
 
 /** @internal */
 export interface CameraOptions {
   zoomRange: Readonly<ZoomRange>;
   onChange(event: CameraEvent): void;
+  onFollowChange?(event: CameraFollowEvent): void;
   /** Bounds of every element on the current page, or `null` when there are none. */
   getContentBounds(): BoxBounds | null;
   /** Bounds of the selection, or `null` when nothing is selected. */
   getSelectionBounds(): BoxBounds | null;
+  getPeerCamera?(
+    userId: string,
+  ): { x: number; y: number; zoom: number; viewport?: ViewportSize } | null;
   scheduler?: FrameScheduler;
   reducedMotion?: boolean;
 }
 
 /** @internal Camera plus the board-only teardown. */
 export interface CameraRuntime extends BoardCamera {
+  /**
+   * Updates followed peer camera when new peer presence arrives (BOARD-1506).
+   *
+   * @internal
+   */
+  syncPeerCamera(
+    userId: string,
+    peerCam?: { x: number; y: number; zoom: number; viewport?: ViewportSize } | null,
+  ): void;
   /** Cancels a running animation; called by `board.dispose()`. */
   dispose(): void;
 }
@@ -352,6 +405,9 @@ export function createCamera(options: CameraOptions): CameraRuntime {
   let scheduler: FrameScheduler | undefined = options.scheduler;
   /** Running animation: its pending frame handle and a function that jumps to the target. */
   let animation: { handle: unknown; finish(): void } | null = null;
+  let followingUserId: string | null = null;
+  let followOpts: CameraFollowOptions | undefined = undefined;
+  let isInternalFollowMove = false;
 
   const clampZoom = (zoom: number): number =>
     Math.min(zoomRange.max, Math.max(zoomRange.min, zoom));
@@ -362,8 +418,19 @@ export function createCamera(options: CameraOptions): CameraRuntime {
     animation = null;
   }
 
-  /** Public `set`: a camera change from outside cancels a running animation. */
+  function stopFollowingInternal(): void {
+    if (followingUserId === null) return;
+    const previous = followingUserId;
+    followingUserId = null;
+    followOpts = undefined;
+    options.onFollowChange?.({ userId: null, previous });
+  }
+
+  /** Public `set`: a camera change from outside cancels a running animation and unfollows. */
   function set(patch: Partial<CameraState>): void {
+    if (!isInternalFollowMove && followingUserId !== null) {
+      stopFollowingInternal();
+    }
     stopAnimation();
     apply(patch);
   }
@@ -491,7 +558,71 @@ export function createCamera(options: CameraOptions): CameraRuntime {
         finish();
       }
     },
-    dispose: stopAnimation,
+    get following() {
+      return followingUserId;
+    },
+    follow(userId: string | null, opts?: CameraFollowOptions): void {
+      if (userId === null) {
+        if (followingUserId !== null) {
+          stopAnimation();
+          stopFollowingInternal();
+        }
+        return;
+      }
+
+      if (typeof userId !== 'string' || userId.trim().length === 0) {
+        throw new TypeError('Argumen userId wajib berupa string ID pengguna atau null.');
+      }
+
+      const previous = followingUserId;
+      if (previous === userId && followOpts === opts) return;
+
+      followingUserId = userId;
+      followOpts = opts;
+
+      if (previous !== userId) {
+        options.onFollowChange?.({ userId, previous });
+      }
+
+      const peerCam = options.getPeerCamera?.(userId);
+      if (peerCam) {
+        const target = computeFollowTarget(peerCam, opts);
+        if (target) {
+          const anim = opts?.animate !== undefined ? opts.animate : true;
+          moveToTarget(target, anim);
+        }
+      }
+    },
+    unfollow(): void {
+      if (followingUserId !== null) {
+        stopAnimation();
+        stopFollowingInternal();
+      }
+    },
+    syncPeerCamera(
+      userId: string,
+      peerCam?: { x: number; y: number; zoom: number; viewport?: ViewportSize } | null,
+    ): void {
+      if (followingUserId !== userId) return;
+      if (!peerCam) {
+        stopAnimation();
+        stopFollowingInternal();
+        return;
+      }
+      const target = computeFollowTarget(peerCam, followOpts);
+      if (target) {
+        const anim =
+          followOpts?.animate !== undefined
+            ? followOpts.animate
+            : { duration: 150, easing: easeInOutCubic };
+        moveToTarget(target, anim);
+      }
+    },
+    dispose() {
+      stopAnimation();
+      followingUserId = null;
+      followOpts = undefined;
+    },
   };
 
   /** Camera that shows `bounds` centered with padding, or `null` when the viewport is unknown. */
@@ -528,6 +659,9 @@ export function createCamera(options: CameraOptions): CameraRuntime {
     zoomOptions: ZoomToOptions | undefined,
     defaultMaxZoom: number,
   ): boolean {
+    if (!isInternalFollowMove && followingUserId !== null) {
+      stopFollowingInternal();
+    }
     if (zoomOptions !== undefined && (typeof zoomOptions !== 'object' || zoomOptions === null)) {
       throw new TypeError('Opsi zoom wajib berupa objek.');
     }
@@ -570,5 +704,42 @@ export function createCamera(options: CameraOptions): CameraRuntime {
       animation = { handle: frames.request(step), finish };
     };
     animation = { handle: frames.request(step), finish };
+  }
+
+  function computeFollowTarget(
+    peerCam: { x: number; y: number; zoom: number; viewport?: ViewportSize },
+    opts?: CameraFollowOptions,
+  ): CameraState | null {
+    const { width, height } = viewport;
+    const targetZoom = (opts?.syncZoom ?? true) ? clampZoom(peerCam.zoom) : state.zoom;
+    const peerVw = peerCam.viewport && peerCam.viewport.width > 0 ? peerCam.viewport.width : width;
+    const peerVh =
+      peerCam.viewport && peerCam.viewport.height > 0 ? peerCam.viewport.height : height;
+
+    const cx = peerCam.x + (peerVw > 0 ? peerVw / 2 / peerCam.zoom : 0);
+    const cy = peerCam.y + (peerVh > 0 ? peerVh / 2 / peerCam.zoom : 0);
+
+    const targetX = width > 0 ? cx - width / 2 / targetZoom : peerCam.x;
+    const targetY = height > 0 ? cy - height / 2 / targetZoom : peerCam.y;
+
+    return { x: targetX, y: targetY, zoom: targetZoom };
+  }
+
+  function moveToTarget(
+    target: CameraState,
+    animOption: boolean | CameraAnimation | undefined,
+  ): void {
+    isInternalFollowMove = true;
+    try {
+      const anim = resolveAnimation(animOption);
+      if (!anim || reducedMotion || anim.duration === 0) {
+        stopAnimation();
+        apply(target);
+      } else {
+        animateTo(target, anim);
+      }
+    } finally {
+      isInternalFollowMove = false;
+    }
   }
 }

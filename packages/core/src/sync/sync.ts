@@ -70,8 +70,8 @@ export interface PresencePeerState {
   cursor?: { x: number; y: number } | null;
   /** IDs of elements currently selected by this collaborator. */
   selection?: readonly string[];
-  /** Current camera position and zoom level of this collaborator. */
-  camera?: { x: number; y: number; zoom: number };
+  /** Current camera position, zoom level, and optional viewport size of this collaborator. */
+  camera?: { x: number; y: number; zoom: number; viewport?: { width: number; height: number } };
   /** Currently active tool ID used by this collaborator. */
   tool?: string;
   /** Ephemeral active freehand stroke being drawn by this collaborator (BOARD-1505). */

@@ -173,4 +173,74 @@ describe('BOARD-401: zoom anchored at a point', () => {
     expect(board.getDocument()).toBe(doc);
     expect(board.history.canUndo).toBe(false);
   });
+
+  describe('BOARD-1506: camera.follow(userId)', () => {
+    it('initializes with following = null and throws on invalid userId', () => {
+      const { camera } = setup();
+      expect(camera.following).toBeNull();
+      // @ts-expect-error test runtime validation
+      expect(() => camera.follow(123)).toThrow(TypeError);
+      expect(() => camera.follow('')).toThrow(TypeError);
+    });
+
+    it('emits camera-follow and follow events when follow/unfollow are called', () => {
+      const { board, camera } = setup();
+      const followEvents: { userId: string | null; previous: string | null }[] = [];
+      const cameraFollowEvents: { userId: string | null; previous: string | null }[] = [];
+
+      board.on('follow', (e) => followEvents.push(e));
+      board.on('camera-follow', (e) => cameraFollowEvents.push(e));
+
+      camera.follow('alice');
+      expect(camera.following).toBe('alice');
+      expect(followEvents).toEqual([{ userId: 'alice', previous: null }]);
+      expect(cameraFollowEvents).toEqual([{ userId: 'alice', previous: null }]);
+
+      // Following same user again is a no-op
+      camera.follow('alice');
+      expect(followEvents).toHaveLength(1);
+
+      // Switching followed user
+      camera.follow('bob');
+      expect(camera.following).toBe('bob');
+      expect(followEvents).toHaveLength(2);
+      expect(followEvents[1]).toEqual({ userId: 'bob', previous: 'alice' });
+
+      // Explicit unfollow
+      camera.unfollow();
+      expect(camera.following).toBeNull();
+      expect(followEvents).toHaveLength(3);
+      expect(followEvents[2]).toEqual({ userId: null, previous: 'bob' });
+
+      // Unfollowing when already null is a no-op
+      camera.follow(null);
+      expect(followEvents).toHaveLength(3);
+    });
+
+    it('automatically unfollows when local user manually moves or zooms the camera', () => {
+      const { board, camera } = setup();
+      const followEvents: { userId: string | null; previous: string | null }[] = [];
+      board.on('camera-follow', (e) => followEvents.push(e));
+
+      // 1. Pan via camera.set
+      camera.follow('alice');
+      expect(camera.following).toBe('alice');
+      camera.set({ x: 50, y: 50 });
+      expect(camera.following).toBeNull();
+      expect(followEvents).toHaveLength(2);
+      expect(followEvents[1]).toEqual({ userId: null, previous: 'alice' });
+
+      // 2. Zoom via zoomTo
+      camera.follow('bob');
+      expect(camera.following).toBe('bob');
+      camera.zoomTo(2);
+      expect(camera.following).toBeNull();
+
+      // 3. Zoom via zoomBy
+      camera.follow('charlie');
+      expect(camera.following).toBe('charlie');
+      camera.zoomBy(1.5);
+      expect(camera.following).toBeNull();
+    });
+  });
 });

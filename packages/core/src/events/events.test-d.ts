@@ -7,6 +7,7 @@ import type {
   BoardErrorEvent,
   BoardEventMap,
   CameraEvent,
+  CameraFollowEvent,
   ChangeEvent,
   HistoryEvent,
   PageEvent,
@@ -30,6 +31,8 @@ export type Tests = [
       | 'change'
       | 'selection'
       | 'camera'
+      | 'camera-follow'
+      | 'follow'
       | 'tool'
       | 'tool-style'
       | 'page'
@@ -43,6 +46,8 @@ export type Tests = [
   Expect<Equal<BoardEventMap['change'], ChangeEvent>>,
   Expect<Equal<BoardEventMap['selection'], SelectionEvent>>,
   Expect<Equal<BoardEventMap['camera'], CameraEvent>>,
+  Expect<Equal<BoardEventMap['camera-follow'], CameraFollowEvent>>,
+  Expect<Equal<BoardEventMap['follow'], CameraFollowEvent>>,
   Expect<Equal<BoardEventMap['tool'], ToolEvent>>,
   Expect<Equal<BoardEventMap['tool-style'], ToolStyleEvent>>,
   Expect<Equal<BoardEventMap['page'], PageEvent>>,

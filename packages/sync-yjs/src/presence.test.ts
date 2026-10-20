@@ -1,20 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
-import {
-  Awareness,
-  applyAwarenessUpdate,
-  encodeAwarenessUpdate,
-} from 'y-protocols/awareness.js';
-import {
-  attachSync,
-  createBoard,
-  type PresencePeerState,
-  type PresenceUser,
-} from '@kujam/core';
-import {
-  createYjsPresence,
-  createYjsSyncAdapter,
-} from './index.js';
+import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from 'y-protocols/awareness.js';
+import { attachSync, createBoard, type PresencePeerState, type PresenceUser } from '@kujam/core';
+import { createYjsPresence, createYjsSyncAdapter } from './index.js';
 
 function linkAwareness(aw1: Awareness, aw2: Awareness): () => void {
   const onUpdate1 = ({
@@ -388,7 +376,11 @@ describe('BOARD-1504: Presence awareness via Yjs Awareness', () => {
     const user1: PresenceUser = { id: 'user-1', name: 'Alice', color: '#ff0000' };
     const user2: PresenceUser = { id: 'user-2', name: 'Bob', color: '#00ff00' };
 
-    const presence1 = createYjsPresence({ awareness: awareness1, user: user1, cursorThrottleMs: 0 });
+    const presence1 = createYjsPresence({
+      awareness: awareness1,
+      user: user1,
+      cursorThrottleMs: 0,
+    });
     const presence2 = createYjsPresence({ awareness: awareness2, user: user2 });
 
     presence1.setCursor({ x: 50, y: 75 });
@@ -399,5 +391,105 @@ describe('BOARD-1504: Presence awareness via Yjs Awareness', () => {
 
     presence1.destroy();
     presence2.destroy();
+  });
+
+  describe('BOARD-1506: camera.follow(userId) integration', () => {
+    it('follows collaborator camera viewport and centers correctly across different screen sizes', () => {
+      const board1 = createBoard();
+      const board2 = createBoard();
+
+      // Alice (board1) has a 1920x1080 display
+      board1.camera.setViewport({ width: 1920, height: 1080 });
+      // Bob (board2) has an 800x600 display
+      board2.camera.setViewport({ width: 800, height: 600 });
+
+      const adapter1 = createYjsSyncAdapter({
+        doc: doc1,
+        awareness: awareness1,
+        user: { id: 'alice', name: 'Alice', color: '#ff0000' },
+      });
+      const adapter2 = createYjsSyncAdapter({
+        doc: doc2,
+        awareness: awareness2,
+        user: { id: 'bob', name: 'Bob', color: '#00ff00' },
+      });
+
+      const att1 = attachSync(board1, adapter1);
+      const att2 = attachSync(board2, adapter2);
+
+      // Alice positions camera at (500, 300) with zoom 1.5
+      board1.setCamera({ x: 500, y: 300, zoom: 1.5 });
+
+      // Alice's center in board coordinates:
+      // cx = 500 + 1920 / 2 / 1.5 = 500 + 640 = 1140
+      // cy = 300 + 1080 / 2 / 1.5 = 300 + 360 = 660
+
+      const followEvents: { userId: string | null; previous: string | null }[] = [];
+      board2.on('camera-follow', (e) => followEvents.push(e));
+
+      // Bob follows Alice with instant transition (reducedMotion or animate: false)
+      board2.camera.follow('alice', { animate: false });
+
+      expect(board2.camera.following).toBe('alice');
+      expect(followEvents).toEqual([{ userId: 'alice', previous: null }]);
+
+      // Bob's camera should be centered on Alice's (cx: 1140, cy: 660) at zoom 1.5:
+      // bob.x = 1140 - 800 / 2 / 1.5 = 1140 - 266.6667 = 873.3333
+      // bob.y = 660 - 600 / 2 / 1.5 = 660 - 200 = 460
+      const bobCam = board2.getCamera();
+      expect(bobCam.zoom).toBe(1.5);
+      expect(bobCam.x).toBeCloseTo(873.3333, 3);
+      expect(bobCam.y).toBeCloseTo(460, 3);
+
+      // Verify that the center point of both viewports matches exactly!
+      const aliceCenter = {
+        x: board1.camera.get().x + board1.camera.viewport.width / 2 / board1.camera.get().zoom,
+        y: board1.camera.get().y + board1.camera.viewport.height / 2 / board1.camera.get().zoom,
+      };
+      const bobCenter = {
+        x: board2.camera.get().x + board2.camera.viewport.width / 2 / board2.camera.get().zoom,
+        y: board2.camera.get().y + board2.camera.viewport.height / 2 / board2.camera.get().zoom,
+      };
+      expect(bobCenter.x).toBeCloseTo(aliceCenter.x, 3);
+      expect(bobCenter.y).toBeCloseTo(aliceCenter.y, 3);
+
+      // 2. Dynamic tracking: Alice pans to a new location
+      board1.setCamera({ x: 2000, y: 1500, zoom: 2 });
+      // Bob automatically tracks Alice with instant follow
+      const updatedBobCam = board2.getCamera();
+      expect(updatedBobCam.zoom).toBe(2);
+
+      const aliceCenter2 = {
+        x: 2000 + 1920 / 2 / 2,
+        y: 1500 + 1080 / 2 / 2,
+      };
+      const bobCenter2 = {
+        x: updatedBobCam.x + 800 / 2 / 2,
+        y: updatedBobCam.y + 600 / 2 / 2,
+      };
+      expect(bobCenter2.x).toBeCloseTo(aliceCenter2.x, 3);
+      expect(bobCenter2.y).toBeCloseTo(aliceCenter2.y, 3);
+
+      // 3. Auto-unfollow when local user pans
+      board2.setCamera({ x: 100 });
+      expect(board2.camera.following).toBeNull();
+      expect(followEvents).toHaveLength(2);
+      expect(followEvents[1]).toEqual({ userId: null, previous: 'alice' });
+
+      // Re-follow Alice
+      board2.camera.follow('alice', { animate: false });
+      expect(board2.camera.following).toBe('alice');
+
+      // 4. Auto-unfollow when followed peer leaves
+      awareness1.setLocalState(null);
+      expect(board2.camera.following).toBeNull();
+      expect(followEvents).toHaveLength(4);
+      expect(followEvents[3]).toEqual({ userId: null, previous: 'alice' });
+
+      att1.disconnect();
+      att2.disconnect();
+      board1.dispose();
+      board2.dispose();
+    });
   });
 });

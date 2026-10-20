@@ -130,6 +130,18 @@ export interface BoardErrorEvent {
 }
 
 /**
+ * Payload of the `camera-follow` and `follow` events (BOARD-1506).
+ *
+ * @public
+ */
+export interface CameraFollowEvent {
+  /** User ID being followed, or null when follow mode is deactivated. */
+  readonly userId: string | null;
+  /** Previous user ID that was followed, or null. */
+  readonly previous: string | null;
+}
+
+/**
  * Map from event name to event payload for `board.on`.
  *
  * A throwing listener does not stop other listeners; its error is emitted as an
@@ -151,6 +163,18 @@ export interface BoardEventMap {
   selection: SelectionEvent;
   /** The camera changed via `setCamera`. */
   camera: CameraEvent;
+  /**
+   * Follow status changed via `camera.follow()` or automatic unfollow (BOARD-1506).
+   *
+   * @public
+   */
+  'camera-follow': CameraFollowEvent;
+  /**
+   * Alias for `camera-follow` (BOARD-1506).
+   *
+   * @public
+   */
+  follow: CameraFollowEvent;
   /**
    * The active tool changed via `setTool`, Esc, a `oneShot` tool, or Space (BOARD-501).
    *

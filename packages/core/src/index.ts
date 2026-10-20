@@ -279,6 +279,7 @@ export type {
   BoardErrorEvent,
   BoardEventMap,
   CameraEvent,
+  CameraFollowEvent,
   Listener,
   PageEvent,
   SelectionEvent,
@@ -388,6 +389,7 @@ export {
   ZOOM_STEPS,
   type BoardCamera,
   type CameraAnimation,
+  type CameraFollowOptions,
   type FrameScheduler,
   type ViewportSize,
   type ZoomRange,
@@ -1708,12 +1710,34 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   let historyDelegate: HistoryApi | null = null;
   let historyDelegateUnsubscribe: (() => void) | null = null;
   let presenceDelegate: PresenceApi | null = null;
+  let presenceUnsubscribeChange: (() => void) | null = null;
+  let presenceUnsubscribeLeave: (() => void) | null = null;
 
   function setPresenceDelegate(delegate: PresenceApi | null): () => void {
+    if (presenceUnsubscribeChange) {
+      presenceUnsubscribeChange();
+      presenceUnsubscribeChange = null;
+    }
+    if (presenceUnsubscribeLeave) {
+      presenceUnsubscribeLeave();
+      presenceUnsubscribeLeave = null;
+    }
     presenceDelegate = delegate;
+    if (delegate && typeof delegate.on === 'function') {
+      presenceUnsubscribeChange = delegate.on('change', (peerId, state) => {
+        if (camera.following === peerId) {
+          camera.syncPeerCamera(peerId, state?.camera);
+        }
+      });
+      presenceUnsubscribeLeave = delegate.on('peer-leave', (peerId) => {
+        if (camera.following === peerId) {
+          camera.follow(null);
+        }
+      });
+    }
     return () => {
       if (presenceDelegate === delegate) {
-        presenceDelegate = null;
+        setPresenceDelegate(null);
       }
     };
   }
@@ -1753,6 +1777,14 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   const camera = createCamera({
     zoomRange,
     onChange: (event) => events.emit('camera', event),
+    onFollowChange: (event) => {
+      events.emit('camera-follow', event);
+      events.emit('follow', event);
+    },
+    getPeerCamera: (userId) => {
+      const peerState = presenceDelegate?.peers.get(userId);
+      return peerState?.camera ?? null;
+    },
     getContentBounds: () => unionBounds(board.query().map((el) => spatial.getBounds(el.id))),
     getSelectionBounds: () => selection.bounds,
     scheduler: frameScheduler,
@@ -2362,6 +2394,14 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
           historyDelegateUnsubscribe = null;
         }
         historyDelegate = null;
+        if (presenceUnsubscribeChange) {
+          presenceUnsubscribeChange();
+          presenceUnsubscribeChange = null;
+        }
+        if (presenceUnsubscribeLeave) {
+          presenceUnsubscribeLeave();
+          presenceUnsubscribeLeave = null;
+        }
         presenceDelegate = null;
         history.dispose();
         store.dispose();
