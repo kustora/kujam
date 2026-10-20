@@ -53,6 +53,9 @@ function pointerKind(raw: string): PointerKind {
   return 'mouse';
 }
 
+/** Longest pause between presses that still counts as a double (or triple) click. */
+const MULTI_CLICK_MS = 500;
+
 function dragThreshold(type: PointerKind): number {
   if (type === 'touch') return DRAG_THRESHOLD_TOUCH;
   if (type === 'pen') return DRAG_THRESHOLD_PEN;
@@ -134,6 +137,22 @@ export function attachInput(
   let twoFinger: TwoFingerState | null = null;
   let lastSafariScale = 1;
   let currentHoverId: string | null = null;
+  // Chromium and Firefox report `detail` 0 on pointer events, so presses are counted here.
+  let lastPress: { time: number; screen: Point; kind: PointerKind; count: number } | null = null;
+  let clickCount = 1;
+
+  /** Counts a press as the next click of a series when it is quick and close to the last one. */
+  function countPress(e: PointerEvent, screen: Point, kind: PointerKind): void {
+    const time = e.timeStamp;
+    const near =
+      lastPress !== null &&
+      lastPress.kind === kind &&
+      time - lastPress.time <= MULTI_CLICK_MS &&
+      Math.hypot(screen.x - lastPress.screen.x, screen.y - lastPress.screen.y) <=
+        dragThreshold(kind);
+    clickCount = e.detail > 0 ? e.detail : near ? lastPress!.count + 1 : 1;
+    lastPress = { time, screen, kind, count: clickCount };
+  }
 
   function toScreen(clientX?: number, clientY?: number): Point {
     const rect = typeof root.getBoundingClientRect === 'function' ? root.getBoundingClientRect() : null;
@@ -169,7 +188,7 @@ export function attachInput(
       button,
       buttons: e.buttons,
       modifiers: extractModifiers(e),
-      clickCount: e.detail || 1,
+      clickCount: e.detail || clickCount,
     };
   }
 
@@ -208,6 +227,7 @@ export function attachInput(
     if (activePointers.size === 0) {
       // First pointer: becomes primary
       primaryPointerId = e.pointerId;
+      countPress(e, screen, kind);
 
       // Special touch rule with select tool: one-finger drag on empty space pans camera (ADR-004)
       const isTouchEmpty =

@@ -579,3 +579,58 @@ describe('BOARD-1504: local cursor presence', () => {
     ).not.toThrow();
   });
 });
+
+describe('Multi-click counting without PointerEvent.detail', () => {
+  /** A press as Chromium and Firefox send it: `detail` 0. */
+  function press(canvas: HTMLCanvasElement, x: number, y: number, time: number): void {
+    for (const type of ['pointerdown', 'pointerup'] as const) {
+      const event = new PointerEvent(type, {
+        pointerId: 1,
+        pointerType: 'mouse',
+        clientX: x,
+        clientY: y,
+        button: 0,
+        buttons: type === 'pointerdown' ? 1 : 0,
+        detail: 0,
+      });
+      Object.defineProperty(event, 'timeStamp', { value: time });
+      canvas.dispatchEvent(event);
+    }
+  }
+
+  const downCounts = () =>
+    dispatchedEvents.flatMap((e) => (e.type === 'pointer-down' ? [e.clickCount] : []));
+
+  it('counts quick presses at the same spot as a double and triple click', () => {
+    const { view } = setup();
+    press(view.layers.canvas, 50, 50, 1000);
+    press(view.layers.canvas, 51, 50, 1200);
+    press(view.layers.canvas, 50, 51, 1400);
+    expect(downCounts()).toEqual([1, 2, 3]);
+    const up = dispatchedEvents.filter((e) => e.type === 'pointer-up').at(-1);
+    expect(up?.type === 'pointer-up' && up.clickCount).toBe(3);
+  });
+
+  it('starts a new series after a pause or away from the last press', () => {
+    const { view } = setup();
+    press(view.layers.canvas, 50, 50, 1000);
+    press(view.layers.canvas, 50, 50, 1700);
+    press(view.layers.canvas, 200, 50, 1800);
+    expect(downCounts()).toEqual([1, 1, 1]);
+  });
+
+  it('uses detail when the browser reports it', () => {
+    const { view } = setup();
+    const event = new PointerEvent('pointerdown', {
+      pointerId: 1,
+      pointerType: 'mouse',
+      clientX: 50,
+      clientY: 50,
+      button: 0,
+      buttons: 1,
+      detail: 2,
+    });
+    view.layers.canvas.dispatchEvent(event);
+    expect(downCounts()).toEqual([2]);
+  });
+});
