@@ -11,6 +11,8 @@ import {
   type Board,
   type BoxBounds,
   type ElementRecord,
+  type PresenceApi,
+  type PresenceLiveStroke,
   type SnapGuide,
 } from '@kujam/core';
 import { getStroke } from 'perfect-freehand';
@@ -44,6 +46,14 @@ export const DEFAULT_COLLAB_COLORS = [
   '#9B3D7F',
 ] as const;
 
+/**
+ * Inactivity timeout duration in milliseconds after which remote cursors are hidden (BOARD-808).
+ * Defaults to 6,000 ms (~6 seconds).
+ *
+ * @public
+ */
+export const DEFAULT_CURSOR_INACTIVITY_MS = 6000;
+
 /** Remote collaborator cursor state rendered on the overlay canvas. @public */
 export interface RemoteCursor {
   readonly id: string;
@@ -51,10 +61,21 @@ export interface RemoteCursor {
   readonly y: number;
   readonly color?: string;
   readonly name?: string;
+  /** Timestamp in milliseconds of the last cursor activity for inactivity timeout calculation. */
+  readonly lastActive?: number;
+}
+
+/** Remote collaborator selection rendered on the overlay canvas (BOARD-808). @public */
+export interface RemoteSelection {
+  readonly peerId: string;
+  readonly elementIds: readonly string[];
+  readonly color?: string;
+  readonly name?: string;
 }
 
 /** In-progress freehand stroke rendered on the overlay layer before commit. @public */
 export interface ActiveStrokeOverlay {
+  readonly id?: string;
   readonly points: readonly (readonly number[])[];
   readonly color: string;
   readonly thickness: number;
@@ -92,6 +113,16 @@ export interface OverlayRenderStats {
   hasActiveStroke: boolean;
   guidesCount: number;
   hoveredId: string | null;
+  /** Number of remote collaborator elements currently selected (BOARD-808). */
+  remoteSelectedCount?: number;
+  /** Number of active remote cursors rendered (BOARD-808). */
+  remoteCursorsCount?: number;
+  /** Number of remote live strokes rendered (BOARD-808). */
+  remoteLiveStrokesCount?: number;
+  /** Whether remote cursors have pending position interpolation requiring another frame (BOARD-808). */
+  hasPendingCursorAnimation?: boolean;
+  /** Milliseconds until the next cursor inactivity timeout expires, if any (BOARD-808). */
+  nextInactivityTimeoutMs?: number;
 }
 
 interface ToolOverlayData {
@@ -132,6 +163,56 @@ function renderStrokeOutline(
   g.fill();
 }
 
+function renderStrokePreview(
+  g: CanvasRenderingContext2D,
+  camera: Board['camera'],
+  pixelRatio: number,
+  stroke: ActiveStrokeOverlay | PresenceLiveStroke,
+  elementContext: Board['elementContext'],
+): void {
+  const points = stroke.points;
+  if (!points || points.length === 0) return;
+
+  const cam = camera.get();
+  const zoom = cam.zoom;
+
+  g.save();
+  g.scale(pixelRatio, pixelRatio);
+  g.translate(-cam.x * zoom, -cam.y * zoom);
+  g.scale(zoom, zoom);
+
+  const brush = elementContext
+    ? elementContext.resolveBrush(stroke.brush ?? 'pen')
+    : undefined;
+  g.globalCompositeOperation = brush?.blend ?? 'source-over';
+  g.fillStyle = stroke.color;
+
+  const taper = brush?.strokeOptions.taper;
+  const startTaper = typeof taper === 'object' && taper !== null ? taper.start : taper;
+  const endTaper = typeof taper === 'object' && taper !== null ? taper.end : taper;
+
+  const strokeOptions = {
+    size: stroke.thickness,
+    thinning: brush?.strokeOptions.thinning,
+    smoothing: brush?.strokeOptions.smoothing,
+    streamline: brush?.strokeOptions.streamline,
+    simulatePressure: brush?.strokeOptions.simulatePressure,
+    start: {
+      taper: startTaper,
+      cap: true,
+    },
+    end: {
+      taper: endTaper,
+      cap: true,
+    },
+    last: false,
+  };
+
+  const outline = getStroke(points as number[][], strokeOptions);
+  renderStrokeOutline(g, outline);
+  g.restore();
+}
+
 function isBoxBounds(b: unknown): b is BoxBounds {
   return (
     typeof b === 'object' &&
@@ -143,6 +224,17 @@ function isBoxBounds(b: unknown): b is BoxBounds {
   );
 }
 
+interface CursorTrack {
+  readonly id: string;
+  currentX: number;
+  currentY: number;
+  targetX: number;
+  targetY: number;
+  color?: string;
+  name?: string;
+  lastActive: number;
+}
+
 /**
  * Manages rendering of the overlay canvas layer.
  *
@@ -151,7 +243,22 @@ function isBoxBounds(b: unknown): b is BoxBounds {
 export class OverlayRenderer {
   private hoveredId: string | null = null;
   private cursors: readonly RemoteCursor[] = [];
+  private readonly cursorTracks = new Map<string, CursorTrack>();
+  private remoteSelections: readonly RemoteSelection[] = [];
+  private remoteLiveStrokes: readonly PresenceLiveStroke[] = [];
+  private presence: PresenceApi | null = null;
   private lastRenderedWasEmpty = false;
+
+  /**
+   * Remote cursor inactivity timeout in milliseconds (BOARD-808).
+   * Cursors without activity beyond this duration are hidden.
+   */
+  inactivityTimeoutMs: number = DEFAULT_CURSOR_INACTIVITY_MS;
+
+  /**
+   * Linear interpolation factor between 0 and 1 for smoothing cursor position updates (BOARD-808).
+   */
+  cursorLerpFactor: number = 0.35;
 
   constructor(private readonly board: Board) {}
 
@@ -165,14 +272,144 @@ export class OverlayRenderer {
     return this.hoveredId;
   }
 
+  setPresence(presence: PresenceApi | null): void {
+    this.presence = presence;
+  }
+
+  getPresence(): PresenceApi | null {
+    return this.presence;
+  }
+
   setCursors(cursors: readonly RemoteCursor[]): void {
     this.cursors = cursors;
+    const now = Date.now();
+    const activeIds = new Set<string>();
+    for (const c of cursors) {
+      activeIds.add(c.id);
+      const existing = this.cursorTracks.get(c.id);
+      if (existing) {
+        if (existing.targetX !== c.x || existing.targetY !== c.y) {
+          existing.targetX = c.x;
+          existing.targetY = c.y;
+          existing.lastActive = c.lastActive ?? now;
+        } else if (c.lastActive !== undefined) {
+          existing.lastActive = c.lastActive;
+        }
+        if (c.color !== undefined) existing.color = c.color;
+        if (c.name !== undefined) existing.name = c.name;
+      } else {
+        this.cursorTracks.set(c.id, {
+          id: c.id,
+          currentX: c.x,
+          currentY: c.y,
+          targetX: c.x,
+          targetY: c.y,
+          color: c.color,
+          name: c.name,
+          lastActive: c.lastActive ?? now,
+        });
+      }
+    }
+    for (const id of this.cursorTracks.keys()) {
+      if (!activeIds.has(id)) {
+        this.cursorTracks.delete(id);
+      }
+    }
+  }
+
+  getCursors(): readonly RemoteCursor[] {
+    const list: RemoteCursor[] = [];
+    for (const track of this.cursorTracks.values()) {
+      list.push({
+        id: track.id,
+        x: track.currentX,
+        y: track.currentY,
+        color: track.color,
+        name: track.name,
+        lastActive: track.lastActive,
+      });
+    }
+    return list;
+  }
+
+  removeCursor(id: string): void {
+    this.cursorTracks.delete(id);
+    this.cursors = this.cursors.filter((c) => c.id !== id);
+  }
+
+  setRemoteSelections(selections: readonly RemoteSelection[]): void {
+    this.remoteSelections = selections;
+  }
+
+  getRemoteSelections(): readonly RemoteSelection[] {
+    return this.remoteSelections;
+  }
+
+  setRemoteLiveStrokes(strokes: readonly PresenceLiveStroke[]): void {
+    this.remoteLiveStrokes = strokes;
+  }
+
+  getRemoteLiveStrokes(): readonly PresenceLiveStroke[] {
+    return this.remoteLiveStrokes;
+  }
+
+  clearRemotePresence(): void {
+    this.cursorTracks.clear();
+    this.cursors = [];
+    this.remoteSelections = [];
+    this.remoteLiveStrokes = [];
+    this.presence = null;
+  }
+
+  private syncPresenceCursors(now: number): void {
+    const presence = this.presence ?? this.board.presence;
+    if (!presence?.peers) return;
+    const activeIds = new Set<string>();
+    for (const [peerId, peerState] of presence.peers.entries()) {
+      const cursor = peerState.cursor;
+      if (!cursor) {
+        this.cursorTracks.delete(peerId);
+        continue;
+      }
+      activeIds.add(peerId);
+      const color = peerState.user?.color;
+      const name = peerState.user?.name;
+      const lastActive = typeof peerState.lastActive === 'number' ? peerState.lastActive : now;
+
+      const existing = this.cursorTracks.get(peerId);
+      if (existing) {
+        if (existing.targetX !== cursor.x || existing.targetY !== cursor.y) {
+          existing.targetX = cursor.x;
+          existing.targetY = cursor.y;
+          existing.lastActive = lastActive;
+        }
+        if (color !== undefined) existing.color = color;
+        if (name !== undefined) existing.name = name;
+      } else {
+        this.cursorTracks.set(peerId, {
+          id: peerId,
+          currentX: cursor.x,
+          currentY: cursor.y,
+          targetX: cursor.x,
+          targetY: cursor.y,
+          color,
+          name,
+          lastActive,
+        });
+      }
+    }
+    for (const id of this.cursorTracks.keys()) {
+      if (this.cursors.length === 0 && !activeIds.has(id)) {
+        this.cursorTracks.delete(id);
+      }
+    }
   }
 
   render(
     canvas: HTMLCanvasElement,
     ctx: CanvasRenderingContext2D,
     pixelRatio: number,
+    now: number = Date.now(),
   ): OverlayRenderStats {
     const { board } = this;
     const camera = board.camera;
@@ -214,6 +451,120 @@ export class OverlayRenderer {
         ? board.getElement(this.hoveredId)
         : null;
 
+    const theme = board.theme;
+    const selectionStroke = theme?.selection?.stroke ?? SELECTION_COLOR;
+    const selectionLineWidth = theme?.selection?.lineWidth ?? SELECTION_LINE_WIDTH;
+    const brushFill = theme?.selection?.brushFill ?? BRUSH_FILL_COLOR;
+    const brushStroke = theme?.selection?.brushStroke ?? BRUSH_STROKE_COLOR;
+    const hoverStroke = theme?.selection?.hoverStroke ?? HOVER_STROKE_COLOR;
+    const collabColors = theme?.collab ?? DEFAULT_COLLAB_COLORS;
+
+    // 4. Remote collaborator selections (BOARD-808)
+    const remoteSelections: RemoteSelection[] = [];
+    if (this.remoteSelections.length > 0) {
+      remoteSelections.push(...this.remoteSelections);
+    } else {
+      const presence = this.presence ?? this.board.presence;
+      if (presence?.peers) {
+        let peerIdx = 0;
+        for (const [peerId, peerState] of presence.peers.entries()) {
+          if (peerState.selection && peerState.selection.length > 0) {
+            remoteSelections.push({
+              peerId,
+              elementIds: peerState.selection,
+              color: peerState.user?.color ?? collabColors[peerIdx % collabColors.length] ?? SELECTION_COLOR,
+              name: peerState.user?.name,
+            });
+          }
+          peerIdx++;
+        }
+      }
+    }
+
+    let remoteSelectedCount = 0;
+    for (const sel of remoteSelections) {
+      for (const id of sel.elementIds) {
+        const el = board.getElement(id);
+        if (el && el.pageId === board.pages.current) {
+          remoteSelectedCount++;
+        }
+      }
+    }
+
+    // 5. Remote ephemeral live strokes (BOARD-808)
+    const remoteLiveStrokes: PresenceLiveStroke[] = [];
+    if (this.remoteLiveStrokes.length > 0) {
+      for (const stroke of this.remoteLiveStrokes) {
+        if (!stroke.id || !board.getElement(stroke.id)) {
+          remoteLiveStrokes.push(stroke);
+        }
+      }
+    } else {
+      const presence = this.presence ?? this.board.presence;
+      if (typeof (presence as { getLiveStrokes?: unknown })?.getLiveStrokes === 'function') {
+        const liveMap = (presence as unknown as { getLiveStrokes: (fn: (id: string) => boolean) => ReadonlyMap<string, PresenceLiveStroke> }).getLiveStrokes(
+          (id: string) => Boolean(board.getElement(id)),
+        );
+        for (const stroke of liveMap.values()) {
+          remoteLiveStrokes.push(stroke);
+        }
+      } else if (presence?.peers) {
+        for (const peerState of presence.peers.values()) {
+          const stroke = peerState.activeStroke;
+          if (!stroke || !stroke.points || stroke.points.length === 0) continue;
+          if (stroke.id && board.getElement(stroke.id)) continue;
+          remoteLiveStrokes.push(stroke);
+        }
+      }
+    }
+
+    // 6. Remote cursors: smoothing, lerp, and inactivity timeout (BOARD-808)
+    if (this.cursors.length === 0) {
+      this.syncPresenceCursors(now);
+    }
+
+    let hasPendingCursorAnimation = false;
+    let nextInactivityTimeoutMs: number | undefined;
+    const visibleCursors: { x: number; y: number; color?: string; name?: string }[] = [];
+
+    for (const track of this.cursorTracks.values()) {
+      const elapsed = now - track.lastActive;
+      if (elapsed > this.inactivityTimeoutMs) {
+        continue;
+      }
+
+      const remaining = this.inactivityTimeoutMs - elapsed;
+      if (remaining > 0) {
+        if (nextInactivityTimeoutMs === undefined || remaining < nextInactivityTimeoutMs) {
+          nextInactivityTimeoutMs = remaining;
+        }
+      }
+
+      if (board.camera.reducedMotion) {
+        track.currentX = track.targetX;
+        track.currentY = track.targetY;
+      } else {
+        const dx = track.targetX - track.currentX;
+        const dy = track.targetY - track.currentY;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 0.5) {
+          track.currentX = track.targetX;
+          track.currentY = track.targetY;
+        } else {
+          track.currentX += dx * this.cursorLerpFactor;
+          track.currentY += dy * this.cursorLerpFactor;
+          hasPendingCursorAnimation = true;
+        }
+      }
+
+      visibleCursors.push({
+        x: track.currentX,
+        y: track.currentY,
+        color: track.color,
+        name: track.name,
+      });
+    }
+
     // Always reset transform and clear backing store
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -224,8 +575,10 @@ export class OverlayRenderer {
       selectionBrush !== null ||
       guides.length > 0 ||
       hoveredEl !== null ||
-      this.cursors.length > 0 ||
+      visibleCursors.length > 0 ||
       hasActiveStroke ||
+      remoteLiveStrokes.length > 0 ||
+      remoteSelectedCount > 0 ||
       hasConnectorSnap ||
       hasConnectorPreview;
 
@@ -237,16 +590,13 @@ export class OverlayRenderer {
         hasActiveStroke: false,
         guidesCount: 0,
         hoveredId: null,
+        remoteSelectedCount: 0,
+        remoteCursorsCount: 0,
+        remoteLiveStrokesCount: 0,
+        hasPendingCursorAnimation: false,
+        nextInactivityTimeoutMs: undefined,
       };
     }
-
-    const theme = board.theme;
-    const selectionStroke = theme?.selection?.stroke ?? SELECTION_COLOR;
-    const selectionLineWidth = theme?.selection?.lineWidth ?? SELECTION_LINE_WIDTH;
-    const brushFill = theme?.selection?.brushFill ?? BRUSH_FILL_COLOR;
-    const brushStroke = theme?.selection?.brushStroke ?? BRUSH_STROKE_COLOR;
-    const hoverStroke = theme?.selection?.hoverStroke ?? HOVER_STROKE_COLOR;
-    const collabColors = theme?.collab ?? DEFAULT_COLLAB_COLORS;
 
     // --- A. Hover Indicator ---
     if (hoveredEl) {
@@ -285,6 +635,71 @@ export class OverlayRenderer {
       ctx.setLineDash([6, 4]);
       ctx.strokeRect(-sw / 2, -sh / 2, sw, sh);
       ctx.restore();
+    }
+
+    // --- A3. Remote Collaborator Selections (BOARD-808) ---
+    for (const sel of remoteSelections) {
+      const color = sel.color ?? SELECTION_COLOR;
+      for (let i = 0; i < sel.elementIds.length; i++) {
+        const id = sel.elementIds[i]!;
+        const el = board.getElement(id);
+        if (!el || el.pageId !== board.pages.current) continue;
+
+        if (el.type === 'connector') {
+          const props = el.props as {
+            readonly start?: { readonly x: number; readonly y: number };
+            readonly end?: { readonly x: number; readonly y: number };
+          };
+          const start = props.start ?? { x: 0, y: 0 };
+          const end = props.end ?? { x: el.w, y: el.h };
+          const startWorld = { x: el.x + start.x, y: el.y + start.y };
+          const endWorld = { x: el.x + end.x, y: el.y + end.y };
+          const sStart = camera.boardToScreen(startWorld);
+          const sEnd = camera.boardToScreen(endWorld);
+
+          ctx.save();
+          ctx.scale(pixelRatio, pixelRatio);
+          ctx.beginPath();
+          ctx.moveTo(sStart.x, sStart.y);
+          ctx.lineTo(sEnd.x, sEnd.y);
+          ctx.strokeStyle = color;
+          ctx.lineWidth = selectionLineWidth;
+          ctx.stroke();
+          ctx.restore();
+        } else {
+          const center = camera.boardToScreen({
+            x: el.x + el.w / 2,
+            y: el.y + el.h / 2,
+          });
+          const sw = el.w * zoom;
+          const sh = el.h * zoom;
+
+          ctx.save();
+          ctx.scale(pixelRatio, pixelRatio);
+          ctx.translate(center.x, center.y);
+          if (el.rotation) {
+            ctx.rotate((el.rotation * Math.PI) / 180);
+          }
+          ctx.strokeStyle = color;
+          ctx.lineWidth = selectionLineWidth;
+          ctx.strokeRect(-sw / 2, -sh / 2, sw, sh);
+
+          // Name badge on the first selected element
+          if (sel.name && i === 0) {
+            ctx.font = '10px sans-serif';
+            const textW = ctx.measureText(sel.name).width;
+            const badgeH = 14;
+            const badgeW = textW + 6;
+            const badgeX = -sw / 2;
+            const badgeY = -sh / 2 - badgeH;
+            ctx.fillStyle = color;
+            ctx.fillRect(badgeX, badgeY, badgeW, badgeH);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(sel.name, badgeX + 3, badgeY + 10);
+          }
+          ctx.restore();
+        }
+      }
     }
 
     // --- B. Selection Frame and Handles ---
@@ -435,11 +850,11 @@ export class OverlayRenderer {
       ctx.restore();
     }
 
-    // --- E. Presence Cursors ---
-    if (this.cursors.length > 0) {
+    // --- E. Presence Cursors (BOARD-808) ---
+    if (visibleCursors.length > 0) {
       ctx.save();
       ctx.scale(pixelRatio, pixelRatio);
-      this.cursors.forEach((cursor, cursorIdx) => {
+      visibleCursors.forEach((cursor, cursorIdx) => {
         const s = camera.boardToScreen({ x: cursor.x, y: cursor.y });
         const color = cursor.color ?? collabColors[cursorIdx % collabColors.length] ?? '#2F6FDB';
 
@@ -470,42 +885,14 @@ export class OverlayRenderer {
 
     // --- F. Active Freehand Stroke Preview (BOARD-1002) ---
     if (activeStroke && activeStroke.points && activeStroke.points.length > 0) {
-      ctx.save();
-      ctx.scale(pixelRatio, pixelRatio);
-      const cam = camera.get();
-      ctx.translate(-cam.x * zoom, -cam.y * zoom);
-      ctx.scale(zoom, zoom);
+      renderStrokePreview(ctx, camera, pixelRatio, activeStroke, board.elementContext);
+    }
 
-      const brush = board.elementContext
-        ? board.elementContext.resolveBrush(activeStroke.brush ?? 'pen')
-        : undefined;
-      ctx.globalCompositeOperation = brush?.blend ?? 'source-over';
-      ctx.fillStyle = activeStroke.color;
-
-      const taper = brush?.strokeOptions.taper;
-      const startTaper = typeof taper === 'object' && taper !== null ? taper.start : taper;
-      const endTaper = typeof taper === 'object' && taper !== null ? taper.end : taper;
-
-      const strokeOptions = {
-        size: activeStroke.thickness,
-        thinning: brush?.strokeOptions.thinning,
-        smoothing: brush?.strokeOptions.smoothing,
-        streamline: brush?.strokeOptions.streamline,
-        simulatePressure: brush?.strokeOptions.simulatePressure,
-        start: {
-          taper: startTaper,
-          cap: true,
-        },
-        end: {
-          taper: endTaper,
-          cap: true,
-        },
-        last: false,
-      };
-
-      const outline = getStroke(activeStroke.points as number[][], strokeOptions);
-      renderStrokeOutline(ctx, outline);
-      ctx.restore();
+    // --- F2. Remote Ephemeral Live Strokes (BOARD-808) ---
+    for (const stroke of remoteLiveStrokes) {
+      if (stroke.points && stroke.points.length > 0) {
+        renderStrokePreview(ctx, camera, pixelRatio, stroke, board.elementContext);
+      }
     }
 
     // --- G. Active Connector Drag Preview (BOARD-1101) ---
@@ -587,6 +974,11 @@ export class OverlayRenderer {
       hasActiveStroke,
       guidesCount: guides.length,
       hoveredId: this.hoveredId,
+      remoteSelectedCount,
+      remoteCursorsCount: visibleCursors.length,
+      remoteLiveStrokesCount: remoteLiveStrokes.length,
+      hasPendingCursorAnimation,
+      nextInactivityTimeoutMs,
     };
   }
 }

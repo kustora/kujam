@@ -27,5 +27,8 @@
     "y-indexeddb": "^9.0.12",
     "y-protocols": "^1.0.6",
     "yjs": "^13.6.24"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.2.6"
   }
 }

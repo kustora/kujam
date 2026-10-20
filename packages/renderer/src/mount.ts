@@ -11,7 +11,7 @@
  * views, so several boards (or iframes) on one page never affect each other.
  */
 
-import type { Board, Point, ThemeDefinition, ThemeMode, ViewportSize } from '@kujam/core';
+import type { Board, Point, PresenceApi, ThemeDefinition, ThemeMode, ViewportSize } from '@kujam/core';
 import { HtmlLayer, type EditorBounds } from './layers/html-layer.js';
 import { attachInput } from './input/input.js';
 import { attachClipboard } from './input/clipboard.js';
@@ -83,6 +83,11 @@ export interface RendererOptions {
    * Called when dropped files are rejected (BOARD-908).
    */
   readonly onDropRejected?: (files: readonly File[], reason: string) => void;
+  /**
+   * Optional presence awareness API for remote collaborator cursors,
+   * selections, and live strokes (BOARD-808). When omitted, falls back to `board.presence`.
+   */
+  readonly presence?: PresenceApi;
 }
 
 /**
@@ -339,7 +344,41 @@ export function mountRenderer(
     hasActiveStroke: false,
     guidesCount: 0,
     hoveredId: null,
+    remoteSelectedCount: 0,
+    remoteCursorsCount: 0,
+    remoteLiveStrokesCount: 0,
+    hasPendingCursorAnimation: false,
+    nextInactivityTimeoutMs: undefined,
   });
+
+  let presenceUnsubs: (() => void)[] = [];
+  let currentPresence: PresenceApi | null = null;
+  let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function syncPresenceListeners(): void {
+    const nextPresence = options.presence ?? board.presence ?? null;
+    if (nextPresence === currentPresence) return;
+    for (const off of presenceUnsubs) off();
+    presenceUnsubs = [];
+    currentPresence = nextPresence;
+
+    if (currentPresence && typeof currentPresence.on === 'function') {
+      const onPresenceChange = () => {
+        scheduleRender();
+      };
+      presenceUnsubs.push(
+        currentPresence.on('change', onPresenceChange),
+        currentPresence.on('peer-join', onPresenceChange),
+        currentPresence.on('peer-leave', (peerId) => {
+          overlayRenderer.removeCursor(peerId);
+          scheduleRender();
+        }),
+      );
+    }
+    overlayRenderer.setPresence(currentPresence);
+  }
+
+  syncPresenceListeners();
 
   const detachInput = attachInput(board, layers, {
     onHover(id) {
@@ -377,6 +416,7 @@ export function mountRenderer(
   }
 
   function draw(): void {
+    syncPresenceListeners();
     // Without a 2D context (unsupported environment, or a lost context) there is nothing to draw.
     const main = canvas.getContext('2d');
     if (main) {
@@ -387,6 +427,23 @@ export function mountRenderer(
     const top = overlay.getContext('2d');
     if (top) {
       overlayStats = overlayRenderer.render(overlay, top, effectivePixelRatio);
+      if (overlayStats.hasPendingCursorAnimation) {
+        scheduleRender();
+      }
+      if (inactivityTimer !== null) {
+        clearTimeout(inactivityTimer);
+        inactivityTimer = null;
+      }
+      if (
+        overlayStats.nextInactivityTimeoutMs !== undefined &&
+        overlayStats.nextInactivityTimeoutMs > 0 &&
+        mounted
+      ) {
+        inactivityTimer = setTimeout(() => {
+          inactivityTimer = null;
+          scheduleRender();
+        }, overlayStats.nextInactivityTimeoutMs + 16);
+      }
     }
   }
 
@@ -396,7 +453,9 @@ export function mountRenderer(
   }
 
   function scheduleRender(): void {
-    if (!mounted || frame !== null) return;
+    if (!mounted) return;
+    syncPresenceListeners();
+    if (frame !== null) return;
     frame = win?.requestAnimationFrame
       ? win.requestAnimationFrame(onFrame)
       : (setTimeout(onFrame, 16) as unknown as number);
@@ -528,9 +587,16 @@ export function mountRenderer(
     if (!mounted) return;
     mounted = false;
     cancelFrame();
+    if (inactivityTimer !== null) {
+      clearTimeout(inactivityTimer);
+      inactivityTimer = null;
+    }
     observer?.disconnect();
     for (const off of unsubscribers) off();
     unsubscribers.length = 0;
+    for (const off of presenceUnsubs) off();
+    presenceUnsubs.length = 0;
+    overlayRenderer.clearRemotePresence();
     detachInput();
     detachClipboard();
     detachDragDrop();

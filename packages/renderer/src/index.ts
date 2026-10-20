@@ -23,6 +23,7 @@ export {
   BRUSH_STROKE_COLOR,
   CONNECTOR_HANDLE_RADIUS_PX,
   DEFAULT_COLLAB_COLORS,
+  DEFAULT_CURSOR_INACTIVITY_MS,
   HANDLE_SIZE_PX,
   HOVER_STROKE_COLOR,
   ROTATE_HANDLE_OFFSET_PX,
@@ -33,4 +34,5 @@ export {
   type ConnectorPreviewOverlay,
   type ConnectorSnapOverlay,
   type RemoteCursor,
+  type RemoteSelection,
 } from './layers/overlay.js';

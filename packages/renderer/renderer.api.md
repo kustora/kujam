@@ -7,6 +7,8 @@
 import { Board } from '@kujam/core';
 import { BoxBounds } from '@kujam/core';
 import { Point } from '@kujam/core';
+import { PresenceApi } from '@kujam/core';
+import { PresenceLiveStroke } from '@kujam/core';
 import { ThemeDefinition } from '@kujam/core';
 import { ThemeMode } from '@kujam/core';
 import { ViewportSize } from '@kujam/core';
@@ -107,6 +109,9 @@ export interface ConnectorSnapOverlay {
 export const DEFAULT_COLLAB_COLORS: readonly ["#2F6FDB", "#6B4FA0", "#16754C", "#C2410C", "#9B3D7F"];
 
 // @public
+export const DEFAULT_CURSOR_INACTIVITY_MS = 6000;
+
+// @public
 export interface EditorBounds {
     // (undocumented)
     readonly h: number;
@@ -136,13 +141,33 @@ export function mountRenderer(board: Board, container: HTMLElement, options?: Re
 export class OverlayRenderer {
     constructor(board: Board);
     // (undocumented)
+    clearRemotePresence(): void;
+    cursorLerpFactor: number;
+    // (undocumented)
+    getCursors(): readonly RemoteCursor[];
+    // (undocumented)
     getHovered(): string | null;
     // (undocumented)
-    render(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, pixelRatio: number): OverlayRenderStats;
+    getPresence(): PresenceApi | null;
+    // (undocumented)
+    getRemoteLiveStrokes(): readonly PresenceLiveStroke[];
+    // (undocumented)
+    getRemoteSelections(): readonly RemoteSelection[];
+    inactivityTimeoutMs: number;
+    // (undocumented)
+    removeCursor(id: string): void;
+    // (undocumented)
+    render(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, pixelRatio: number, now?: number): OverlayRenderStats;
     // (undocumented)
     setCursors(cursors: readonly RemoteCursor[]): void;
     // (undocumented)
     setHovered(id: string | null): boolean;
+    // (undocumented)
+    setPresence(presence: PresenceApi | null): void;
+    // (undocumented)
+    setRemoteLiveStrokes(strokes: readonly PresenceLiveStroke[]): void;
+    // (undocumented)
+    setRemoteSelections(selections: readonly RemoteSelection[]): void;
 }
 
 // @public
@@ -153,8 +178,13 @@ export interface OverlayRenderStats {
     hasActiveStroke: boolean;
     // (undocumented)
     hasBrush: boolean;
+    hasPendingCursorAnimation?: boolean;
     // (undocumented)
     hoveredId: string | null;
+    nextInactivityTimeoutMs?: number;
+    remoteCursorsCount?: number;
+    remoteLiveStrokesCount?: number;
+    remoteSelectedCount?: number;
     // (undocumented)
     rendered: boolean;
     // (undocumented)
@@ -167,12 +197,25 @@ export interface RemoteCursor {
     readonly color?: string;
     // (undocumented)
     readonly id: string;
+    readonly lastActive?: number;
     // (undocumented)
     readonly name?: string;
     // (undocumented)
     readonly x: number;
     // (undocumented)
     readonly y: number;
+}
+
+// @public
+export interface RemoteSelection {
+    // (undocumented)
+    readonly color?: string;
+    // (undocumented)
+    readonly elementIds: readonly string[];
+    // (undocumented)
+    readonly name?: string;
+    // (undocumented)
+    readonly peerId: string;
 }
 
 // @public
@@ -195,6 +238,7 @@ export interface RendererOptions {
     readonly onDropRejected?: (files: readonly File[], reason: string) => void;
     readonly onPasteUrl?: (url: string, point: Point, board: Board) => boolean | Promise<boolean>;
     readonly pixelRatio?: number;
+    readonly presence?: PresenceApi;
     readonly reducedMotion?: boolean;
     readonly shortTextThreshold?: number;
     readonly theme?: ThemeMode | ThemeDefinition;

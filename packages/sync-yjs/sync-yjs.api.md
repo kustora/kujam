@@ -9,6 +9,7 @@ import { Board } from '@kujam/core';
 import { BoardRecord } from '@kujam/core';
 import { HistoryApi } from '@kujam/core';
 import { HistoryStep } from '@kujam/core';
+import { IndexeddbPersistence } from 'y-indexeddb';
 import { PresenceApi } from '@kujam/core';
 import { PresenceLiveStroke } from '@kujam/core';
 import { PresenceUser } from '@kujam/core';
@@ -21,13 +22,24 @@ import * as Y from 'yjs';
 export { Awareness }
 
 // @public
+export function createWhenLoaded(getPersistence: () => IndexeddbPersistence | null | undefined, getSyncPromise?: () => Promise<void> | null | undefined): WhenLoadedPromise;
+
+// @public
 export function createYjsHistory(options: YjsHistoryOptions): YjsHistory;
+
+// @public
+export function createYjsPersistence(doc: Y.Doc, options?: boolean | YjsIndexedDbOptions): IndexeddbPersistence | null;
 
 // @public
 export function createYjsPresence(options?: YjsPresenceOptions): YjsPresence;
 
 // @public
 export function createYjsSyncAdapter(options?: YjsSyncOptions): YjsSyncAdapter;
+
+export { IndexeddbPersistence }
+
+// @public
+export function isIndexedDbSupported(): boolean;
 
 // @public
 export function isValidBoardRecord(value: unknown): value is BoardRecord;
@@ -46,6 +58,12 @@ export { SyncEventMap }
 export function syncRichTextToYText(delta: unknown[], yText: Y.Text): void;
 
 export { SyncStatus }
+
+// @public
+export interface WhenLoadedPromise extends Promise<void> {
+    // (undocumented)
+    (): Promise<void>;
+}
 
 // @public
 export interface YjsHistory extends HistoryApi {
@@ -72,6 +90,11 @@ export interface YjsHistoryOptions {
 }
 
 // @public
+export interface YjsIndexedDbOptions {
+    name?: string;
+}
+
+// @public
 export interface YjsPresence extends PresenceApi {
     readonly awareness: Awareness;
     destroy(): void;
@@ -94,9 +117,14 @@ export interface YjsPresenceOptions {
 // @public
 export interface YjsSyncAdapter extends SyncAdapter {
     readonly awareness: Awareness;
+    destroy?(): void;
     readonly doc: Y.Doc;
     readonly history?: YjsHistory;
+    isOnlineRequired?(action: string): boolean;
+    readonly pendingUpdates?: number;
+    readonly persistence?: IndexeddbPersistence | null;
     readonly presence: YjsPresence;
+    readonly whenLoaded: WhenLoadedPromise;
 }
 
 // @public
@@ -106,6 +134,8 @@ export interface YjsSyncOptions {
     cursorThrottleMs?: number;
     doc?: Y.Doc;
     history?: boolean | Omit<YjsHistoryOptions, 'doc' | 'clientOrigin'>;
+    indexeddb?: boolean | YjsIndexedDbOptions;
+    isOnlineRequired?: (action: string) => boolean;
     strokeThrottleMs?: number;
     user?: PresenceUser;
     validateRecord?: (record: unknown) => record is BoardRecord;

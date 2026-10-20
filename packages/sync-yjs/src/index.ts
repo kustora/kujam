@@ -24,9 +24,33 @@ import {
   type YjsPresenceOptions,
 } from './presence.js';
 import { createYjsHistory, type YjsHistory, type YjsHistoryOptions } from './history.js';
+import {
+  createWhenLoaded,
+  createYjsPersistence,
+  isIndexedDbSupported,
+  resolveIndexedDbEnabled,
+  resolveIndexedDbName,
+  IndexeddbPersistence,
+  type WhenLoadedPromise,
+  type YjsIndexedDbOptions,
+} from './persistence.js';
 
-export { recordToYMap, yMapToRecord, isValidBoardRecord, syncRichTextToYText };
-export { createYjsPresence, createYjsHistory, Awareness, type LiveStroke };
+export {
+  recordToYMap,
+  yMapToRecord,
+  isValidBoardRecord,
+  syncRichTextToYText,
+  createYjsPresence,
+  createYjsHistory,
+  createWhenLoaded,
+  createYjsPersistence,
+  isIndexedDbSupported,
+  IndexeddbPersistence,
+  Awareness,
+  type LiveStroke,
+  type WhenLoadedPromise,
+  type YjsIndexedDbOptions,
+};
 export type {
   SyncAdapter,
   SyncStatus,
@@ -123,6 +147,20 @@ export interface YjsSyncOptions {
    * Set to `false` to disable Yjs history delegation.
    */
   history?: boolean | Omit<YjsHistoryOptions, 'doc' | 'clientOrigin'>;
+
+  /**
+   * IndexedDB persistence options (BOARD-1508).
+   *
+   * Enabled by default if `indexedDB` is available in the environment (`typeof indexedDB !== 'undefined'`).
+   * Set to `false` to disable IndexedDB persistence.
+   */
+  indexeddb?: boolean | YjsIndexedDbOptions;
+
+  /**
+   * Optional action validator hook indicating whether an action requires an active online server connection (BOARD-1508).
+   * Used by plugins to disable server-only actions (such as converting to a server post/task) when offline.
+   */
+  isOnlineRequired?: (action: string) => boolean;
 }
 
 /**
@@ -144,6 +182,34 @@ export interface YjsSyncAdapter extends SyncAdapter {
 
   /** History API backed by Yjs UndoManager for per-user undo/redo (BOARD-1507). */
   readonly history?: YjsHistory;
+
+  /**
+   * IndexedDB persistence provider for local offline caching and restoration (BOARD-1508).
+   * `null` when running in environments without IndexedDB (e.g. Node/SSR) or when disabled.
+   */
+  readonly persistence?: IndexeddbPersistence | null;
+
+  /**
+   * Property and method returning a promise that resolves once the initial IndexedDB state has been loaded into Y.Doc (BOARD-1508).
+   *
+   * Can be awaited directly (`await adapter.whenLoaded`) or called (`await adapter.whenLoaded()`).
+   */
+  readonly whenLoaded: WhenLoadedPromise;
+
+  /**
+   * Number of pending updates stored in IndexedDB (BOARD-1508).
+   */
+  readonly pendingUpdates?: number;
+
+  /**
+   * Checks if a particular action requires an active online connection (BOARD-1508).
+   */
+  isOnlineRequired?(action: string): boolean;
+
+  /**
+   * Destroys adapter resources including persistence, history, and listeners.
+   */
+  destroy?(): void;
 }
 
 /**
@@ -201,6 +267,19 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
       captureTimeout: historyOpts.captureTimeout,
       limit: historyOpts.limit,
       getBoard: () => currentBoard,
+    });
+  }
+
+  const shouldEnableIdb = resolveIndexedDbEnabled(options.indexeddb);
+  const idbName = resolveIndexedDbName(options.indexeddb);
+  let persistence: IndexeddbPersistence | null = shouldEnableIdb
+    ? new IndexeddbPersistence(idbName, doc)
+    : null;
+  let syncPromise: Promise<void> | null = null;
+
+  if (persistence) {
+    persistence.whenSynced.catch((err: unknown) => {
+      syncEmitter.emit('error', err);
     });
   }
 
@@ -281,7 +360,7 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
       return history;
     },
 
-    connect(board: Board): void {
+    connect(board: Board): Promise<void> | void {
       if (currentBoard === board && currentStatus === 'synced') {
         return;
       }
@@ -289,58 +368,75 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
         adapter.disconnect();
       }
 
+      if (shouldEnableIdb && !persistence) {
+        persistence = new IndexeddbPersistence(idbName, doc);
+        persistence.whenSynced.catch((err: unknown) => {
+          syncEmitter.emit('error', err);
+        });
+      }
+
       currentBoard = board;
       setStatus('connecting');
 
       const recordsMap = doc.getMap<Y.Map<unknown>>('records');
 
-      // Initialize state between board and Y.Doc
-      if (recordsMap.size === 0) {
-        const docRecords = board.getDocument().records;
-        doc.transact(() => {
-          for (const record of Object.values(docRecords)) {
-            let yMap = recordsMap.get(record.id);
-            if (!(yMap instanceof Y.Map)) {
-              yMap = new Y.Map<unknown>();
-              recordsMap.set(record.id, yMap);
+      const initSyncState = () => {
+        if (!currentBoard || currentBoard !== board) return;
+
+        // Initialize state between board and Y.Doc
+        if (recordsMap.size === 0) {
+          const docRecords = board.getDocument().records;
+          doc.transact(() => {
+            for (const record of Object.values(docRecords)) {
+              let yMap = recordsMap.get(record.id);
+              if (!(yMap instanceof Y.Map)) {
+                yMap = new Y.Map<unknown>();
+                recordsMap.set(record.id, yMap);
+              }
+              recordToYMap(record, yMap);
             }
-            recordToYMap(record, yMap);
-          }
-        }, Symbol.for('kujam.sync.yjs.init'));
-      } else {
-        board.transact(
-          (tx) => {
-            const remoteIds = new Set<string>();
-            for (const [id, yRecordMap] of recordsMap.entries()) {
-              if (yRecordMap instanceof Y.Map) {
-                const record = yMapToRecord(yRecordMap);
-                if (record && isRecordValid(record)) {
-                  remoteIds.add(id);
-                  tx.put(record);
+          }, Symbol.for('kujam.sync.yjs.init'));
+        } else {
+          board.transact(
+            (tx) => {
+              const remoteIds = new Set<string>();
+              for (const [id, yRecordMap] of recordsMap.entries()) {
+                if (yRecordMap instanceof Y.Map) {
+                  const record = yMapToRecord(yRecordMap);
+                  if (record && isRecordValid(record)) {
+                    remoteIds.add(id);
+                    tx.put(record);
+                  } else {
+                    reportInvalidRecord(id, yRecordMap);
+                  }
                 } else {
                   reportInvalidRecord(id, yRecordMap);
                 }
-              } else {
-                reportInvalidRecord(id, yRecordMap);
               }
-            }
-            if (remoteIds.size > 0) {
-              const localRecords = board.getDocument().records;
-              for (const localId of Object.keys(localRecords)) {
-                if (!remoteIds.has(localId)) {
-                  tx.remove(localId);
+              if (remoteIds.size > 0) {
+                const localRecords = board.getDocument().records;
+                for (const localId of Object.keys(localRecords)) {
+                  if (!remoteIds.has(localId)) {
+                    tx.remove(localId);
+                  }
                 }
               }
-            }
-          },
-          { origin: 'remote', label: 'sync.init' },
-        );
-      }
+            },
+            { origin: 'remote', label: 'sync.init' },
+          );
+        }
+
+        setStatus('synced');
+      };
 
       // Remote -> Local: listen for Y.Doc CRDT changes
       const deepObserver = (events: Y.YEvent<Y.Map<unknown>>[], transaction: Y.Transaction) => {
-        if (transaction.origin === clientOrigin) {
-          return; // Skip echo
+        if (
+          transaction.origin === clientOrigin ||
+          transaction.origin === Symbol.for('kujam.sync.yjs.init') ||
+          (persistence && transaction.origin === persistence)
+        ) {
+          return; // Skip echo, init transaction, or initial persistence load
         }
         if (!currentBoard) return;
 
@@ -566,10 +662,30 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
         return result;
       };
 
-      setStatus('synced');
+      if (persistence && !persistence.synced) {
+        syncPromise = persistence.whenSynced
+          .then(() => {
+            initSyncState();
+            syncPromise = null;
+          })
+          .catch((err: unknown) => {
+            syncPromise = null;
+            setStatus('error');
+            syncEmitter.emit('error', err);
+          });
+        return syncPromise;
+      }
+
+      initSyncState();
     },
 
     disconnect(): void {
+      if (persistence) {
+        void persistence.destroy();
+        persistence = null;
+      }
+      syncPromise = null;
+
       if (currentStatus === 'offline') return;
 
       if (history) {
@@ -611,6 +727,29 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
 
       currentBoard = null;
       setStatus('offline');
+    },
+
+    get persistence(): IndexeddbPersistence | null {
+      return persistence;
+    },
+
+    get whenLoaded(): WhenLoadedPromise {
+      return createWhenLoaded(
+        () => persistence,
+        () => syncPromise,
+      );
+    },
+
+    get pendingUpdates(): number {
+      return persistence ? persistence._dbsize : 0;
+    },
+
+    isOnlineRequired(action: string): boolean {
+      return options.isOnlineRequired ? options.isOnlineRequired(action) : false;
+    },
+
+    destroy(): void {
+      adapter.disconnect();
     },
 
     on<K extends keyof SyncEventMap>(
