@@ -635,3 +635,17 @@ describe('Multi-click counting without PointerEvent.detail', () => {
     expect(downCounts()).toEqual([2]);
   });
 });
+
+describe('Board cursor', () => {
+  it('shows the active tool cursor on the board root and follows tool changes', () => {
+    const { board, view } = setup();
+    board.tools.register(
+      defineTool({ id: 'pen', cursor: 'crosshair', initial: 'idle', states: { idle: {} } }),
+    );
+    expect(view.layers.root.style.cursor).toBe('default');
+    board.setTool('pen');
+    expect(view.layers.root.style.cursor).toBe('crosshair');
+    board.setTool('select');
+    expect(view.layers.root.style.cursor).toBe('default');
+  });
+});

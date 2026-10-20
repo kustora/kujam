@@ -2063,6 +2063,15 @@ export type SchemaResult<T> = {
 export type SchemaShape = Record<string, Schema<unknown>>;
 
 // @beta
+export interface SegmentHandle extends Point {
+    readonly axis: 'x' | 'y';
+    readonly index: number;
+}
+
+// @beta
+export function segmentHandles(points: readonly Point[], minLength?: number): SegmentHandle[];
+
+// @beta
 export interface SelectionEvent {
     readonly ids: readonly string[];
     readonly previous: readonly string[];
@@ -2311,6 +2320,7 @@ export interface ToolContext<S extends string = string, D = Record<string, unkno
     }): void;
     commit(): void;
     data: D;
+    setCursor(cursor: string | null): void;
     readonly state: S;
 }
 

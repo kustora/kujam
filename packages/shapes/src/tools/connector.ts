@@ -76,7 +76,7 @@ export function resolvePreviewStyle(ctx: { readonly board: Board }): {
 } {
   const rem = rememberedProps(ctx.board, 'connector', 'connector');
   return {
-    style: (rem.style as ConnectorStyle | undefined) ?? 'straight',
+    style: (rem.style as ConnectorStyle | undefined) ?? 'elbow',
     startArrow: (rem.startArrow as ArrowheadStyle | undefined) ?? 'none',
     endArrow: (rem.endArrow as ArrowheadStyle | undefined) ?? 'arrow',
     color: (rem.color as ColorKey | undefined) ?? 'black',

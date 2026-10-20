@@ -161,6 +161,11 @@ export interface ToolContext<S extends string = string, D = Record<string, unkno
    * is ignored.
    */
   cancel(): void;
+  /**
+   * Overrides the CSS cursor, for example for what is under the pointer while hovering. It wins
+   * over the state and tool cursors until replaced, cleared with `null`, or the tool is switched.
+   */
+  setCursor(cursor: string | null): void;
 }
 
 /**
@@ -462,6 +467,8 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
     pointerId: number | null;
     /** Incremented on every state change, to ignore stale handler return values. */
     generation: number;
+    /** Cursor set with `ctx.setCursor`, or `null`. */
+    cursor: string | null;
     readonly ctx: ToolContext;
   }
 
@@ -495,6 +502,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
       data: makeData(definition),
       pointerId: null,
       generation: 0,
+      cursor: null,
       ctx: {
         get board() {
           return getBoard();
@@ -517,6 +525,9 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
         },
         cancel() {
           if (active === a) cancelActive();
+        },
+        setCursor(cursor) {
+          a.cursor = cursor;
         },
       } as ToolContext,
     };
@@ -734,7 +745,7 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
     },
     get cursor() {
       if (!active) return 'default';
-      return stateDef(active).cursor ?? active.definition.cursor ?? 'default';
+      return active.cursor ?? stateDef(active).cursor ?? active.definition.cursor ?? 'default';
     },
     get data() {
       return active?.data;

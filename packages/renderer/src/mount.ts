@@ -400,6 +400,13 @@ export function mountRenderer(
 
   syncPresenceListeners();
 
+  /** Shows the active tool's cursor (`board.cursor`) over the board. */
+  function syncCursor(): void {
+    const cursor = board.cursor;
+    if (root.style.cursor !== cursor) root.style.cursor = cursor;
+  }
+  syncCursor();
+
   const detachInput = attachInput(board, layers, {
     onHover(id) {
       if (overlayRenderer.setHovered(id)) {
@@ -407,6 +414,7 @@ export function mountRenderer(
       }
     },
     onEvent() {
+      syncCursor();
       if (board.toolState !== 'idle' || board.tool === 'connector' || board.toolData !== null) {
         scheduleRender();
       }
@@ -550,7 +558,10 @@ export function mountRenderer(
       a11yTree.onSelection(event.ids);
       scheduleRender();
     }),
-    board.on('tool', scheduleRender),
+    board.on('tool', () => {
+      syncCursor();
+      scheduleRender();
+    }),
     board.on('theme', (theme) => {
       root.style.backgroundColor = theme.canvas.background;
       canvasRenderer.markAllDirty();

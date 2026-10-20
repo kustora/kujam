@@ -15,6 +15,7 @@ import {
   nullable,
   number,
   object,
+  optional,
   polyline,
   schema,
   string,
@@ -46,6 +47,7 @@ import {
   resolveAnchorSide,
   type AnchorSide,
   type ArrowheadStyle,
+  type ConnectorBend,
   type ConnectorDash,
   type ConnectorRouteOptions,
   type ConnectorRouteResult,
@@ -71,6 +73,8 @@ export interface ConnectorProps extends Record<string, unknown> {
   strokeWidth: number;
   dash: ConnectorDash;
   label: RichText;
+  /** Dragged middle segment of an `elbow` route; `null` or absent routes automatically. */
+  bend?: ConnectorBend | null;
 }
 
 declare module '@kujam/core' {
@@ -101,6 +105,11 @@ export const connectorPropsSchema = schema({
   strokeWidth: number({ min: 1, max: 32 }),
   dash: enumOf(['solid', 'dashed', 'dotted'] as const),
   label: richTextSchema,
+  bend: optional(
+    nullable(
+      object({ axis: enumOf(['x', 'y'] as const), offset: number({ min: -1e6, max: 1e6 }) }),
+    ),
+  ),
 });
 
 const activeBoards = new Set<Board>();
@@ -225,6 +234,7 @@ export function resolveConnectorRouteOptions(
     startBounds,
     endBounds,
     obstacles,
+    bend: element.props.style === 'elbow' ? (element.props.bend ?? null) : null,
   };
 }
 
@@ -279,6 +289,41 @@ export function computeConnectorGeometry(element: ElementRecord<ConnectorProps>)
   return polyline(route.points, Math.max(8, element.props.strokeWidth));
 }
 
+/** Corner radius of elbow connectors, in board units (capped by half of the shorter segment). */
+const ELBOW_CORNER_RADIUS = 12;
+
+/** Continues the path from `points[0]` through the corners with rounded joins. */
+function traceRoundedCorners(
+  g: ElementCanvasContext,
+  points: readonly Point[],
+  radius: number,
+): void {
+  for (let i = 1; i < points.length - 1; i++) {
+    const prev = points[i - 1]!;
+    const corner = points[i]!;
+    const next = points[i + 1]!;
+    const inLen = Math.hypot(corner.x - prev.x, corner.y - prev.y);
+    const outLen = Math.hypot(next.x - corner.x, next.y - corner.y);
+    const r = Math.min(radius, inLen / 2, outLen / 2);
+    if (r < 0.5) {
+      g.lineTo(corner.x, corner.y);
+      continue;
+    }
+    g.lineTo(
+      corner.x + ((prev.x - corner.x) / inLen) * r,
+      corner.y + ((prev.y - corner.y) / inLen) * r,
+    );
+    g.quadraticCurveTo(
+      corner.x,
+      corner.y,
+      corner.x + ((next.x - corner.x) / outLen) * r,
+      corner.y + ((next.y - corner.y) / outLen) * r,
+    );
+  }
+  const last = points[points.length - 1]!;
+  g.lineTo(last.x, last.y);
+}
+
 const DASHES: Readonly<Record<ConnectorDash, readonly number[]>> = {
   solid: [],
   dashed: [4, 4],
@@ -320,6 +365,8 @@ export function renderConnectorCanvas(
   if (props.style === 'curved' && route.controlPoints) {
     const [c1, c2] = route.controlPoints;
     g.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, last.x, last.y);
+  } else if (props.style === 'elbow') {
+    traceRoundedCorners(g, pts, ELBOW_CORNER_RADIUS);
   } else {
     for (let i = 1; i < pts.length; i++) {
       g.lineTo(pts[i]!.x, pts[i]!.y);
@@ -391,7 +438,8 @@ export const connectorElement = defineElement({
     endBindingId: null,
     start: { x: 0, y: 0 },
     end: { x: 120, y: 0 },
-    style: 'straight',
+    // Elbow by default, as in FigJam: drag its middle segment to bend it.
+    style: 'elbow',
     startArrow: 'none',
     endArrow: 'arrow',
     color: 'black',

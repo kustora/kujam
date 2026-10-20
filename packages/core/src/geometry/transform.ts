@@ -199,6 +199,44 @@ export function quickConnectHandles(frame: ElementTransform, offset: number): Qu
   }));
 }
 
+/**
+ * A draggable segment of an orthogonal (elbow) path: its index (`points[index]` to
+ * `points[index + 1]`), the axis it moves along, and its midpoint.
+ *
+ * @beta
+ */
+export interface SegmentHandle extends Point {
+  /** Index of the segment's first point in the path. */
+  readonly index: number;
+  /** `x` for a vertical segment (dragged sideways), `y` for a horizontal one. */
+  readonly axis: 'x' | 'y';
+}
+
+/**
+ * Handles of the segments of an orthogonal path that can be dragged: the inner segments when the
+ * path has stubs at both ends (4 or more points), otherwise every segment. Diagonal and very short
+ * segments get none.
+ *
+ * @beta
+ */
+export function segmentHandles(points: readonly Point[], minLength = 8): SegmentHandle[] {
+  const n = points.length;
+  if (n < 2) return [];
+  const first = n >= 4 ? 1 : 0;
+  const last = n >= 4 ? n - 3 : n - 2;
+  const out: SegmentHandle[] = [];
+  for (let i = first; i <= last; i++) {
+    const a = points[i]!;
+    const b = points[i + 1]!;
+    const vertical = Math.abs(a.x - b.x) < 1e-6;
+    const horizontal = Math.abs(a.y - b.y) < 1e-6;
+    if (vertical === horizontal) continue;
+    if (Math.hypot(b.x - a.x, b.y - a.y) < minLength) continue;
+    out.push({ index: i, axis: vertical ? 'x' : 'y', x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  }
+  return out;
+}
+
 /** Normalizes degrees to `[0, 360)` without returning `-0`. */
 function normalizeRotation(degrees: number): number {
   const r = ((degrees % 360) + 360) % 360;

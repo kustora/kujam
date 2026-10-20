@@ -204,6 +204,45 @@ describe('defineTool dan registri (BOARD-501)', () => {
   });
 });
 
+describe('ctx.setCursor', () => {
+  it('overrides the state and tool cursors until cleared or the tool is switched', () => {
+    const hover = defineTool({
+      id: 'hover',
+      cursor: 'crosshair',
+      initial: 'idle',
+      states: {
+        idle: {
+          onPointerMove(ctx, e) {
+            ctx.setCursor(e.point.x > 50 ? 'grab' : null);
+          },
+          onPointerDown: () => 'pressing',
+        },
+        pressing: { cursor: 'move', onPointerUp: () => 'idle' },
+      },
+    });
+    const other = defineTool({ id: 'other', initial: 'idle', states: { idle: {} } });
+    const board = createBoard();
+    board.tools.register(hover);
+    board.tools.register(other);
+    board.setTool('hover');
+    expect(board.cursor).toBe('crosshair');
+
+    board.dispatch({ ...pointer('pointer-move', 60, 0), buttons: 0 });
+    expect(board.cursor).toBe('grab');
+    // Kept while pressing, over the state cursor
+    board.dispatch(pointer('pointer-down', 60, 0));
+    expect(board.cursor).toBe('grab');
+    board.dispatch(pointer('pointer-up', 60, 0));
+    board.dispatch({ ...pointer('pointer-move', 10, 0), buttons: 0 });
+    expect(board.cursor).toBe('crosshair');
+
+    board.dispatch({ ...pointer('pointer-move', 60, 0), buttons: 0 });
+    board.setTool('other');
+    board.setTool('hover');
+    expect(board.cursor).toBe('crosshair');
+  });
+});
+
 describe('setTool, board.tool, dan event tool', () => {
   it('board mulai tanpa tool; setTool mengaktifkan dan memancarkan event', () => {
     const { board, toolEvents } = setup();

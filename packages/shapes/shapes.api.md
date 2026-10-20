@@ -121,6 +121,12 @@ export function computeElementConnectorRoute(element: ElementRecord<ConnectorPro
 export const CONNECTOR_STYLES: readonly ["straight", "elbow", "curved"];
 
 // @public
+export interface ConnectorBend {
+    readonly axis: 'x' | 'y';
+    readonly offset: number;
+}
+
+// @public
 export type ConnectorDash = 'solid' | 'dashed' | 'dotted';
 
 // @public
@@ -151,6 +157,10 @@ export const connectorElement: _kujam_core.ElementDefinition<"connector", {
             indent?: number | undefined;
         } | undefined;
     }[]>;
+    bend: _kujam_core.OptionalSchema<{
+        axis: "x" | "y";
+        offset: number;
+    } | null>;
 }, undefined>;
 
 // @public
@@ -177,6 +187,7 @@ export interface ConnectorPreview {
 
 // @public
 export interface ConnectorProps extends Record<string, unknown> {
+    bend?: ConnectorBend | null;
     // (undocumented)
     color: ColorKey;
     // (undocumented)
@@ -227,10 +238,15 @@ export const connectorPropsSchema: _kujam_core.ObjectSchema<{
             indent?: number | undefined;
         } | undefined;
     }[]>;
+    bend: _kujam_core.OptionalSchema<{
+        axis: "x" | "y";
+        offset: number;
+    } | null>;
 }>;
 
 // @public
 export interface ConnectorRouteOptions {
+    readonly bend?: ConnectorBend | null;
     // (undocumented)
     readonly clearance?: number;
     // (undocumented)
@@ -424,6 +440,10 @@ export const defaultElements: Readonly<{
                 indent?: number | undefined;
             } | undefined;
         }[]>;
+        bend: _kujam_core.OptionalSchema<{
+            axis: "x" | "y";
+            offset: number;
+        } | null>;
     }, undefined>, _kujam_core.ElementDefinition<"group", {}, undefined>, _kujam_core.ElementDefinition<"frame", {
         name: _kujam_core.Schema<string>;
         fill: _kujam_core.Schema<"yellow" | "green" | "pink" | "blue" | "purple" | "gray" | "none" | "surface">;
@@ -454,7 +474,7 @@ export type DefaultToolId = (typeof DEFAULT_TOOL_IDS)[number];
 // @public
 export const defaultTools: Readonly<{
     readonly id: "default-tools";
-    readonly tools: readonly [_kujam_core.ToolDefinition<"idle" | "quick-connecting" | "pointing" | "translating" | "brushing" | "resizing" | "rotating" | "reconnecting", SelectToolData>, _kujam_core.ToolDefinition<"idle" | "panning", HandToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<DrawToolState, DrawToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<ConnectorToolState, ConnectorToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<EraserToolState, EraserToolData>];
+    readonly tools: readonly [_kujam_core.ToolDefinition<"idle" | "quick-connecting" | "pointing" | "translating" | "brushing" | "resizing" | "rotating" | "bending" | "reconnecting", SelectToolData>, _kujam_core.ToolDefinition<"idle" | "panning", HandToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<DrawToolState, DrawToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<ConnectorToolState, ConnectorToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<EraserToolState, EraserToolData>];
     readonly keybindings: {
         readonly v: "tool:select";
         readonly h: "tool:hand";
@@ -855,10 +875,10 @@ export function sanitizePastedHtml(rawHtml: string): string;
 export function segmentDistance(a: readonly number[], b: readonly number[], c: readonly number[], d: readonly number[]): number;
 
 // @public
-export type SelectHandle = ResizeHandle | 'rotate' | 'connector-start' | 'connector-end';
+export type SelectHandle = ResizeHandle | 'rotate' | 'connector-start' | 'connector-end' | 'connector-segment';
 
 // @beta
-export const selectTool: _kujam_core.ToolDefinition<"idle" | "quick-connecting" | "pointing" | "translating" | "brushing" | "resizing" | "rotating" | "reconnecting", SelectToolData>;
+export const selectTool: _kujam_core.ToolDefinition<"idle" | "quick-connecting" | "pointing" | "translating" | "brushing" | "resizing" | "rotating" | "bending" | "reconnecting", SelectToolData>;
 
 // @beta
 export interface SelectToolData {
@@ -876,6 +896,7 @@ export interface SelectToolData {
     quickConnect?: QuickConnectTarget;
     quickConnectHover?: string | null;
     reconnectBindingId?: string;
+    segmentAxis?: 'x' | 'y';
     start: Point;
     // (undocumented)
     startScreen: Point;

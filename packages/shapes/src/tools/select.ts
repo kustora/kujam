@@ -7,6 +7,7 @@ import {
   resolveElementGeometry,
   rotateElements,
   ROTATION_SNAP_DEGREES,
+  segmentHandles,
   selectionFrame,
   snapTranslation,
   transformHandles,
@@ -32,7 +33,7 @@ import {
   type ConnectorPreview,
   type ConnectorSnapTarget,
 } from '../elements/connector-routing.js';
-import type { ConnectorProps } from '../elements/connector.js';
+import { computeElementConnectorRoute, type ConnectorProps } from '../elements/connector.js';
 import { buildDuplicate } from './duplicate.js';
 import { handlePinch, handleWheel } from './navigation.js';
 import {
@@ -50,9 +51,12 @@ export const HANDLE_TOLERANCE_PX = 8;
 export const ROTATE_HANDLE_OFFSET_PX = 24;
 /** Hit-test tolerance for clicking elements, in screen pixels. @public */
 export const HIT_TOLERANCE_PX = 4;
+/** Shortest elbow segment, in screen pixels, that gets a drag handle (twice the renderer's pill). */
+const SEGMENT_MIN_LENGTH_PX = 32;
 
 /** Handle identifier for select tool interactions. @public */
-export type SelectHandle = ResizeHandle | 'rotate' | 'connector-start' | 'connector-end';
+export type SelectHandle =
+  ResizeHandle | 'rotate' | 'connector-start' | 'connector-end' | 'connector-segment';
 
 /**
  * `ctx.data` of the select tool. The renderer reads it from `board.toolData` to draw feedback:
@@ -71,6 +75,8 @@ export interface SelectToolData {
   connectorSnap?: ConnectorSnapTarget;
   /** Generated binding ID reused during a connector endpoint drag session. */
   reconnectBindingId?: string;
+  /** Axis of the elbow segment being dragged (`connector-segment` handle). */
+  segmentAxis?: 'x' | 'y';
   /** Board and screen position of the press that started the interaction. */
   start: Point;
   startScreen: Point;
@@ -107,6 +113,7 @@ type State =
   | 'resizing'
   | 'rotating'
   | 'reconnecting'
+  | 'bending'
   | 'quick-connecting';
 type Ctx = ToolContext<State, SelectToolData>;
 
@@ -201,7 +208,7 @@ function handleAt(board: Board, screen: Point): SelectHandle | null {
     if (dStart <= HANDLE_TOLERANCE_PX || dEnd <= HANDLE_TOLERANCE_PX) {
       return dStart <= dEnd ? 'connector-start' : 'connector-end';
     }
-    return null;
+    return segmentAt(board, conn, screen) ? 'connector-segment' : null;
   }
 
   const frame = selectionFrame(items, { registry: board.elements });
@@ -218,6 +225,73 @@ function handleAt(board: Board, screen: Point): SelectHandle | null {
     }
   }
   return best;
+}
+
+/** Resize cursors by handle direction, every 45 degrees clockwise from east. */
+const RESIZE_CURSORS = ['ew-resize', 'nwse-resize', 'ns-resize', 'nesw-resize'] as const;
+const HANDLE_ANGLE: Readonly<Record<ResizeHandle, number>> = {
+  e: 0,
+  se: 45,
+  s: 90,
+  sw: 135,
+  w: 180,
+  nw: 225,
+  n: 270,
+  ne: 315,
+};
+
+/** CSS cursor for the handle under `screen`, or `null` for the default cursor. */
+function hoverCursor(board: Board, screen: Point): string | null {
+  const handle = handleAt(board, screen);
+  if (!handle) return null;
+  if (handle === 'rotate') return 'grab';
+  if (handle === 'connector-start' || handle === 'connector-end') return 'crosshair';
+  if (handle === 'connector-segment') {
+    const items = transformable(board);
+    const conn = items[0] as Readonly<ElementRecord<ConnectorProps>> | undefined;
+    const segment = conn ? segmentAt(board, conn, screen) : null;
+    return segment?.axis === 'x' ? 'ew-resize' : 'ns-resize';
+  }
+  // Rotated selections turn the resize arrows with them, snapped to 45 degrees.
+  const frame = selectionFrame(transformable(board), { registry: board.elements });
+  const angle = HANDLE_ANGLE[handle] + (frame?.rotation ?? 0);
+  const step = ((Math.round(angle / 45) % 4) + 4) % 4;
+  return RESIZE_CURSORS[step]!;
+}
+
+/** The draggable elbow segment of `conn` under `screen`, if any. */
+function segmentAt(
+  board: Board,
+  conn: Readonly<ElementRecord<ConnectorProps>>,
+  screen: Point,
+): { axis: 'x' | 'y' } | null {
+  if (conn.props.style !== 'elbow') return null;
+  const route = computeElementConnectorRoute(conn as ElementRecord<ConnectorProps>, board);
+  // Same screen-space rule as the renderer's segment pills.
+  const onScreen = route.points.map((p) =>
+    board.camera.boardToScreen({ x: conn.x + p.x, y: conn.y + p.y }),
+  );
+  for (const handle of segmentHandles(onScreen, SEGMENT_MIN_LENGTH_PX)) {
+    if (Math.hypot(handle.x - screen.x, handle.y - screen.y) <= HANDLE_TOLERANCE_PX + 2) {
+      return { axis: handle.axis };
+    }
+  }
+  return null;
+}
+
+/** Moves the dragged elbow segment to the pointer, stored as the connector's `bend`. */
+function dragConnectorSegment(ctx: Ctx, e: ToolPointerEvent): void {
+  const { data } = ctx;
+  const orig = data.originals[0] as ElementRecord<ConnectorProps> | undefined;
+  if (!orig || orig.type !== 'connector' || !data.segmentAxis) return;
+  const axis = data.segmentAxis;
+  const mid =
+    axis === 'x'
+      ? orig.x + (orig.props.start.x + orig.props.end.x) / 2
+      : orig.y + (orig.props.start.y + orig.props.end.y) / 2;
+  const offset = (axis === 'x' ? e.point.x : e.point.y) - mid;
+  const updated = { ...orig, props: { ...orig.props, bend: { axis, offset } } };
+  ctx.change((tx) => tx.put(updated as ElementRecord), { label: 'connector-bend' });
 }
 
 function dragConnectorEndpoint(ctx: Ctx, e: ToolPointerEvent): void {
@@ -456,6 +530,13 @@ export const selectTool = defineTool({
           if (handle === 'connector-start' || handle === 'connector-end') {
             return 'reconnecting';
           }
+          if (handle === 'connector-segment') {
+            const conn = data.originals[0] as ElementRecord<ConnectorProps> | undefined;
+            const segment = conn ? segmentAt(board, conn, e.screen) : null;
+            if (!segment) return;
+            data.segmentAxis = segment.axis;
+            return 'bending';
+          }
           return handle === 'rotate' ? 'rotating' : 'resizing';
         }
 
@@ -527,6 +608,8 @@ export const selectTool = defineTool({
       onPointerMove(ctx, e) {
         const side = quickConnectAt(ctx.board, e.screen)?.side ?? null;
         if ((ctx.data.quickConnectHover ?? null) !== side) ctx.data.quickConnectHover = side;
+        // The cursor shows what a press would grab; it stays during the drag that follows.
+        ctx.setCursor(side ? 'crosshair' : hoverCursor(ctx.board, e.screen));
       },
       onWheel: (ctx, e) => handleWheel(ctx.board, e),
       onPinch: (ctx, e) => handlePinch(ctx.board, e),
@@ -538,7 +621,10 @@ export const selectTool = defineTool({
         const { board, data } = ctx;
         const s = data.startScreen;
         if (!data.quickConnect) return;
-        if (!data.connectorPreview && Math.hypot(e.screen.x - s.x, e.screen.y - s.y) < DRAG_THRESHOLD_PX) {
+        if (
+          !data.connectorPreview &&
+          Math.hypot(e.screen.x - s.x, e.screen.y - s.y) < DRAG_THRESHOLD_PX
+        ) {
           return;
         }
         const next = quickConnectPreview(board, data.quickConnect, e.point);
@@ -620,7 +706,8 @@ export const selectTool = defineTool({
           !data.handle ||
           data.handle === 'rotate' ||
           data.handle === 'connector-start' ||
-          data.handle === 'connector-end'
+          data.handle === 'connector-end' ||
+          data.handle === 'connector-segment'
         ) {
           return;
         }
@@ -646,6 +733,19 @@ export const selectTool = defineTool({
       },
       onPointerUp: () => 'idle',
       onCancel: restoreSelection,
+    },
+
+    bending: {
+      cursor: 'grabbing',
+      onPointerMove: dragConnectorSegment,
+      onPointerUp(ctx) {
+        delete ctx.data.segmentAxis;
+        return 'idle';
+      },
+      onCancel(ctx) {
+        delete ctx.data.segmentAxis;
+        restoreSelection(ctx);
+      },
     },
 
     reconnecting: {

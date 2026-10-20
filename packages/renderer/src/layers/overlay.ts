@@ -8,6 +8,7 @@
 import {
   QUICK_CONNECT_OFFSET_PX,
   quickConnectHandles,
+  segmentHandles,
   selectionFrame,
   transformHandles,
   type Board,
@@ -33,6 +34,10 @@ export const ROTATE_HANDLE_OFFSET_PX = 24;
 export const CONNECTOR_HANDLE_RADIUS_PX = 5;
 /** Quick-connect handle radius in screen pixels; larger while hovered. @public */
 export const QUICK_CONNECT_RADIUS_PX = 5;
+/** Length of the pill drawn on a draggable elbow connector segment, in screen pixels. @public */
+export const SEGMENT_HANDLE_LENGTH_PX = 16;
+/** Thickness of the elbow segment pill, in screen pixels. @public */
+export const SEGMENT_HANDLE_THICKNESS_PX = 6;
 /** Alignment snap guide line color. @public */
 export const SNAP_GUIDE_COLOR = '#e02874';
 /** Marquee selection box fill color. @public */
@@ -730,13 +735,49 @@ export class OverlayRenderer {
       ctx.save();
       ctx.scale(pixelRatio, pixelRatio);
 
-      // Subtle highlight line between startWorld and endWorld
+      // Subtle highlight along the routed path (its polyline geometry), or start to end
+      const geometry = board.elements.get(el.type)?.geometry?.(el as never);
+      const route =
+        geometry?.kind === 'polyline' && geometry.points.length >= 2
+          ? geometry.points.map((p) => camera.boardToScreen({ x: el.x + p.x, y: el.y + p.y }))
+          : [sStart, sEnd];
       ctx.beginPath();
-      ctx.moveTo(sStart.x, sStart.y);
-      ctx.lineTo(sEnd.x, sEnd.y);
+      ctx.moveTo(route[0]!.x, route[0]!.y);
+      // Elbow corners are rounded like the connector itself (12 board units).
+      const cornerRadius = (props as { style?: string }).style === 'elbow' ? 12 * zoom : 0;
+      for (let i = 1; i < route.length - 1; i++) {
+        const prev = route[i - 1]!;
+        const corner = route[i]!;
+        const next = route[i + 1]!;
+        const r = Math.min(
+          cornerRadius,
+          Math.hypot(corner.x - prev.x, corner.y - prev.y) / 2,
+          Math.hypot(next.x - corner.x, next.y - corner.y) / 2,
+        );
+        if (r > 0.5) ctx.arcTo(corner.x, corner.y, next.x, next.y, r);
+        else ctx.lineTo(corner.x, corner.y);
+      }
+      ctx.lineTo(route[route.length - 1]!.x, route[route.length - 1]!.y);
       ctx.strokeStyle = selectionStroke;
       ctx.lineWidth = 1.5;
       ctx.stroke();
+
+      // Elbow connectors: a pill on each draggable segment
+      if ((props as { style?: string }).style === 'elbow') {
+        for (const handle of segmentHandles(route, SEGMENT_HANDLE_LENGTH_PX * 2)) {
+          const long = SEGMENT_HANDLE_LENGTH_PX;
+          const short = SEGMENT_HANDLE_THICKNESS_PX;
+          const w = handle.axis === 'y' ? long : short;
+          const h = handle.axis === 'y' ? short : long;
+          ctx.beginPath();
+          ctx.roundRect?.(handle.x - w / 2, handle.y - h / 2, w, h, short / 2);
+          ctx.fillStyle = selectionStroke;
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        }
+      }
 
       // Circular endpoint handles (radius 5px, white fill, 2px selectionStroke border)
       const endpoints = [

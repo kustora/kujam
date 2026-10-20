@@ -66,6 +66,7 @@ export {
   simplifyOrthogonalPoints,
   type AnchorSide,
   type ArrowheadStyle,
+  type ConnectorBend,
   type ConnectorDash,
   type ConnectorPreview,
   type ConnectorRouteOptions,

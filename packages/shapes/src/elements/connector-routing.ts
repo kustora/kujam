@@ -106,11 +106,27 @@ export interface ConnectorPreview {
 }
 
 /**
+ * Manual placement of an elbow connector's middle segment, set by dragging it: the segment runs
+ * along `axis` (`x`: a vertical segment at that x) at `offset` board units from the midpoint
+ * between the connector's ends, so it follows when bound shapes move.
+ *
+ * @public
+ */
+export interface ConnectorBend {
+  /** `x`: the middle segment is vertical, at an x position; `y`: horizontal, at a y position. */
+  readonly axis: 'x' | 'y';
+  /** Distance of the segment from the midpoint between the ends, in board units. */
+  readonly offset: number;
+}
+
+/**
  * Options for {@link computeConnectorRoute}.
  *
  * @public
  */
 export interface ConnectorRouteOptions {
+  /** Manual middle segment of an elbow route; obstacle avoidance is then skipped. */
+  readonly bend?: ConnectorBend | null;
   readonly startSide?: AnchorSide | null;
   readonly endSide?: AnchorSide | null;
   readonly startBounds?: BoxBounds | null;
@@ -404,6 +420,17 @@ function reversesStub(
   return false;
 }
 
+/**
+ * Clamps a bent segment coordinate to `[max(mins), min(maxes)]`. When the limits conflict (the
+ * stubs face each other's far sides), the value is kept as dragged.
+ */
+function clampBend(value: number, mins: readonly number[], maxes: readonly number[]): number {
+  const lo = Math.max(...mins);
+  const hi = Math.min(...maxes);
+  if (lo > hi) return value;
+  return Math.min(hi, Math.max(lo, value));
+}
+
 function computeElbowPoints(
   start: Point,
   end: Point,
@@ -419,6 +446,46 @@ function computeElbowPoints(
 
   const startStub = computeStubPoint(start, startSide, options.startBounds, clearance);
   const endStub = computeStubPoint(end, endSide, options.endBounds, clearance);
+
+  // A dragged middle segment wins over automatic routing. It stays on the outer side of both
+  // stubs, so the path still leaves and enters bound shapes from their bound sides.
+  const bend = options.bend;
+  if (bend) {
+    if (bend.axis === 'x') {
+      const x = clampBend(
+        (start.x + end.x) / 2 + bend.offset,
+        [
+          startSide === 'right' ? startStub.x : -Infinity,
+          endSide === 'right' ? endStub.x : -Infinity,
+        ],
+        [startSide === 'left' ? startStub.x : Infinity, endSide === 'left' ? endStub.x : Infinity],
+      );
+      return simplifyOrthogonalPoints([
+        start,
+        startStub,
+        { x, y: startStub.y },
+        { x, y: endStub.y },
+        endStub,
+        end,
+      ]);
+    }
+    const y = clampBend(
+      (start.y + end.y) / 2 + bend.offset,
+      [
+        startSide === 'bottom' ? startStub.y : -Infinity,
+        endSide === 'bottom' ? endStub.y : -Infinity,
+      ],
+      [startSide === 'top' ? startStub.y : Infinity, endSide === 'top' ? endStub.y : Infinity],
+    );
+    return simplifyOrthogonalPoints([
+      start,
+      startStub,
+      { x: startStub.x, y },
+      { x: endStub.x, y },
+      endStub,
+      end,
+    ]);
+  }
 
   // Build padded obstacle boxes for intermediate routing between startStub and endStub.
   const paddedObstacles: BoxBounds[] = [];
