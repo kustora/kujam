@@ -12,6 +12,7 @@ import type {
   HistoryEvent,
   PageEvent,
   SelectionEvent,
+  SyncChangeEvent,
   ThemeDefinition,
   ToolEvent,
   ToolStyleEvent,
@@ -25,6 +26,7 @@ type ListenerArg<K extends keyof BoardEventMap> = Parameters<
 >[0];
 
 export type Tests = [
+  Expect<Equal<ListenerArg<'sync'>, SyncChangeEvent>>,
   Expect<
     Equal<
       keyof BoardEventMap,
@@ -41,6 +43,7 @@ export type Tests = [
       | 'history'
       | 'theme'
       | 'dispose'
+      | 'sync'
     >
   >,
   Expect<Equal<BoardEventMap['change'], ChangeEvent>>,

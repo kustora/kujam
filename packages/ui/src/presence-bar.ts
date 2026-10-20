@@ -89,7 +89,7 @@ export function translateStatus(status: string, board: Board): string {
 }
 
 function getSyncAdapter(board: Board): SyncAdapter | undefined {
-  return (board as unknown as { sync?: SyncAdapter }).sync;
+  return board.sync;
 }
 
 function getPresenceApi(board: Board): PresenceApi | undefined {
@@ -555,6 +555,8 @@ function renderPresenceBar(root: ShadowRoot, board: Board, host: HTMLElement): (
   // Initial render & bindings
   updateAll();
 
+  // `attachSync` may run after the bar is mounted (for example once a provider has connected).
+  const offSync = board.on('sync', () => updateAll());
   const offCameraFollow = board.on('camera-follow', () => renderPeers());
   const offFollow = board.on('follow', () => renderPeers());
   const offCamera = board.on('camera', () => renderPeers());
@@ -572,6 +574,7 @@ function renderPresenceBar(root: ShadowRoot, board: Board, host: HTMLElement): (
       unbindPresence();
       unbindPresence = null;
     }
+    offSync();
     offCameraFollow();
     offFollow();
     offCamera();

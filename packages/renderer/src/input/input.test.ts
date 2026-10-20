@@ -1,6 +1,15 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createBoard, defineTool, definePlugin, type Board, type BoardInputEvent } from '@kujam/core';
+import {
+  attachSync,
+  createBoard,
+  createMemorySyncAdapter,
+  createMemorySyncBus,
+  defineTool,
+  definePlugin,
+  type Board,
+  type BoardInputEvent,
+} from '@kujam/core';
 import { mountRenderer, type BoardView } from '../index.js';
 import { MIN_PEN_PRESSURE } from './input.js';
 
@@ -543,5 +552,30 @@ describe('BOARD-806: Keyboard & Focus', () => {
     );
 
     expect(dispatchedEvents).toHaveLength(0);
+  });
+});
+
+describe('BOARD-1504: local cursor presence', () => {
+  it('publishes the hover and drag position in board coordinates and clears it on leave', () => {
+    const { board, view } = setup();
+    attachSync(board, createMemorySyncAdapter({ bus: createMemorySyncBus(), channel: 'cursor' }));
+    board.camera.set({ x: 100, y: 50, zoom: 2 });
+    const spy = vi.spyOn(board.presence!, 'setLocalState');
+    const canvas = view.layers.canvas;
+
+    // Hover (no button) is not dispatched to tools but still moves the cursor.
+    canvas.dispatchEvent(new PointerEvent('pointermove', { clientX: 40, clientY: 20, buttons: 0 }));
+    expect(spy).toHaveBeenLastCalledWith({ cursor: { x: 120, y: 60 } });
+    expect(dispatchedEvents.some((e) => e.type === 'pointer-move')).toBe(false);
+
+    canvas.dispatchEvent(new PointerEvent('pointerleave'));
+    expect(spy).toHaveBeenLastCalledWith({ cursor: null });
+  });
+
+  it('does nothing without presence', () => {
+    const { view } = setup();
+    expect(() =>
+      view.layers.canvas.dispatchEvent(new PointerEvent('pointermove', { clientX: 1, clientY: 1 })),
+    ).not.toThrow();
   });
 });

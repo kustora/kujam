@@ -130,3 +130,17 @@ const provider = new HocuspocusProvider({
   },
 });
 ```
+
+---
+
+## Mencoba dengan Lab Sinkronisasi Playground
+
+Lab `sync-lab` di playground (BOARD-2410) bisa memakai server ini sebagai transport:
+
+```bash
+pnpm --filter @kujam/example-hocuspocus-server dev   # ws://127.0.0.1:1234
+pnpm playground
+# buka /s/sync-lab?transport=hocuspocus (opsional: &server=ws://...&room=nama&peers=3)
+```
+
+Setiap papan memakai token mock `mock:<id>:editor:<nama>`. Dengan `peers=1&peer=<0|1|2>`, beberapa jendela browser masing-masing menjadi satu pengguna.

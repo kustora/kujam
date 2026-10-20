@@ -264,6 +264,33 @@ export interface BoardSyncHistoryDelegateHook {
 }
 
 /**
+ * Payload of the board `sync` event: the sync adapter now attached to the board, or `null` after
+ * it was detached.
+ *
+ * @beta
+ */
+export interface SyncChangeEvent {
+  readonly adapter: SyncAdapter | null;
+}
+
+/**
+ * Internal symbol used to register the attached sync adapter on a Board.
+ *
+ * @internal
+ */
+export const BOARD_SYNC_ADAPTER_DELEGATE = Symbol.for('kujam.board.syncAdapterDelegate');
+
+/**
+ * Internal interface on Board for exposing the attached sync adapter as `board.sync`.
+ *
+ * @internal
+ */
+export interface BoardSyncAdapterDelegateHook {
+  /** Sets the attached adapter and emits `sync`. Returns a function that clears it again. */
+  setSyncAdapter(adapter: SyncAdapter | null): () => void;
+}
+
+/**
  * Internal symbol used to register and detach external presence delegates on a Board.
  *
  * @internal
@@ -311,6 +338,12 @@ export function attachSync(board: Board, adapter: SyncAdapter): SyncAttachment {
     unregisterPresenceDelegate = presenceHook.setPresenceDelegate(adapter.presence);
   }
 
+  // Exposed as `board.sync` before connecting, so `sync` listeners see the first status change.
+  const adapterHook = (
+    board as unknown as { [BOARD_SYNC_ADAPTER_DELEGATE]?: BoardSyncAdapterDelegateHook }
+  )[BOARD_SYNC_ADAPTER_DELEGATE];
+  let unregisterAdapter = adapterHook?.setSyncAdapter(adapter);
+
   const connectResult = adapter.connect(board);
   if (connectResult && typeof (connectResult as Promise<void>).then === 'function') {
     (connectResult as Promise<void>).catch((err) => {
@@ -339,6 +372,9 @@ export function attachSync(board: Board, adapter: SyncAdapter): SyncAttachment {
       presenceHook.setPresenceDelegate(null);
     }
     adapter.disconnect();
+    // After disconnecting, so listeners still receive the final `offline` status.
+    unregisterAdapter?.();
+    unregisterAdapter = undefined;
   }
 
   return {

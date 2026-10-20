@@ -8,6 +8,7 @@ import type { ChangeEvent } from '../document/store.js';
 import type { ThemeDefinition } from '../theme/theme.js';
 import type { ToolStyleEvent } from '../tools/tool-styles.js';
 import type { CameraState } from '../types.js';
+import type { SyncChangeEvent } from '../sync/sync.js';
 
 /**
  * Typed event listener.
@@ -218,6 +219,13 @@ export interface BoardEventMap {
    * @beta
    */
   dispose: undefined;
+  /**
+   * A sync adapter was attached with `attachSync` or detached; `board.sync` changed. UI that
+   * shows the connection status listens to it to (re)bind to the adapter.
+   *
+   * @beta
+   */
+  sync: SyncChangeEvent;
 }
 
 /**

@@ -313,7 +313,23 @@ export function attachInput(
     state.lastPoint = point;
   }
 
+  /**
+   * Shares the pointer position with collaborators through `board.presence` (BOARD-1504), also
+   * while hovering, which tools never see. The presence layer throttles it. `null` hides it.
+   */
+  function publishCursor(e: PointerEvent | null): void {
+    const presence = board.presence;
+    if (!presence) return;
+    if (e === null) {
+      presence.setLocalState({ cursor: null });
+      return;
+    }
+    const point = board.camera.screenToBoard(toScreen(e.clientX, e.clientY));
+    presence.setLocalState({ cursor: { x: point.x, y: point.y } });
+  }
+
   function onPointerMove(e: PointerEvent): void {
+    publishCursor(e);
     if (!activePointers.has(e.pointerId)) {
       if (e.buttons === 0) {
         const screen = toScreen(e.clientX, e.clientY);
@@ -595,6 +611,7 @@ export function attachInput(
   }
 
   function onPointerLeave(): void {
+    publishCursor(null);
     if (currentHoverId !== null) {
       currentHoverId = null;
       options?.onHover?.(null);

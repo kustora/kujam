@@ -113,6 +113,8 @@ export interface BindingRecord {
 // @public
 export interface Board {
     // @internal
+    readonly [BOARD_SYNC_ADAPTER_DELEGATE]?: BoardSyncAdapterDelegateHook;
+    // @internal
     readonly [BOARD_SYNC_HISTORY_DELEGATE]?: BoardSyncHistoryDelegateHook;
     // @internal
     readonly [BOARD_SYNC_PRESENCE_DELEGATE]?: BoardSyncPresenceDelegateHook;
@@ -202,6 +204,8 @@ export interface Board {
     // @beta
     readonly snapOptions: Readonly<SnapOptions>;
     readonly spatial: SpatialIndex;
+    // @beta
+    readonly sync?: SyncAdapter;
     t(key: string, params?: TranslationParams): string;
     // @beta
     readonly theme: Readonly<ThemeDefinition>;
@@ -303,6 +307,8 @@ export interface BoardEventMap {
     page: PageEvent;
     // @beta
     selection: SelectionEvent;
+    // @beta
+    sync: SyncChangeEvent;
     // @beta
     theme: Readonly<ThemeDefinition>;
     // @beta
@@ -2201,6 +2207,12 @@ export interface SyncAdapter {
 export interface SyncAttachment {
     readonly adapter: SyncAdapter;
     disconnect(): void;
+}
+
+// @beta
+export interface SyncChangeEvent {
+    // (undocumented)
+    readonly adapter: SyncAdapter | null;
 }
 
 // @public

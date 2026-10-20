@@ -417,3 +417,45 @@ describe('BOARD-1501: SyncAdapter, PresenceApi, HistoryApi', () => {
     });
   });
 });
+
+describe('board.sync and the sync event', () => {
+  it('exposes the attached adapter and emits sync on attach and detach', () => {
+    const board = createBoard();
+    const bus = createMemorySyncBus();
+    const adapter = createMemorySyncAdapter({ bus, channel: 'board-sync' });
+    const seen: Array<[SyncAdapter | null, SyncStatus]> = [];
+    board.on('sync', (e) => seen.push([e.adapter, adapter.status]));
+    expect(board.sync).toBeUndefined();
+
+    const attachment = attachSync(board, adapter);
+    expect(board.sync).toBe(adapter);
+    // Emitted before connecting, so listeners can subscribe to the first status change.
+    expect(seen).toEqual([[adapter, 'offline']]);
+
+    attachment.disconnect();
+    expect(board.sync).toBeUndefined();
+    expect(seen).toEqual([
+      [adapter, 'offline'],
+      [null, 'offline'],
+    ]);
+    attachment.disconnect();
+    expect(seen).toHaveLength(2);
+  });
+
+  it('keeps the newer adapter when an older attachment disconnects', () => {
+    const board = createBoard();
+    const bus = createMemorySyncBus();
+    const first = attachSync(board, createMemorySyncAdapter({ bus, channel: 'a' }));
+    const second = createMemorySyncAdapter({ bus, channel: 'b' });
+    attachSync(board, second);
+    first.disconnect();
+    expect(board.sync).toBe(second);
+  });
+
+  it('clears board.sync on dispose', () => {
+    const board = createBoard();
+    attachSync(board, createMemorySyncAdapter({ bus: createMemorySyncBus(), channel: 'd' }));
+    board.dispose();
+    expect(board.sync).toBeUndefined();
+  });
+});

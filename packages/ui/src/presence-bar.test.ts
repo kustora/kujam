@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  attachSync,
   createBoard,
   createMemorySyncAdapter,
   createMemorySyncBus,
@@ -12,11 +13,7 @@ import {
   type SyncAdapter,
   type SyncStatus,
 } from '@kujam/core';
-import {
-  defineUiElements,
-  mountDefaultUi,
-  UI_TAGS,
-} from './index.js';
+import { defineUiElements, mountDefaultUi, UI_TAGS } from './index.js';
 import {
   getContrastColor,
   getInitials,
@@ -51,6 +48,11 @@ function mountPresenceBar(board: Board): PresenceBarElement {
   el.board = board;
   document.body.append(el);
   return el;
+}
+
+/** Exposes a fake adapter as `board.sync`, which is otherwise only set by `attachSync`. */
+function fakeSync(board: Board, sync: unknown): void {
+  Object.defineProperty(board, 'sync', { value: sync, configurable: true });
 }
 
 describe('BOARD-1407: getInitials and getContrastColor helpers', () => {
@@ -117,7 +119,7 @@ describe('BOARD-1407: Presence Bar Component (<kujam-presence-bar>)', () => {
       },
     };
 
-    (board as unknown as { sync: Partial<SyncAdapter> }).sync = mockSync;
+    fakeSync(board, mockSync);
     const el = mountPresenceBar(board);
 
     const shadow = el.shadowRoot!;
@@ -168,9 +170,9 @@ describe('BOARD-1407: Presence Bar Component (<kujam-presence-bar>)', () => {
       },
     });
 
-    (board as unknown as { sync?: { presence: { peers: Map<string, PresencePeerState> } } }).sync = {
+    fakeSync(board, {
       presence: { peers: peersMap },
-    };
+    });
 
     const el = mountPresenceBar(board);
     const shadow = el.shadowRoot!;
@@ -208,9 +210,9 @@ describe('BOARD-1407: Presence Bar Component (<kujam-presence-bar>)', () => {
       },
     });
 
-    (board as unknown as { sync?: { presence: { peers: Map<string, PresencePeerState> } } }).sync = {
+    fakeSync(board, {
       presence: { peers: peersMap },
-    };
+    });
 
     const el = mountPresenceBar(board);
     const shadow = el.shadowRoot!;
@@ -239,9 +241,9 @@ describe('BOARD-1407: Presence Bar Component (<kujam-presence-bar>)', () => {
       },
     });
 
-    (board as unknown as { sync?: { presence: { peers: Map<string, PresencePeerState> } } }).sync = {
+    fakeSync(board, {
       presence: { peers: peersMap },
-    };
+    });
 
     const el = mountPresenceBar(board);
     const shadow = el.shadowRoot!;
@@ -288,9 +290,9 @@ describe('BOARD-1407: Presence Bar Component (<kujam-presence-bar>)', () => {
       },
     });
 
-    (board as unknown as { sync?: { presence: { peers: Map<string, PresencePeerState> } } }).sync = {
+    fakeSync(board, {
       presence: { peers: peersMap },
-    };
+    });
 
     const el = mountPresenceBar(board);
     const shadow = el.shadowRoot!;
@@ -317,7 +319,7 @@ describe('BOARD-1407: Presence Bar Component (<kujam-presence-bar>)', () => {
     const adapter1 = createMemorySyncAdapter({ bus, channel: 'presence-test', user: user1 });
     const adapter2 = createMemorySyncAdapter({ bus, channel: 'presence-test', user: user2 });
 
-    (board as unknown as { sync: SyncAdapter }).sync = adapter1;
+    fakeSync(board, adapter1);
     const el = mountPresenceBar(board);
 
     // Initially no remote peers
@@ -399,9 +401,9 @@ describe('BOARD-1407: Presence Bar Component (<kujam-presence-bar>)', () => {
       },
     };
 
-    (board as unknown as { sync?: { presence: unknown } }).sync = {
+    fakeSync(board, {
       presence: mockPresence,
-    };
+    });
 
     const el = mountPresenceBar(board);
     expect(el.shadowRoot!.querySelectorAll('.avatar-btn').length).toBe(0);
@@ -446,5 +448,24 @@ describe('BOARD-1407: Presence Bar Component (<kujam-presence-bar>)', () => {
 
     board.setTheme('dark');
     expect(el.dataset.theme).toBe('dark');
+  });
+});
+
+describe('BOARD-1407: presence bar with attachSync', () => {
+  it('binds to an adapter attached after the bar was mounted, and unbinds on detach', () => {
+    const board = makeBoard('id');
+    const el = mountPresenceBar(board);
+    const label = () => el.shadowRoot!.querySelector('.status-label')!.textContent;
+    expect(label()).toBe('Offline');
+
+    const attachment = attachSync(
+      board,
+      createMemorySyncAdapter({ bus: createMemorySyncBus(), channel: 'presence-bar' }),
+    );
+    expect(board.sync?.status).toBe('synced');
+    expect(label()).toBe('Tersinkron');
+
+    attachment.disconnect();
+    expect(label()).toBe('Offline');
   });
 });

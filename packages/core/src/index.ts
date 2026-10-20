@@ -35,12 +35,15 @@ import {
   type HistoryOptions,
 } from './history/history.js';
 import {
+  BOARD_SYNC_ADAPTER_DELEGATE,
   BOARD_SYNC_HISTORY_DELEGATE,
   BOARD_SYNC_PRESENCE_DELEGATE,
+  type BoardSyncAdapterDelegateHook,
   type BoardSyncHistoryDelegateHook,
   type BoardSyncPresenceDelegateHook,
   type HistoryApi,
   type PresenceApi,
+  type SyncAdapter,
 } from './sync/sync.js';
 import { createId as createRandomId, type IdGenerator } from './utils/ids.js';
 import { createInteraction } from './tools/interaction.js';
@@ -426,6 +429,7 @@ export {
   type PresenceUser,
   type SyncAdapter,
   type SyncAttachment,
+  type SyncChangeEvent,
   type SyncErrorDetail,
   type SyncEventMap,
   type SyncStatus,
@@ -1186,6 +1190,13 @@ export interface Board {
    */
   readonly presence?: PresenceApi;
   /**
+   * Sync adapter attached with `attachSync`, or undefined when none is attached. Changes emit the
+   * `sync` event.
+   *
+   * @beta
+   */
+  readonly sync?: SyncAdapter;
+  /**
    * Internal hook for sync adapter history delegation.
    *
    * @internal
@@ -1197,6 +1208,12 @@ export interface Board {
    * @internal
    */
   readonly [BOARD_SYNC_PRESENCE_DELEGATE]?: BoardSyncPresenceDelegateHook;
+  /**
+   * Internal hook used by `attachSync` to expose the adapter as `board.sync`.
+   *
+   * @internal
+   */
+  readonly [BOARD_SYNC_ADAPTER_DELEGATE]?: BoardSyncAdapterDelegateHook;
 }
 
 /**
@@ -1716,6 +1733,15 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   let historyDelegate: HistoryApi | null = null;
   let historyDelegateUnsubscribe: (() => void) | null = null;
   let presenceDelegate: PresenceApi | null = null;
+  let syncAdapter: SyncAdapter | null = null;
+
+  function setSyncAdapter(adapter: SyncAdapter | null): () => void {
+    syncAdapter = adapter;
+    events.emit('sync', Object.freeze({ adapter }));
+    return () => {
+      if (syncAdapter === adapter && adapter !== null) setSyncAdapter(null);
+    };
+  }
   let presenceUnsubscribeChange: (() => void) | null = null;
   let presenceUnsubscribeLeave: (() => void) | null = null;
 
@@ -2240,6 +2266,9 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     get presence(): PresenceApi | undefined {
       return presenceDelegate ?? undefined;
     },
+    get sync(): SyncAdapter | undefined {
+      return syncAdapter ?? undefined;
+    },
     [BOARD_SYNC_HISTORY_DELEGATE]: {
       setHistoryDelegate,
       getHistoryDelegate: () => historyDelegate,
@@ -2248,6 +2277,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       setPresenceDelegate,
       getPresenceDelegate: () => presenceDelegate,
     },
+    [BOARD_SYNC_ADAPTER_DELEGATE]: { setSyncAdapter },
     undo(): boolean {
       assertUsable();
       if (tools.busy) return tools.cancel();

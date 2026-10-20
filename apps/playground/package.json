@@ -12,6 +12,7 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
+    "@hocuspocus/provider": "^4.7.1",
     "@kujam/core": "workspace:*",
     "@kujam/export": "workspace:*",
     "@kujam/react": "workspace:*",
@@ -25,7 +26,9 @@
     "qrcode-generator": "^2.0.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "vue": "^3.5.13"
+    "vue": "^3.5.13",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.24"
   },
   "devDependencies": {
     "@kujam/spike-board-008-richtext": "workspace:^",
