@@ -157,10 +157,12 @@ export interface BoardView {
    * Mounts an active DOM editor (e.g. text or rich text editor) inside the HTML camera layer (BOARD-804).
    * The editor is positioned in board coordinates and moves automatically with camera pan and zoom.
    *
+   * @param elementId - Element whose text the editor edits. While mounted, the canvas draws that
+   *   element without its text, so the text does not show twice.
    * @returns Unmount callback that removes the editor from the layer. When the editor has focus at
    *   that moment, focus returns to the selected element's accessibility item, or to the view.
    */
-  mountEditor(editor: HTMLElement, bounds: EditorBounds): () => void;
+  mountEditor(editor: HTMLElement, bounds: EditorBounds, elementId?: string): () => void;
   /**
    * Schedules a render on the next animation frame. Several calls before that frame produce one
    * render. No effect after unmount.
@@ -682,9 +684,17 @@ export function mountRenderer(
       reducedMotionOverridden = true;
       applyReducedMotion(Boolean(value));
     },
-    mountEditor(editor, bounds) {
+    mountEditor(editor, bounds, elementId) {
       const remove = htmlLayer.mountEditor(editor, bounds);
+      if (elementId !== undefined) {
+        canvasRenderer.setEditingText(elementId, true);
+        scheduleRender();
+      }
       return () => {
+        if (elementId !== undefined && mounted) {
+          canvasRenderer.setEditingText(elementId, false);
+          scheduleRender();
+        }
         // Closing a focused editor (Esc) would drop focus to the page body: keep it on the
         // edited element instead (BOARD-1902).
         const hadFocus = editor.contains(doc.activeElement);

@@ -132,12 +132,14 @@ export const frameElement = defineElement({
       const effectiveZoom = Math.max(0.15, Math.min(2, zoom));
       const fontSize = Math.min(32, Math.max(11, 13 / effectiveZoom));
 
-      g.save();
-      g.font = `600 ${fontSize}px ${ctx?.theme?.typography?.fontFamily ?? 'Inter, sans-serif'}`;
-      g.textBaseline = 'bottom';
-      g.fillStyle = ctx?.theme?.mode === 'dark' ? '#94A3B8' : '#64748B';
-      g.fillText(title, 2, -6 / zoom);
-      g.restore();
+      if (!lod.editingText) {
+        g.save();
+        g.font = `600 ${fontSize}px ${ctx?.theme?.typography?.fontFamily ?? 'Inter, sans-serif'}`;
+        g.textBaseline = 'bottom';
+        g.fillStyle = ctx?.theme?.mode === 'dark' ? '#94A3B8' : '#64748B';
+        g.fillText(title, 2, -6 / zoom);
+        g.restore();
+      }
     },
   },
   a11y: (el, _data, ctx) => ({

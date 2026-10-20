@@ -185,7 +185,7 @@ export const geoElement = defineElement({
     ctx.emit('edit', { id: el.id });
   },
   render: {
-    canvas: (g, el, _data, _lod, ctx) => {
+    canvas: (g, el, _data, lod, ctx) => {
       const { props } = el;
       if (props.geo === 'rounded-rectangle')
         traceRoundedRect(g, el.w, el.h, Math.min(el.w, el.h) * 0.15);
@@ -204,7 +204,7 @@ export const geoElement = defineElement({
         g.stroke();
         g.setLineDash([]);
       }
-      if (!isRichTextEmpty(props.label)) {
+      if (!lod.editingText && !isRichTextEmpty(props.label)) {
         const padX = Math.min(16, Math.max(4, el.w * 0.1));
         const padY = Math.min(16, Math.max(4, el.h * 0.1));
         const wrapWidth = Math.max(0, el.w - padX * 2);

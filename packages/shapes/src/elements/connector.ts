@@ -22,6 +22,7 @@ import {
   type BoxBounds,
   type ElementCanvasContext,
   type ElementContext,
+  type ElementLodState,
   type ElementRecord,
   type Geometry,
   type Point,
@@ -293,7 +294,7 @@ export function renderConnectorCanvas(
   g: ElementCanvasContext,
   element: ElementRecord<ConnectorProps>,
   _data: undefined,
-  _lod: unknown,
+  lod: unknown,
   ctx?: ElementContext,
 ): void {
   const { props } = element;
@@ -362,12 +363,15 @@ export function renderConnectorCanvas(
     g.stroke();
     g.restore();
 
-    drawRichText(g, layout, {
-      x: pillX + padX,
-      y: pillY + padY,
-      color: strokeColor,
-      fontFamily,
-    });
+    // While the label editor is open it shows the text over the pill.
+    if (!(lod as Partial<ElementLodState> | undefined)?.editingText) {
+      drawRichText(g, layout, {
+        x: pillX + padX,
+        y: pillY + padY,
+        color: strokeColor,
+        fontFamily,
+      });
+    }
   }
 
   g.restore();

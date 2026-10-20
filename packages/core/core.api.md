@@ -1070,6 +1070,7 @@ export interface ElementLod {
 // @public
 export interface ElementLodState {
     readonly compact: boolean;
+    readonly editingText?: boolean;
     readonly zoom: number;
 }
 

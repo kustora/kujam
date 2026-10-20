@@ -39,8 +39,8 @@ export const textElement = defineElement({
     ctx.emit('edit', { id: el.id });
   },
   render: {
-    canvas: (g, el, _data, _lod, ctx) => {
-      if (isRichTextEmpty(el.props.text)) return;
+    canvas: (g, el, _data, lod, ctx) => {
+      if (lod.editingText || isRichTextEmpty(el.props.text)) return;
       const maxWidth = el.props.widthMode === 'fixed' ? el.w : undefined;
       const layout = layoutRichText(el.props.text, {
         maxWidth,

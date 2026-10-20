@@ -802,7 +802,7 @@ export const rectangleTool: ToolDefinition<BoxToolState, BoxToolData>;
 export function registerConnectorBoard(board: Board): () => void;
 
 // @public
-export function renderConnectorCanvas(g: ElementCanvasContext, element: ElementRecord<ConnectorProps>, _data: undefined, _lod: unknown, ctx?: ElementContext): void;
+export function renderConnectorCanvas(g: ElementCanvasContext, element: ElementRecord<ConnectorProps>, _data: undefined, lod: unknown, ctx?: ElementContext): void;
 
 // @public
 export function resolveAnchorSide(anchor: Point, rotation?: number): AnchorSide;
@@ -957,7 +957,7 @@ export interface TextEditorHost {
         w: number;
         h: number;
         rotation?: number;
-    }): () => void;
+    }, elementId?: string): () => void;
 }
 
 // @public

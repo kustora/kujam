@@ -25,6 +25,8 @@ const clearRectCalls: Array<{ x: number; y: number; w: number; h: number }> = []
 const clipCalls: number[] = [];
 const strokeRectCalls: Array<{ x: number; y: number; w: number; h: number }> = [];
 const fillTextCalls: string[] = [];
+/** `lod.editingText` of each element's last draw. */
+const editingTextLog = new Map<string, boolean | undefined>();
 
 /** Controllable ResizeObserver stub */
 class FakeResizeObserver {
@@ -62,8 +64,9 @@ const boxElement = defineElement({
   props: schema({ label: string() }),
   geometry: (el) => rect(el.w, el.h),
   render: {
-    canvas: (_ctx, el) => {
+    canvas: (_ctx, el, _data, lod) => {
       drawnLog.push(el.id);
+      editingTextLog.set(el.id, lod.editingText);
     },
   },
 });
@@ -127,6 +130,7 @@ beforeEach(() => {
   clipCalls.length = 0;
   strokeRectCalls.length = 0;
   fillTextCalls.length = 0;
+  editingTextLog.clear();
   frames.clear();
   FakeResizeObserver.instances = [];
 
@@ -533,5 +537,38 @@ describe('BOARD-810: Error Isolation in Canvas Renderer', () => {
     flushFrames();
     // After fixing, it renders without error
     expect(errors).toHaveLength(1);
+  });
+});
+
+describe('Inline text editor: canvas skips the edited text', () => {
+  it('passes lod.editingText to the edited element while its editor is mounted', () => {
+    const { board, view } = setupView();
+    for (const id of ['edited', 'other']) {
+      board.create({ id, type: 'test-box', x: 100, y: 100, w: 50, h: 50, props: { label: id } });
+    }
+    flushFrames();
+    expect(editingTextLog.get('edited')).toBeUndefined();
+
+    const editor = document.createElement('div');
+    const unmountEditor = view.mountEditor(editor, { x: 100, y: 100, w: 50, h: 50 }, 'edited');
+    drawnLog.length = 0;
+    flushFrames();
+    expect(drawnLog).toEqual(expect.arrayContaining(['edited', 'other']));
+    expect(editingTextLog.get('edited')).toBe(true);
+    expect(editingTextLog.get('other')).toBeUndefined();
+
+    unmountEditor();
+    drawnLog.length = 0;
+    flushFrames();
+    expect(drawnLog).toContain('edited');
+    expect(editingTextLog.get('edited')).toBeUndefined();
+  });
+
+  it('keeps drawing the element normally when the editor names no element', () => {
+    const { board, view } = setupView();
+    board.create({ id: 'a', type: 'test-box', x: 100, y: 100, w: 50, h: 50, props: { label: 'a' } });
+    view.mountEditor(document.createElement('div'), { x: 100, y: 100, w: 50, h: 50 });
+    flushFrames();
+    expect(editingTextLog.get('a')).toBeUndefined();
   });
 });

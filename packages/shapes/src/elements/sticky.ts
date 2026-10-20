@@ -34,14 +34,14 @@ export const stickyElement = defineElement({
     ctx.emit('edit', { id: el.id });
   },
   render: {
-    canvas: (g, el, _data, _lod, ctx) => {
+    canvas: (g, el, _data, lod, ctx) => {
       // Sticky notes have sharp corners (radius 0) per DESIGN.md
       g.beginPath();
       g.rect(0, 0, el.w, el.h);
       g.fillStyle = ctx?.theme?.sticky[el.props.color] ?? STICKY_COLOR_VALUES[el.props.color];
       g.fill();
 
-      if (!isRichTextEmpty(el.props.text)) {
+      if (!lod.editingText && !isRichTextEmpty(el.props.text)) {
         const layout = layoutStickyText(el.props.text, {
           boxW: el.w,
           boxH: el.h,

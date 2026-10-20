@@ -37,6 +37,7 @@ export interface TextEditorHost {
   mountEditor(
     editor: HTMLElement,
     bounds: { x: number; y: number; w: number; h: number; rotation?: number },
+    elementId?: string,
   ): () => void;
 }
 
@@ -776,7 +777,7 @@ export function attachTextEditor(
             h: record.h,
             rotation: record.rotation,
           };
-    unmountEditorFn = host.mountEditor(editor, editorBounds);
+    unmountEditorFn = host.mountEditor(editor, editorBounds, elementId);
 
     // Focus editor and select all text
     setTimeout(() => {

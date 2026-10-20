@@ -133,6 +133,22 @@ const provider = new HocuspocusProvider({
 
 ---
 
+## Uji Realtime: Setiap Tab Jadi Pengguna
+
+Skenario `realtime` di playground menyambungkan satu papan penuh ke server ini. Setiap tab browser otomatis menjadi pengguna berbeda (nama dan warna acak):
+
+```bash
+pnpm --filter @kujam/example-hocuspocus-server dev   # ws://<host>:1234
+pnpm playground
+# buka /s/realtime di beberapa tab (opsional: ?room=nama&server=ws://...&role=viewer)
+```
+
+- Identitas disimpan di `sessionStorage`: reload tab mempertahankan pengguna, tab baru mendapat pengguna baru. Tab hasil "Duplikat" dideteksi lewat `BroadcastChannel` dan diberi pengguna baru.
+- Tombol **Buka tab baru (pengguna baru)** dan **Ganti identitas** ada di panel kiri, bersama status koneksi dan daftar pengguna di room.
+- Server bawaan `ws://<host halaman>:1234`, jadi perangkat lain di jaringan yang sama (tombol "Perangkat lain (QR)") ikut tersambung ke server di mesin pengembang.
+- `?role=viewer` masuk baca-saja: server menolak update dokumen dari tab itu, kursor tetap terlihat.
+- Bila server dimatikan, status papan menjadi `connecting` dan tersambung lagi otomatis saat server hidup; perubahan selama terputus dikirim ulang.
+
 ## Mencoba dengan Lab Sinkronisasi Playground
 
 Lab `sync-lab` di playground (BOARD-2410) bisa memakai server ini sebagai transport:

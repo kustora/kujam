@@ -26,7 +26,7 @@ export interface BoardView {
     debug: boolean;
     readonly layers: RendererLayers;
     readonly mounted: boolean;
-    mountEditor(editor: HTMLElement, bounds: EditorBounds): () => void;
+    mountEditor(editor: HTMLElement, bounds: EditorBounds, elementId?: string): () => void;
     readonly overlayStats: Readonly<OverlayRenderStats>;
     readonly pixelRatio: number;
     reducedMotion: boolean;

@@ -117,6 +117,12 @@ export interface ElementLodState {
   readonly zoom: number;
   /** `true` when the element is drawn in its compact version (below `lod.compactBelowZoom`). */
   readonly compact: boolean;
+  /**
+   * `true` while the inline text editor of this element is open. The editor shows the text over
+   * the canvas, so the element should skip drawing its text (but still draw its shape) to avoid a
+   * doubled, slightly offset copy.
+   */
+  readonly editingText?: boolean;
 }
 
 /**

@@ -230,6 +230,7 @@ function drawSingleElement(
   board: Board,
   camera: CameraState,
   erroredElements: Set<string>,
+  editingText: ReadonlySet<string>,
 ): void {
   const def = board.elements.get(el.type);
   // Registered types without a canvas renderer draw nothing (for example HTML-only elements);
@@ -240,6 +241,7 @@ function drawSingleElement(
   const lod: ElementLodState = {
     zoom: camera.zoom,
     compact: Boolean(def?.lod && camera.zoom < def.lod.compactBelowZoom),
+    ...(editingText.has(el.id) ? { editingText: true } : {}),
   };
 
   // Find ancestor clipping frame (BOARD-1105)
@@ -319,7 +321,18 @@ export class CanvasRenderer {
   /** Background pattern painted under the elements (BOARD-1007). */
   background: BoardBackground = 'dots';
 
+  /** Elements whose inline text editor is open: drawn without their text. */
+  private readonly editingText = new Set<string>();
+
   constructor(private readonly board: Board) {}
+
+  /** Marks whether the inline text editor of `id` is open, and redraws. */
+  setEditingText(id: string, editing: boolean): void {
+    if (editing === this.editingText.has(id)) return;
+    if (editing) this.editingText.add(id);
+    else this.editingText.delete(id);
+    this.markAllDirty();
+  }
 
   /** Marks the entire viewport dirty (e.g. camera move, zoom, page change, resize). */
   markAllDirty(): void {
@@ -446,7 +459,7 @@ export class CanvasRenderer {
 
       ctx.setTransform(scale, 0, 0, scale, -camera.x * scale, -camera.y * scale);
       for (const el of visible) {
-        drawSingleElement(ctx, el, this.board, camera, this.erroredElements);
+        drawSingleElement(ctx, el, this.board, camera, this.erroredElements, this.editingText);
         drawnIds.add(el.id);
       }
     } else {
@@ -488,7 +501,7 @@ export class CanvasRenderer {
 
         ctx.setTransform(scale, 0, 0, scale, -camera.x * scale, -camera.y * scale);
         for (const el of elements) {
-          drawSingleElement(ctx, el, this.board, camera, this.erroredElements);
+          drawSingleElement(ctx, el, this.board, camera, this.erroredElements, this.editingText);
           drawnIds.add(el.id);
         }
         ctx.restore();

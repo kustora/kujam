@@ -149,6 +149,7 @@ describe('Inline HTML contenteditable rich text editor (BOARD-1003b, 1003c, 1003
       expect(host.mountEditor).toHaveBeenCalledWith(
         expect.any(HTMLElement),
         expect.objectContaining({ x: 100, y: 200, w: 192, h: 144, rotation: 5 }),
+        's1',
       );
       expect(mountedEditor).not.toBeNull();
       expect(mountedEditor?.textContent).toContain('Catatan pertama');
