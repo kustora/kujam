@@ -82,6 +82,7 @@ export interface BoxToolOptions<P = Record<string, unknown>> {
     // (undocumented)
     readonly onCreated?: (el: ElementRecord<P>, ctx: ToolContext<BoxToolState, BoxToolData>) => void;
     readonly props?: Partial<P> | ((board: Board) => Partial<P>);
+    readonly returnToSelect?: boolean;
     readonly styleId?: string;
     // (undocumented)
     readonly type: string;

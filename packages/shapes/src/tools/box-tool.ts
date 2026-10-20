@@ -42,6 +42,11 @@ export interface BoxToolOptions<P = Record<string, unknown>> {
   readonly minSize?: { readonly w: number; readonly h: number };
   readonly lockAspectWithShift?: boolean;
   readonly onCreated?: (el: ElementRecord<P>, ctx: ToolContext<BoxToolState, BoxToolData>) => void;
+  /**
+   * Switches to the `select` tool (when registered) after each new element, with the element
+   * selected, instead of staying active until Esc.
+   */
+  readonly returnToSelect?: boolean;
 }
 
 function highestIndex(board: Board): string | null {
@@ -98,7 +103,7 @@ function initialData(): BoxToolData {
  *
  * Click creates an element at default size, dragging creates an element with the dragged bounds,
  * and Enter creates one at default size in the center of the viewport (BOARD-1902). Other keys
- * are left unhandled. Remains active until Esc.
+ * are left unhandled. Remains active until Esc, unless `returnToSelect` is set.
  *
  * @internal
  */
@@ -116,6 +121,17 @@ export function createBoxTool<P = Record<string, unknown>>(
     ctx.change((tx) => tx.put(el as unknown as ElementRecord), { label: options.id });
     board.select([el.id]);
     options.onCreated?.(el, ctx);
+    afterCreate(ctx);
+  }
+
+  function afterCreate(ctx: Ctx): void {
+    if (!options.returnToSelect || !ctx.board.tools.has('select')) return;
+    // Switching tools cancels the active gesture, and cancelling removes a dragged element: commit
+    // the new element and let go of it first.
+    ctx.data.element = null;
+    ctx.data.dragged = false;
+    ctx.commit();
+    ctx.board.setTool('select');
   }
 
   /** Enter places an element of the default size at the viewport center (BOARD-1902). */
@@ -197,9 +213,10 @@ export function createBoxTool<P = Record<string, unknown>>(
           } else if (data.element) {
             board.select([data.element.id]);
             options.onCreated?.(data.element as unknown as ElementRecord<P>, ctx);
+            afterCreate(ctx);
           }
 
-          // Tool stays active in idle until Esc (BOARD-913)
+          // Without `returnToSelect`, the tool stays active in idle until Esc (BOARD-913)
           return 'idle';
         },
 

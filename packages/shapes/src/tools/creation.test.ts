@@ -204,13 +204,23 @@ describe('BOARD-913: Element creation tools', () => {
       expect(elements[0]!.props.geo).toBe('rectangle');
       expect(elements[0]!.w).toBe(100);
       expect(elements[0]!.h).toBe(100);
+      // Back to selecting, with the new shape selected
+      expect(board.tool).toBe('select');
+      expect([...board.selection]).toEqual([elements[0]!.id]);
 
       // Drag with free aspect
+      board.setTool('rectangle');
       drag(board, [{ x: 200, y: 200 }, { x: 400, y: 300 }]);
       elements = board.query();
       expect(elements).toHaveLength(2);
       expect(elements[1]!.w).toBe(200);
       expect(elements[1]!.h).toBe(100);
+      expect(board.tool).toBe('select');
+      expect([...board.selection]).toEqual([elements[1]!.id]);
+
+      // One shape is one undo step
+      board.undo();
+      expect(board.query()).toHaveLength(1);
     });
 
     it('ellipse tool creates geo element with geo="ellipse"', () => {
@@ -224,13 +234,16 @@ describe('BOARD-913: Element creation tools', () => {
       expect(elements[0]!.props.geo).toBe('ellipse');
       expect(elements[0]!.w).toBe(100);
       expect(elements[0]!.h).toBe(100);
+      expect(board.tool).toBe('select');
 
       // Shift drag locks 1:1
+      board.setTool('ellipse');
       drag(board, [{ x: 200, y: 200 }, { x: 320, y: 280 }], { shift: true });
       elements = board.query();
       expect(elements).toHaveLength(2);
       expect(elements[1]!.w).toBe(120);
       expect(elements[1]!.h).toBe(120);
+      expect(board.tool).toBe('select');
     });
   });
 

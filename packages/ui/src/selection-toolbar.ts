@@ -18,6 +18,7 @@ import {
   labelButton,
   shortcutFor,
   type MenuEntry,
+  type MenuGroup,
   type PopupMenu,
 } from './controls.js';
 
@@ -304,6 +305,12 @@ export function createSelectionToolbarClass(win: UiWindow) {
               radio: true,
             });
 
+            const swatches: MenuGroup = {
+              id: groupKey,
+              label: groupLabel,
+              layout: 'swatches',
+              columns: 5,
+            };
             const entries: MenuEntry[] = groupActions.map((action) => {
               const key = action.id.split('.').pop()!;
               const color = resolveColor(key);
@@ -311,6 +318,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
               return {
                 id: action.id,
                 label,
+                group: swatches,
                 swatch: color,
                 checked: action.isActive?.(),
                 disabled: action.isEnabled ? !action.isEnabled() : false,

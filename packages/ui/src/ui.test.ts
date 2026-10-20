@@ -773,6 +773,27 @@ describe('BOARD-1403: contextual selection toolbar', () => {
     expect(board.getElement(rec.id)?.props.color).toBe('blue');
   });
 
+  it('lays out color choices as a labelled swatch grid', () => {
+    const board = boardWithCustom();
+    const rec = board.create({
+      type: 'test-box',
+      x: 100,
+      y: 100,
+      w: 100,
+      h: 100,
+      props: { color: 'yellow', size: 'm' },
+    })!;
+    board.select(rec.id);
+    const el = mountToolbar(board, UI_TAGS.selection);
+
+    const colorMenu = el.shadowRoot!.querySelector<HTMLElement>('#kujam-selection-style\\.color')!;
+    const grid = colorMenu.querySelector<HTMLElement>('[role="group"] .swatches')!;
+    expect(grid).not.toBeNull();
+    expect(grid.style.getPropertyValue('--kujam-ui-columns')).toBe('5');
+    expect(grid.querySelectorAll('.option.swatch')).toHaveLength(2);
+    expect(colorMenu.querySelector('.group-label')!.textContent).toBe('Warna');
+  });
+
   it('renders connectorStyle, startArrow, and endArrow action groups cleanly (BOARD-1101)', () => {
     const connectorPlugin = definePlugin({
       id: 'test-connector-plugin',

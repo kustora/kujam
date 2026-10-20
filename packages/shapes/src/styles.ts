@@ -103,6 +103,8 @@ interface StyleSpec {
     readonly value: ToolStyleValue;
     readonly label: Bilingual | string;
   }[];
+  /** Extra props to write with a choice, given the element's current props. */
+  readonly also?: (props: Record<string, unknown>) => Record<string, ToolStyleValue> | undefined;
 }
 
 function named<K extends string>(
@@ -136,8 +138,8 @@ function styleActions<P>(
       group: `style.${spec.style}`,
       isActive: () => props[spec.prop] === option.value,
       run: () => {
-        const patch = { [spec.prop]: option.value } as Partial<P>;
-        if (ctx.updateProps(patch)) ctx.toolStyles.set(scope, { [spec.prop]: option.value });
+        const patch = { ...spec.also?.(props), [spec.prop]: option.value };
+        if (ctx.updateProps(patch as Partial<P>)) ctx.toolStyles.set(scope, patch);
       },
     }));
   });
@@ -208,7 +210,13 @@ export function geoActions<P>(el: ElementRecord<P>, ctx: ElementActionContext<P>
         solid: { id: 'Penuh', en: 'Solid' },
       }),
     },
-    { style: 'fillColor', prop: 'fillColor', options: COLOR_OPTIONS },
+    {
+      style: 'fillColor',
+      prop: 'fillColor',
+      options: COLOR_OPTIONS,
+      // A fill color on an unfilled shape would change nothing visible: fill it as well.
+      also: (props) => (props.fill === 'none' ? { fill: 'solid' } : undefined),
+    },
     { style: 'thickness', prop: 'strokeWidth', options: presets(GEO_STROKE_WIDTHS) },
     {
       style: 'dash',

@@ -26,6 +26,8 @@ export function createGeoTool(
     props: { geo: kind },
     // Every shape tool remembers one shared shape style (BOARD-1108).
     styleId: 'geo',
+    // After drawing a shape, go back to selecting so it can be styled or moved right away.
+    returnToSelect: true,
   });
 }
 

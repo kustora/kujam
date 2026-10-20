@@ -140,6 +140,32 @@ describe('BOARD-1108: style actions of built-in elements', () => {
     expect(el.props).toMatchObject({ dash: 'dashed', strokeWidth: 8, strokeColor: 'red' });
   });
 
+  it('fills an unfilled shape when a fill color is chosen, in one undo step', () => {
+    const board = setup();
+    const g = createWith(board, 'rectangle');
+    expect(g.props).toMatchObject({ fill: 'none' });
+
+    action(board, 'style.fillColor.violet').run();
+    expect(board.getElement(g.id)!.props).toMatchObject({ fill: 'solid', fillColor: 'violet' });
+    // The next shape is drawn with the same fill.
+    expect(createWith(board, 'rectangle', { x: 300, y: 0 }).props).toMatchObject({
+      fill: 'solid',
+      fillColor: 'violet',
+    });
+
+    board.undo();
+    board.undo();
+    expect(board.getElement(g.id)!.props).toMatchObject({ fill: 'none', fillColor: 'white' });
+  });
+
+  it('keeps a semi-transparent fill when only the fill color changes', () => {
+    const board = setup();
+    const g = createWith(board, 'rectangle');
+    action(board, 'style.fill.semi').run();
+    action(board, 'style.fillColor.green').run();
+    expect(board.getElement(g.id)!.props).toMatchObject({ fill: 'semi', fillColor: 'green' });
+  });
+
   it('applies a style to a multi-element selection, mixed types included, in one undo step', () => {
     const board = setup();
     const a = createWith(board, 'draw', { x: 0, y: 0 });
