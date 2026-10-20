@@ -153,10 +153,16 @@ export interface Board {
     getCamera(): Readonly<CameraState>;
     getDocument(): Readonly<BoardDocument>;
     getElement<T = Record<string, unknown>>(id: string): Readonly<ElementRecord<ResolveElementProps<T>>> | undefined;
+    // @beta
+    getElementData<D = unknown>(id: string, options?: {
+        readonly load?: boolean;
+    }): ElementDataState<D>;
     readonly history: BoardHistory;
     // @beta
     hitTest(point: Point, options?: HitTestOptions): Readonly<ElementRecord> | undefined;
     readonly i18n: BoardI18n;
+    // @beta
+    invalidate(resolver: string, id?: string): void;
     // @beta
     readonly keybindings: BoardKeybindings;
     readonly limits: Readonly<BoardLimits>;
@@ -175,6 +181,8 @@ export interface Board {
     query<T = Record<string, unknown>>(filter?: QueryFilter): readonly Readonly<ElementRecord<ResolveElementProps<T>>>[];
     readonly readOnly: boolean;
     redo(): boolean;
+    // @beta
+    reloadElementData(id: string): void;
     // @beta
     removeFromSelection(ids: SelectionInput): void;
     // @beta
@@ -279,7 +287,7 @@ export interface BoardElementTypes {
 }
 
 // @beta
-export type BoardErrorCode = 'listener-error' | 'invalid-props' | 'invalid-record' | 'forbidden' | 'limit-exceeded' | 'document-too-new' | 'page-not-found' | 'render-error';
+export type BoardErrorCode = 'listener-error' | 'invalid-props' | 'invalid-record' | 'forbidden' | 'limit-exceeded' | 'document-too-new' | 'page-not-found' | 'render-error' | 'resolve-error' | 'action-error';
 
 // @public
 export interface BoardErrorEvent {
@@ -298,6 +306,8 @@ export interface BoardEventMap {
     action: ActionEvent;
     camera: CameraEvent;
     change: ChangeEvent;
+    // @beta
+    data: ElementDataEvent;
     // @beta
     dispose: undefined;
     error: BoardErrorEvent;
@@ -1008,6 +1018,23 @@ export interface ElementContext {
     readonly theme: Readonly<ThemeDefinition>;
 }
 
+// @beta
+export interface ElementDataEvent {
+    // (undocumented)
+    readonly ids: readonly string[];
+}
+
+// @beta
+export type ElementDataState<D = unknown> = {
+    readonly status: 'loading';
+} | {
+    readonly status: 'ready';
+    readonly data: D;
+} | {
+    readonly status: ResolveErrorStatus;
+    readonly message?: string;
+};
+
 // @public
 export interface ElementDefinition<T extends string = string, S extends SchemaShape = SchemaShape, D = unknown> {
     a11y?(el: ElementRecord<InferShape<S>>, data: D | undefined, ctx: ElementContext): ElementA11y;
@@ -1025,7 +1052,7 @@ export interface ElementDefinition<T extends string = string, S extends SchemaSh
     readonly minSize?: ElementSize;
     onDoubleClick?(el: ElementRecord<InferShape<S>>, ctx: ElementContext): void;
     // @beta
-    placeholder?(reason: ResolveErrorStatus): ElementPlaceholder;
+    placeholder?(reason: ResolveErrorStatus | 'loading'): ElementPlaceholder;
     readonly props: ObjectSchema<S>;
     readonly render?: ElementRenderers<InferShape<S>, D>;
     readonly resize?: ElementResize<InferShape<S>>;
@@ -1393,6 +1420,9 @@ export function isDevelopmentMode(): boolean;
 
 // @public
 export function isRectBounds(bounds: unknown): bounds is RectBounds;
+
+// @beta
+export function isResolveError(value: unknown): value is ResolveError;
 
 // @beta
 export function isRetryableStorageError(error: unknown): boolean;

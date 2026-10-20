@@ -554,6 +554,11 @@ export function mountRenderer(
       a11yTree.onChange(event);
       scheduleRender();
     }),
+    // External data loaded, failed, or was invalidated: redraw only those elements (BOARD-1203).
+    board.on('data', (event) => {
+      canvasRenderer.markElements(event.ids);
+      scheduleRender();
+    }),
     board.on('selection', (event) => {
       a11yTree.onSelection(event.ids);
       scheduleRender();

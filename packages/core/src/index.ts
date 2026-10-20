@@ -19,6 +19,7 @@ import {
   type ElementRegistry,
   type ResolveResult,
 } from './elements/elements.js';
+import { createElementDataRuntime, type ElementDataState } from './elements/element-data.js';
 import {
   createEmitter,
   reportUnhandled,
@@ -188,6 +189,11 @@ export {
   type SafeUrlOptions,
 } from './utils/url.js';
 export * from './elements/elements.js';
+export {
+  isResolveError,
+  type ElementDataEvent,
+  type ElementDataState,
+} from './elements/element-data.js';
 export * from './geometry/geometry.js';
 export {
   definePlugin,
@@ -1164,6 +1170,29 @@ export interface Board {
    */
   getActions(ids?: SelectionInput): readonly ElementAction[];
   /**
+   * External data state of an element (BOARD-604): runs its `resolve` the first time and caches
+   * the result. `ready` with `data: undefined` for elements without `resolve`. Listen to the
+   * `data` event for changes. With `{ load: false }`, returns the current state without starting
+   * a resolve (`loading` when none has run), for callers that touch every element.
+   *
+   * @beta
+   */
+  getElementData<D = unknown>(id: string, options?: { readonly load?: boolean }): ElementDataState<D>;
+  /**
+   * Drops cached resolver values for `resolver` (one `id`, or all of them) and resets only the
+   * elements that used them, announced in one `data` event (BOARD-604).
+   *
+   * @beta
+   */
+  invalidate(resolver: string, id?: string): void;
+  /**
+   * Resolves an element's data again, dropping the cached values it used (for example a retry
+   * after an error, BOARD-1202).
+   *
+   * @beta
+   */
+  reloadElementData(id: string): void;
+  /**
    * Remembered style per tool (BOARD-1108): creation tools read it for the next element, and the UI
    * and element style actions write it. Session state: not in the document, not saved, not in undo
    * history, and allowed on `readOnly` boards. Changes emit a `tool-style` event.
@@ -1722,6 +1751,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       if (interaction.capturing) interaction.observe(event);
       // History is updated first so `change` listeners read the new canUndo/canRedo.
       else history.observe(event);
+      elementData.observe(event);
       events.emit('change', event);
       history.flush();
       // After `change`, so `page` and `selection` listeners see the document that caused it.
@@ -1854,6 +1884,24 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   });
   const toolStyles = createToolStyles((event) => events.emit('tool-style', event));
 
+  // External data of custom elements (BOARD-604).
+  const elementData = createElementDataRuntime({
+    getElement: (id) => {
+      const rec = store.getRecord(id);
+      return rec?.kind === 'element' ? (rec as ElementRecord) : undefined;
+    },
+    getDefinition: (type) => elements.get(type),
+    resolvers,
+    baseContext: () => ({ assets, getAsset: elementContext.getAsset }),
+    emit: (event) => events.emit('data', event),
+    reportError: (id, error) =>
+      emitError(
+        'resolve-error',
+        `Data elemen "${id}" gagal dimuat: ${error instanceof Error ? error.message : String(error)}`,
+        error,
+      ),
+  });
+
   /** Context for an element's `actions` (BOARD-605, BOARD-1108). */
   function actionContext(el: Readonly<ElementRecord>): ElementActionContext {
     return Object.freeze({
@@ -1880,7 +1928,21 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   function actionsOf(el: Readonly<ElementRecord>): Map<string, ElementAction> | null {
     const def = elements.get(el.type);
     if (typeof def?.actions !== 'function') return null;
-    const list: unknown = def.actions(el as never, undefined, actionContext(el) as never);
+    // Actions get the element's resolved data once it is ready (BOARD-604).
+    const state = elementData.get(el.id);
+    const data = state.status === 'ready' ? state.data : undefined;
+    let list: unknown;
+    try {
+      list = def.actions(el as never, data as never, actionContext(el) as never);
+    } catch (error) {
+      // A throwing `actions` only costs this element its actions (BOARD-1206).
+      emitError(
+        'action-error',
+        `Aksi elemen "${el.id}" (${el.type}) gagal dibuat: ${error instanceof Error ? error.message : String(error)}`,
+        error,
+      );
+      return new Map();
+    }
     const byId = new Map<string, ElementAction>();
     if (!Array.isArray(list)) return byId;
     for (const action of list as unknown[]) {
@@ -2122,6 +2184,18 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       }
       action.run();
       return true;
+    },
+    getElementData(id, opts) {
+      assertUsable();
+      return elementData.get(id, opts?.load !== false) as never;
+    },
+    invalidate(resolver, id) {
+      assertUsable();
+      elementData.invalidate(resolver, id);
+    },
+    reloadElementData(id) {
+      assertUsable();
+      elementData.reload(id);
     },
     getActions(ids) {
       assertUsable();
@@ -2430,6 +2504,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
         camera.dispose();
         spatial.clear();
         events.clear();
+        elementData.clear();
         commands.clear();
         tools.clear();
         brushes.clear();

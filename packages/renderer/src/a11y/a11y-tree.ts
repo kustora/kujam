@@ -105,7 +105,10 @@ export function describeElement(
 ): { role: string; label: string; description: string } {
   let a11y: { role?: unknown; label?: unknown; description?: unknown } | undefined;
   try {
-    a11y = board.elements.get(el.type)?.a11y?.(el as never, undefined, board.elementContext);
+    // Data already resolved is used; describing every element must not resolve them all.
+    const state = board.getElementData(el.id, { load: false });
+    const data = state.status === 'ready' ? state.data : undefined;
+    a11y = board.elements.get(el.type)?.a11y?.(el as never, data as never, board.elementContext);
   } catch {
     // A failing callback only costs this element its custom label.
     a11y = undefined;

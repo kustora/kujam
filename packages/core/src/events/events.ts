@@ -4,6 +4,7 @@
  */
 
 import type { HistoryEvent } from '../history/history.js';
+import type { ElementDataEvent } from '../elements/element-data.js';
 import type { ChangeEvent } from '../document/store.js';
 import type { ThemeDefinition } from '../theme/theme.js';
 import type { ToolStyleEvent } from '../tools/tool-styles.js';
@@ -112,7 +113,9 @@ export type BoardErrorCode =
   | 'limit-exceeded'
   | 'document-too-new'
   | 'page-not-found'
-  | 'render-error';
+  | 'render-error'
+  | 'resolve-error'
+  | 'action-error';
 
 /**
  * Payload of the `error` event.
@@ -202,6 +205,13 @@ export interface BoardEventMap {
    * @beta
    */
   action: ActionEvent;
+  /**
+   * Data of these elements changed: a `resolve` finished or failed, or `invalidate` reset it
+   * (BOARD-604). Read the new state with `board.getElementData`.
+   *
+   * @beta
+   */
+  data: ElementDataEvent;
   /** Errors not thrown to the caller (see {@link BoardErrorCode}). */
   error: BoardErrorEvent;
   /** `canUndo` or `canRedo` changed (BOARD-301). */

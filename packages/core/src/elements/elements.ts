@@ -471,11 +471,12 @@ export interface ElementDefinition<
     ctx: ElementActionContext<InferShape<S>>,
   ): readonly ElementAction[];
   /**
-   * Placeholder when the resolver fails (BOARD-1202).
+   * Placeholder shown in place of the element while its data is loading (`'loading'`, replacing
+   * the built-in skeleton) or unavailable (BOARD-1202). Placeholders never show resolved data.
    *
    * @beta
    */
-  placeholder?(reason: ResolveErrorStatus): ElementPlaceholder;
+  placeholder?(reason: ResolveErrorStatus | 'loading'): ElementPlaceholder;
 }
 
 /**

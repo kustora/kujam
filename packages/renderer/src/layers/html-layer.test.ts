@@ -152,7 +152,8 @@ describe('BOARD-804: HTML Layer Camera Transform', () => {
     expect(host.style.height).toBe('80px');
     expect(host.style.transform).toBe('rotate(45deg)');
     expect(host.style.opacity).toBe('0.8');
-    expect(host.style.pointerEvents).toBe('auto');
+    // Pass-through host: the board's tools get pointer events; `data-board-interactive` opts in.
+    expect(host.style.pointerEvents).toBe('none');
 
     // Pan and zoom camera: wrapper transform updates instantly
     board.setCamera({ x: 50, y: 100, zoom: 2 });

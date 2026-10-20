@@ -221,6 +221,46 @@ export function drawErrorPlaceholder(
   ctx.fillText(`⚠️ ${el.type}`, pad, pad, Math.max(0, w - pad * 2));
 }
 
+const DATA_LABELS: Readonly<Record<string, { id: string; en: string }>> = {
+  forbidden: { id: 'Tidak punya akses', en: 'No access' },
+  'not-found': { id: 'Tidak ditemukan', en: 'Not found' },
+  error: { id: 'Gagal memuat', en: 'Could not load' },
+};
+
+/**
+ * Placeholder of the element's size while its data loads or is unavailable (BOARD-1202): a
+ * skeleton, or the element's `placeholder(reason)` label. Never shows resolved data.
+ */
+function drawDataPlaceholder(
+  ctx: CanvasRenderingContext2D,
+  el: ElementRecord,
+  board: Board,
+  status: string,
+  def: { placeholder?(reason: never): { label: string } } | undefined,
+): void {
+  const dark = board.theme.mode === 'dark';
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') ctx.roundRect(0, 0, el.w, el.h, 8);
+  else ctx.rect(0, 0, el.w, el.h);
+  ctx.fillStyle = dark ? '#2A2D34' : '#ECEAE3';
+  ctx.fill();
+  let label = '';
+  try {
+    label = def?.placeholder?.(status as never)?.label || '';
+  } catch {
+    label = '';
+  }
+  if (!label && DATA_LABELS[status]) {
+    label = board.locale === 'en' ? DATA_LABELS[status]!.en : DATA_LABELS[status]!.id;
+  }
+  if (!label) return;
+  ctx.fillStyle = dark ? '#B4B8C0' : '#4A4F59';
+  ctx.font = `12px ${board.theme.typography.fontFamily}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, el.w / 2, el.h / 2, Math.max(0, el.w - 16));
+}
+
 /**
  * Draws a single element with local translation, rotation, opacity, and LOD settings.
  */
@@ -277,12 +317,22 @@ function drawSingleElement(
     ctx.globalAlpha *= Math.max(0, Math.min(1, el.opacity));
   }
   try {
+    // External data (BOARD-604): drawn only once ready; a placeholder of the same size meanwhile.
+    const dataState = def?.resolve ? board.getElementData(el.id) : null;
     if (erroredElements.has(el.id)) {
       drawErrorPlaceholder(ctx, el, board.theme.typography.fontFamily, camera.zoom);
+    } else if (dataState && dataState.status !== 'ready') {
+      drawDataPlaceholder(ctx, el, board, dataState.status, def);
     } else if (def && render) {
       try {
         // Called as a method so plugin renderers keep their `this`.
-        def.render!.canvas!(ctx, el, undefined, lod, board.elementContext);
+        def.render!.canvas!(
+          ctx,
+          el,
+          dataState?.status === 'ready' ? dataState.data : undefined,
+          lod,
+          board.elementContext,
+        );
       } catch (error) {
         erroredElements.add(el.id);
         const message = `Kesalahan saat merender elemen "${el.id}" (${el.type}): ${error instanceof Error ? error.message : String(error)}`;
@@ -332,6 +382,16 @@ export class CanvasRenderer {
     if (editing) this.editingText.add(id);
     else this.editingText.delete(id);
     this.markAllDirty();
+  }
+
+  /** Marks the given elements dirty, for example after their data changed (BOARD-1203). */
+  markElements(ids: readonly string[]): void {
+    if (this.dirtyAll) return;
+    const currentPage = this.board.pages.current;
+    for (const id of ids) {
+      const el = this.board.getElement(id);
+      if (el && el.pageId === currentPage) this.dirtyRects.push(getElementDirtyBounds(this.board, el));
+    }
   }
 
   /** Marks the entire viewport dirty (e.g. camera move, zoom, page change, resize). */

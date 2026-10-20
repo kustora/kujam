@@ -39,6 +39,7 @@ export type Tests = [
       | 'tool-style'
       | 'page'
       | 'action'
+      | 'data'
       | 'error'
       | 'history'
       | 'theme'
@@ -71,6 +72,8 @@ export type Tests = [
       | 'document-too-new'
       | 'page-not-found'
       | 'render-error'
+      | 'resolve-error'
+      | 'action-error'
     >
   >,
   Expect<Equal<ReturnType<Board['undo']>, boolean>>,
