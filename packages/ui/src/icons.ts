@@ -65,6 +65,10 @@ const ICONS: Readonly<Record<string, readonly IconShape[]>> = {
   ],
   rectangle: [['rect', { x: '4', y: '5', width: '16', height: '14', rx: '1' }]],
   ellipse: [['ellipse', { cx: '12', cy: '12', rx: '9', ry: '7' }]],
+  diamond: [['path', { d: 'M12 3l9 9-9 9-9-9z' }]],
+  triangle: [['path', { d: 'M12 4l9 16H3z' }]],
+  'triangle-down': [['path', { d: 'M3 4h18l-9 16z' }]],
+  pill: [['rect', { x: '3', y: '7', width: '18', height: '10', rx: '5' }]],
   connector: [
     ['circle', { cx: '6', cy: '18', r: '3' }],
     ['path', { d: 'M8.5 15.5L19 5' }],

@@ -51,3 +51,31 @@ export const rectangleTool = createGeoTool('rectangle', 'rectangle');
  * @public
  */
 export const ellipseTool = createGeoTool('ellipse', 'ellipse');
+
+/**
+ * Diamond creation tool (flowchart decision).
+ *
+ * @public
+ */
+export const diamondTool = createGeoTool('diamond', 'diamond');
+
+/**
+ * Triangle creation tool.
+ *
+ * @public
+ */
+export const triangleTool = createGeoTool('triangle', 'triangle');
+
+/**
+ * Inverted triangle creation tool (flowchart merge).
+ *
+ * @public
+ */
+export const triangleDownTool = createGeoTool('triangle-down', 'triangle-down');
+
+/**
+ * Pill creation tool (flowchart start and end).
+ *
+ * @public
+ */
+export const pillTool = createGeoTool('pill', 'pill');

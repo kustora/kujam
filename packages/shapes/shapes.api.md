@@ -396,7 +396,7 @@ export const defaultElements: Readonly<{
         widthMode: _kujam_core.Schema<"auto" | "fixed">;
         color: _kujam_core.Schema<"yellow" | "green" | "blue" | "purple" | "black" | "grey" | "white" | "red" | "orange" | "violet">;
     }, undefined>, _kujam_core.ElementDefinition<"geo", {
-        geo: _kujam_core.Schema<"rectangle" | "rounded-rectangle" | "ellipse" | "diamond" | "triangle" | "parallelogram" | "star" | "arrow">;
+        geo: _kujam_core.Schema<"rectangle" | "rounded-rectangle" | "ellipse" | "diamond" | "triangle" | "parallelogram" | "star" | "arrow" | "triangle-down" | "pill">;
         fill: _kujam_core.Schema<"none" | "semi" | "solid">;
         fillColor: _kujam_core.Schema<"yellow" | "green" | "blue" | "purple" | "black" | "grey" | "white" | "red" | "orange" | "violet">;
         strokeColor: _kujam_core.Schema<"yellow" | "green" | "blue" | "purple" | "black" | "grey" | "white" | "red" | "orange" | "violet">;
@@ -474,7 +474,7 @@ export type DefaultToolId = (typeof DEFAULT_TOOL_IDS)[number];
 // @public
 export const defaultTools: Readonly<{
     readonly id: "default-tools";
-    readonly tools: readonly [_kujam_core.ToolDefinition<"idle" | "quick-connecting" | "pointing" | "translating" | "brushing" | "resizing" | "rotating" | "bending" | "reconnecting", SelectToolData>, _kujam_core.ToolDefinition<"idle" | "panning", HandToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<DrawToolState, DrawToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<ConnectorToolState, ConnectorToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<EraserToolState, EraserToolData>];
+    readonly tools: readonly [_kujam_core.ToolDefinition<"idle" | "quick-connecting" | "pointing" | "translating" | "brushing" | "resizing" | "rotating" | "bending" | "reconnecting", SelectToolData>, _kujam_core.ToolDefinition<"idle" | "panning", HandToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<DrawToolState, DrawToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<ConnectorToolState, ConnectorToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<EraserToolState, EraserToolData>];
     readonly keybindings: {
         readonly v: "tool:select";
         readonly h: "tool:hand";
@@ -489,6 +489,9 @@ export const defaultTools: Readonly<{
     };
     readonly setup: (board: _kujam_core.Board) => () => void;
 }>;
+
+// @public
+export const diamondTool: ToolDefinition<BoxToolState, BoxToolData>;
 
 // @internal
 export function distanceToSegment(p: readonly number[], a: readonly number[], b: readonly number[]): number;
@@ -644,7 +647,7 @@ export const framePropsSchema: _kujam_core.ObjectSchema<{
 export const frameTool: ToolDefinition<BoxToolState, BoxToolData>;
 
 // @beta
-export const GEO_KINDS: readonly ["rectangle", "rounded-rectangle", "ellipse", "diamond", "triangle", "parallelogram", "star", "arrow"];
+export const GEO_KINDS: readonly ["rectangle", "rounded-rectangle", "ellipse", "diamond", "triangle", "parallelogram", "star", "arrow", "triangle-down", "pill"];
 
 // @beta
 export const GEO_STROKE_WIDTHS: Readonly<{
@@ -656,7 +659,7 @@ export const GEO_STROKE_WIDTHS: Readonly<{
 
 // @beta
 export const geoElement: _kujam_core.ElementDefinition<"geo", {
-    geo: _kujam_core.Schema<"rectangle" | "rounded-rectangle" | "ellipse" | "diamond" | "triangle" | "parallelogram" | "star" | "arrow">;
+    geo: _kujam_core.Schema<"rectangle" | "rounded-rectangle" | "ellipse" | "diamond" | "triangle" | "parallelogram" | "star" | "arrow" | "triangle-down" | "pill">;
     fill: _kujam_core.Schema<"none" | "semi" | "solid">;
     fillColor: _kujam_core.Schema<"yellow" | "green" | "blue" | "purple" | "black" | "grey" | "white" | "red" | "orange" | "violet">;
     strokeColor: _kujam_core.Schema<"yellow" | "green" | "blue" | "purple" | "black" | "grey" | "white" | "red" | "orange" | "violet">;
@@ -816,6 +819,9 @@ export function normalizeRichText(input: readonly unknown[]): RichText;
 
 // @beta
 export const penBrush: BrushDefinition;
+
+// @public
+export const pillTool: ToolDefinition<BoxToolState, BoxToolData>;
 
 // @public
 export const rectangleTool: ToolDefinition<BoxToolState, BoxToolData>;
@@ -1081,6 +1087,12 @@ export { ThemeMode }
 export { ThemeSelectionTokens }
 
 export { ThemeTypographyTokens }
+
+// @public
+export const triangleDownTool: ToolDefinition<BoxToolState, BoxToolData>;
+
+// @public
+export const triangleTool: ToolDefinition<BoxToolState, BoxToolData>;
 
 // @public
 export function validateRichText(value: unknown): SchemaResult<RichText>;

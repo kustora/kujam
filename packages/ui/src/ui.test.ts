@@ -516,6 +516,22 @@ describe('BOARD-1404: history control', () => {
   });
 });
 
+describe('Shape palette', () => {
+  it('shows the shape variants as a row of icon-only buttons named by tooltip', () => {
+    const board = newBoard();
+    const el = mountToolbar(board);
+    const shape = button(el, 'shape');
+    shape.click();
+    shape.click();
+
+    const icons = [...el.shadowRoot!.querySelectorAll<HTMLButtonElement>('.icons .option.icon-only')];
+    expect(icons.map((b) => b.title)).toEqual(['Kotak (R)', 'Elips (O)']);
+    expect(icons.every((b) => b.querySelector('svg') && !b.querySelector('span'))).toBe(true);
+    icons[1]!.click();
+    expect(board.tool).toBe('ellipse');
+  });
+});
+
 describe('BOARD-1402: style popovers (BOARD-1108)', () => {
   // Stand-ins for the built-in sticky and stroke elements: ui does not depend on shapes.
   const styled = definePlugin({

@@ -8,6 +8,8 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 import {
   COLOR_VALUES,
+  defaultElements,
+  defaultTools,
   GEO_KINDS,
   geoElement,
   geoGeometry,
@@ -118,6 +120,32 @@ describe('BOARD-1004: Geometric Shape Elements', () => {
       // Extreme corner (2, 2) is clipped by 15px radius and is outside
       expect(containsPoint(geom, { x: 2, y: 2 }, el)).toBe(false);
       expect(containsPoint(geom, { x: 98, y: 2 }, el)).toBe(false);
+    });
+
+    it('triangle-down: the point is at the bottom', () => {
+      const el = createGeo('triangle-down', 100, 100);
+      const geom = geoElement.geometry!(el);
+      expect(containsPoint(geom, { x: 50, y: 10 }, el)).toBe(true);
+      expect(containsPoint(geom, { x: 50, y: 90 }, el)).toBe(true);
+      expect(containsPoint(geom, { x: 5, y: 95 }, el)).toBe(false);
+      expect(containsPoint(geom, { x: 95, y: 95 }, el)).toBe(false);
+    });
+
+    it('pill: fully rounded ends', () => {
+      const el = createGeo('pill', 200, 80);
+      const geom = geoElement.geometry!(el);
+      expect(containsPoint(geom, { x: 100, y: 40 }, el)).toBe(true);
+      expect(containsPoint(geom, { x: 4, y: 40 }, el)).toBe(true);
+      // Corners of the box are outside the 40-unit rounded ends.
+      expect(containsPoint(geom, { x: 6, y: 6 }, el)).toBe(false);
+      expect(containsPoint(geom, { x: 194, y: 74 }, el)).toBe(false);
+    });
+
+    it('flowchart shape tools are registered in defaultTools', () => {
+      const board = createBoard({ plugins: [defaultElements, defaultTools] });
+      for (const kind of ['diamond', 'triangle', 'triangle-down', 'pill'] as const) {
+        expect(board.tools.get(kind)).toBeDefined();
+      }
     });
 
     it('parallelogram: respects skew in hit-testing', () => {

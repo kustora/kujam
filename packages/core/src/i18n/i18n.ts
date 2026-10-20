@@ -49,6 +49,8 @@ const RAW_DICTIONARY = {
   'tool.shape': { id: 'Bentuk', en: 'Shape' },
   'tool.rectangle': { id: 'Kotak', en: 'Rectangle' },
   'tool.ellipse': { id: 'Elips', en: 'Ellipse' },
+  'tool.triangle-down': { id: 'Segitiga terbalik', en: 'Inverted triangle' },
+  'tool.pill': { id: 'Pil', en: 'Pill' },
   'tool.diamond': { id: 'Belah ketupat', en: 'Diamond' },
   'tool.triangle': { id: 'Segitiga', en: 'Triangle' },
   'tool.star': { id: 'Bintang', en: 'Star' },

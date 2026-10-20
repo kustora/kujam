@@ -29,6 +29,9 @@ export const GEO_KINDS = [
   'parallelogram',
   'star',
   'arrow',
+  // Flowchart shapes (FigJam-like palette): merge/extract and terminator.
+  'triangle-down',
+  'pill',
 ] as const;
 
 /**
@@ -47,6 +50,8 @@ const GEO_NAMES: Readonly<Record<GeoKind, Bilingual>> = {
   parallelogram: { id: 'Jajaran genjang', en: 'Parallelogram' },
   star: { id: 'Bintang', en: 'Star' },
   arrow: { id: 'Panah', en: 'Arrow' },
+  'triangle-down': { id: 'Segitiga terbalik', en: 'Inverted triangle' },
+  pill: { id: 'Pil', en: 'Pill' },
 };
 
 function starPoints(w: number, h: number): Point[] {
@@ -118,6 +123,14 @@ export function geoGeometry(kind: GeoKind, w: number, h: number): Geometry {
         { x: w, y: h },
         { x: 0, y: h },
       ]);
+    case 'triangle-down':
+      return polygon([
+        { x: 0, y: 0 },
+        { x: w, y: 0 },
+        { x: w / 2, y: h },
+      ]);
+    case 'pill':
+      return polygon(roundedRectPoints(w, h, Math.min(w, h) / 2));
     case 'parallelogram': {
       const skew = w * 0.2;
       return polygon([
@@ -191,6 +204,7 @@ export const geoElement = defineElement({
       const { props } = el;
       if (props.geo === 'rounded-rectangle')
         traceRoundedRect(g, el.w, el.h, Math.min(el.w, el.h) * 0.15);
+      else if (props.geo === 'pill') traceRoundedRect(g, el.w, el.h, Math.min(el.w, el.h) / 2);
       else traceGeometry(g, geoGeometry(props.geo, el.w, el.h));
       if (props.fill !== 'none') {
         g.save();

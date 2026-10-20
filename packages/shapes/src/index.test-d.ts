@@ -57,7 +57,7 @@ export type Checks = [
   >,
   // BOARD-502: built-in select and hand tools, and the overlay data of the select tool.
   Expect<Equal<NonNullable<(typeof defaultTools)['tools']>[number]['id'], string>>,
-  Expect<Equal<NonNullable<(typeof defaultTools)['tools']>['length'], 11>>,
+  Expect<Equal<NonNullable<(typeof defaultTools)['tools']>['length'], 15>>,
   Expect<Equal<SelectToolData['brush'], BoxBounds | null>>,
   Expect<Equal<SelectToolData['guides'], readonly SnapGuide[]>>,
 ];

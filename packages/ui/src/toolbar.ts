@@ -165,6 +165,10 @@ const BUILT_INS: readonly BuiltIn[] = [
     variants: [
       { toolId: 'rectangle', label: 'tool.rectangle' },
       { toolId: 'ellipse', label: 'tool.ellipse' },
+      { toolId: 'diamond', label: 'tool.diamond' },
+      { toolId: 'triangle', label: 'tool.triangle' },
+      { toolId: 'triangle-down', label: 'tool.triangle-down' },
+      { toolId: 'pill', label: 'tool.pill' },
     ],
   },
   {
@@ -409,11 +413,19 @@ function renderToolbar(root: ShadowRoot, board: Board, host: HTMLElement): () =>
     const entries: MenuEntry[] = [];
     if (item.options) {
       const variant = currentVariant(item);
+      // Variants (for example the shapes) as one row of icons, like a shape palette.
+      const variants = {
+        id: 'variants',
+        label: item.label,
+        layout: 'icons' as const,
+        columns: Math.min(6, item.options.length),
+      };
       for (const option of item.options) {
         entries.push({
           id: option.toolId,
           label: option.label,
           shortcut: option.shortcut,
+          group: variants,
           icon: iconOrLetter(option.icon, option.label),
           checked: option.toolId === variant.toolId,
           select: () => {

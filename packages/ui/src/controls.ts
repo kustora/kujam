@@ -55,8 +55,11 @@ export function labelButton(
 export interface MenuGroup {
   readonly id: string;
   readonly label: string;
-  /** `swatches` lays the entries out as a grid of color swatches. Defaults to `list`. */
-  readonly layout?: 'list' | 'swatches';
+  /**
+   * `swatches` lays the entries out as a grid of color swatches, `icons` as a grid of icon-only
+   * buttons (the label becomes the tooltip and accessible name). Defaults to `list`.
+   */
+  readonly layout?: 'list' | 'swatches' | 'icons';
   /** Swatches per row. Defaults to 5. */
   readonly columns?: number;
 }
@@ -168,7 +171,12 @@ export function createMenu(
             heading.setAttribute('aria-hidden', 'true');
             heading.textContent = group.label;
             const body = doc.createElement('div');
-            body.className = group.layout === 'swatches' ? 'swatches' : 'entries';
+            body.className =
+              group.layout === 'swatches'
+                ? 'swatches'
+                : group.layout === 'icons'
+                  ? 'icons'
+                  : 'entries';
             if (group.columns) body.style.setProperty('--kujam-ui-columns', String(group.columns));
             parent.append(heading, body);
             element.append(parent);
@@ -187,13 +195,17 @@ export function createMenu(
         if (entry.swatch !== undefined) {
           el.title = entry.label;
           el.style.setProperty('--kujam-ui-swatch', entry.swatch);
+        } else if (group?.layout === 'icons' && entry.icon) {
+          el.classList.add('icon-only');
+          el.title = entry.shortcut ? `${entry.label} (${entry.shortcut})` : entry.label;
+          el.append(entry.icon);
         } else {
           if (entry.icon) el.append(entry.icon);
           const text = doc.createElement('span');
           text.textContent = entry.label;
           el.append(text);
         }
-        if (entry.shortcut) {
+        if (entry.shortcut && !el.classList.contains('icon-only')) {
           const kbd = doc.createElement('kbd');
           kbd.setAttribute('aria-hidden', 'true');
           kbd.textContent = entry.shortcut;
@@ -316,6 +328,19 @@ export const CONTROL_CSS = `
     grid-template-columns: repeat(var(--kujam-ui-columns, 5), 32px);
     gap: 4px;
     padding: 4px;
+  }
+  .icons {
+    display: grid;
+    grid-template-columns: repeat(var(--kujam-ui-columns, 6), 36px);
+    gap: 2px;
+    padding: 2px;
+  }
+  .option.icon-only {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
   }
   .option.swatch {
     display: grid;

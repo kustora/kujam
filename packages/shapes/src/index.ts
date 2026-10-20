@@ -19,7 +19,15 @@ import { connectorTool } from './tools/connector.js';
 import { drawTool } from './tools/draw.js';
 import { eraserTool } from './tools/eraser.js';
 import { frameTool } from './tools/frame.js';
-import { ellipseTool, geoTool, rectangleTool } from './tools/geo.js';
+import {
+  diamondTool,
+  ellipseTool,
+  geoTool,
+  pillTool,
+  rectangleTool,
+  triangleDownTool,
+  triangleTool,
+} from './tools/geo.js';
 import { groupElement } from './elements/group.js';
 import { frameElement } from './elements/frame.js';
 import { imageElement } from './elements/image.js';
@@ -88,7 +96,16 @@ export { handTool, type HandToolData } from './tools/hand.js';
 export { createBoxTool, type BoxToolOptions } from './tools/box-tool.js';
 export { stickyTool } from './tools/sticky.js';
 export { textTool } from './tools/text.js';
-export { createGeoTool, geoTool, rectangleTool, ellipseTool } from './tools/geo.js';
+export {
+  createGeoTool,
+  diamondTool,
+  ellipseTool,
+  geoTool,
+  pillTool,
+  rectangleTool,
+  triangleDownTool,
+  triangleTool,
+} from './tools/geo.js';
 export {
   connectorTool,
   DEFAULT_CONNECTOR_LENGTH,
@@ -228,6 +245,10 @@ export const defaultTools = definePlugin({
     geoTool,
     rectangleTool,
     ellipseTool,
+    diamondTool,
+    triangleTool,
+    triangleDownTool,
+    pillTool,
     connectorTool,
     frameTool,
     eraserTool,
