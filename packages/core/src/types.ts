@@ -158,6 +158,10 @@ export interface StorageChange {
  */
 export interface StorageAdapter {
   load(boardId: string): Promise<BoardDocument | Uint8Array | null>;
+  /**
+   * Stores a change. Reject with an error that has `retryable: false` to stop `attachStorage` from
+   * retrying a save that cannot succeed (for example `403 Forbidden` or a version conflict).
+   */
   save(boardId: string, change: StorageChange): Promise<void>;
   /** Autosave debounce delay in milliseconds (defaults to 1000). */
   debounceMs?: number;

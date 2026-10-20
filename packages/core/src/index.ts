@@ -400,6 +400,7 @@ export {
 export {
   attachStorage,
   DEFAULT_SAVE_DEBOUNCE_MS,
+  isRetryableStorageError,
   type AttachStorageOptions,
   type PageLifecycleTarget,
   type SaveErrorEvent,

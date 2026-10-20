@@ -7,16 +7,66 @@
 import { StorageAdapter } from '@kujam/core';
 
 // @public
-export function createHttpStorage(options: HttpStorageOptions): StorageAdapter;
+export function createHttpStorage(options: HttpStorageOptions): HttpStorage;
+
+// @public
+export interface HttpStorage extends StorageAdapter {
+    getVersion(boardId: string): string | null;
+    on<K extends keyof HttpStorageEventMap>(type: K, listener: (event: HttpStorageEventMap[K]) => void): () => void;
+    setVersion(boardId: string, version: string | null): void;
+}
+
+// @public
+export class HttpStorageError extends Error {
+    constructor(operation: HttpStorageOperation, boardId: string, response: Response);
+    readonly boardId: string;
+    readonly kind: HttpStorageErrorKind;
+    // (undocumented)
+    readonly name = "HttpStorageError";
+    readonly operation: HttpStorageOperation;
+    readonly response: Response;
+    readonly retryable: boolean;
+    readonly status: number;
+}
+
+// @public
+export type HttpStorageErrorKind = 'unauthorized' | 'forbidden' | 'conflict' | 'http';
+
+// @public
+export interface HttpStorageEvent {
+    // (undocumented)
+    readonly boardId: string;
+    readonly error: HttpStorageError;
+    // (undocumented)
+    readonly operation: HttpStorageOperation;
+    // (undocumented)
+    readonly status: number;
+}
+
+// @public
+export interface HttpStorageEventMap {
+    conflict: HttpStorageEvent;
+    forbidden: HttpStorageEvent;
+    unauthorized: HttpStorageEvent;
+}
+
+// @public
+export type HttpStorageOperation = 'load' | 'save';
 
 // @public
 export interface HttpStorageOptions {
-    // (undocumented)
-    baseUrl: string;
-    // (undocumented)
     debounceMs?: number;
+    fetch?: (input: string | URL, init: RequestInit) => Promise<Response>;
+    headers?: HeadersInit | ((context: HttpStorageRequestContext) => HeadersInit | Promise<HeadersInit>);
+    url: (boardId: string) => string | URL;
+}
+
+// @public
+export interface HttpStorageRequestContext {
     // (undocumented)
-    headers?: Record<string, string> | (() => Record<string, string>);
+    readonly boardId: string;
+    // (undocumented)
+    readonly operation: HttpStorageOperation;
 }
 
 // (No @packageDocumentation comment for this package)

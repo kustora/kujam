@@ -9,13 +9,19 @@
  * 2. Every change with origin `local`, `undo`, `redo`, or `migration` marks the board dirty and
  *    (re)starts the debounce timer. `remote` and `load` changes are never saved by this client.
  * 3. One save runs at a time. Changes made during a save trigger another save afterwards.
- * 4. A failed save is retried with exponential backoff. After the last attempt the board stays
- *    dirty and the next change schedules a new save.
+ * 4. A failed save is retried with exponential backoff, unless the error has `retryable: false`
+ *    (for example a permission or version-conflict error from `@kujam/storage-http`). After the last
+ *    attempt the board stays dirty and the next change schedules a new save.
  * 5. `pagehide` and `board.dispose()` save immediately (best effort, a single attempt).
  */
 
 import type { Board } from '../index.js';
-import { createEmitter, reportUnhandled, type Listener, type Unsubscribe } from '../events/events.js';
+import {
+  createEmitter,
+  reportUnhandled,
+  type Listener,
+  type Unsubscribe,
+} from '../events/events.js';
 import type { ChangeOrigin } from '../document/store.js';
 import type { BoardDocument, StorageAdapter } from '../types.js';
 
@@ -109,7 +115,10 @@ export interface SaveErrorEvent {
   readonly error: unknown;
   /** Attempt number that failed, starting at 1. */
   readonly attempt: number;
-  /** Whether another attempt is scheduled. */
+  /**
+   * Whether another attempt is scheduled. Always `false` when the error has `retryable: false`
+   * (see {@link isRetryableStorageError}).
+   */
   readonly willRetry: boolean;
 }
 
@@ -204,6 +213,22 @@ function resolveRetry(retry: SaveRetryOptions | undefined): ResolvedRetry {
     baseDelayMs: nonNegative(retry?.baseDelayMs, 'retry.baseDelayMs', 1000),
     maxDelayMs: nonNegative(retry?.maxDelayMs, 'retry.maxDelayMs', 30_000),
   };
+}
+
+/**
+ * Whether a failed save may be retried. An error opts out of retries by having a `retryable`
+ * property set to `false`; every other value (including plain `Error`s and network failures) is
+ * retried. Adapters use this to stop retries that cannot succeed, such as `403 Forbidden` or a
+ * version conflict.
+ *
+ * @beta
+ */
+export function isRetryableStorageError(error: unknown): boolean {
+  return !(
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { retryable?: unknown }).retryable === false
+  );
 }
 
 function resolveLifecycle(
@@ -311,7 +336,8 @@ export function attachStorage(
       } catch (error) {
         running = null;
         dirty = true;
-        const willRetry = allowRetry && !detached && current < retry.maxAttempts;
+        const willRetry =
+          allowRetry && !detached && current < retry.maxAttempts && isRetryableStorageError(error);
         attempt = willRetry ? current + 1 : 1;
         events.emit('save:error', Object.freeze({ boardId, error, attempt: current, willRetry }));
         if (willRetry) {

@@ -5,6 +5,7 @@ import {
   createEmptyDocument,
   defineElement,
   definePlugin,
+  isRetryableStorageError,
   object,
   string,
   type Board,
@@ -277,6 +278,39 @@ describe('BOARD-1601: attachStorage', () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(adapter.save).toHaveBeenCalledTimes(3);
     expect(storage.status).toBe('idle');
+  });
+
+  it('does not retry errors marked retryable: false', async () => {
+    const adapter = fakeAdapter();
+    const denied = Object.assign(new Error('forbidden'), { retryable: false });
+    adapter.save = vi.fn(async () => {
+      throw denied;
+    });
+    const { board, storage } = await attached(adapter);
+    const errors: SaveErrorEvent[] = [];
+    storage.on('save:error', (e) => errors.push(e));
+
+    board.create({ id: 'a', type: 'note' });
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(adapter.save).toHaveBeenCalledTimes(1);
+    expect(errors.map((e) => [e.attempt, e.willRetry, e.error])).toEqual([[1, false, denied]]);
+    expect(storage.status).toBe('error');
+    expect(storage.dirty).toBe(true);
+
+    // The next change schedules a fresh save.
+    board.update('a', { x: 1 });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(adapter.save).toHaveBeenCalledTimes(2);
+  });
+
+  it('isRetryableStorageError only opts out on retryable === false', () => {
+    expect(isRetryableStorageError(new Error('offline'))).toBe(true);
+    expect(isRetryableStorageError({ retryable: true })).toBe(true);
+    expect(isRetryableStorageError({ retryable: 0 })).toBe(true);
+    expect(isRetryableStorageError(null)).toBe(true);
+    expect(isRetryableStorageError('boom')).toBe(true);
+    expect(isRetryableStorageError({ retryable: false })).toBe(false);
   });
 
   it('handles an adapter that throws synchronously', async () => {

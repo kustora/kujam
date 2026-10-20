@@ -1385,6 +1385,9 @@ export function isDevelopmentMode(): boolean;
 // @public
 export function isRectBounds(bounds: unknown): bounds is RectBounds;
 
+// @beta
+export function isRetryableStorageError(error: unknown): boolean;
+
 // @public
 export function isSafeUrl(url: unknown, allowedSchemes?: readonly string[], options?: SafeUrlOptions): boolean;
 
@@ -2128,7 +2131,6 @@ export interface StorageAdapter {
     debounceMs?: number;
     // (undocumented)
     load(boardId: string): Promise<BoardDocument | Uint8Array | null>;
-    // (undocumented)
     save(boardId: string, change: StorageChange): Promise<void>;
 }
 
