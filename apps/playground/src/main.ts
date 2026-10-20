@@ -3,7 +3,8 @@
  *
  * Route: `/s/<scenario>`. Global query: `bare=1` (center area only, for Playwright),
  * `debug=0` (hide the debug panel), `test=1` (test mode: the scenario's board is exposed as
- * `window.__board`, BOARD-2415). Other query params belong to the active scenario.
+ * `window.__board`, BOARD-2415), `csp=1` (served with a strict Content Security Policy,
+ * BOARD-2006). Other query params belong to the active scenario.
  */
 import type { Board } from '@kujam/core';
 import { append, h } from './dom.js';
@@ -12,7 +13,7 @@ import { DEFAULT_SCENARIO, findScenario, scenarios } from './registry.js';
 import type { ScenarioState } from './scenario.js';
 import './inspector.css';
 
-const GLOBAL_KEYS = ['bare', 'debug', 'test'];
+const GLOBAL_KEYS = ['bare', 'debug', 'test', 'csp'];
 
 declare global {
   interface Window {

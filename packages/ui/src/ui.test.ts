@@ -27,6 +27,7 @@ import {
 } from './index.js';
 import { BASE_CSS, uiToken } from './theme.js';
 import { createIcon } from './icons.js';
+import { createElementClass, type UiWindow } from './base.js';
 
 const tool = (id: string) => defineTool({ id, initial: 'idle', states: { idle: {} } });
 
@@ -78,6 +79,16 @@ function mountToolbar(board: Board, tag: string = UI_TAGS.toolbar): KujamUiEleme
   el.board = board;
   document.body.append(el);
   return el;
+}
+
+/** Styles of an element's shadow root: adopted sheets, or `<style>` elements in the fallback. */
+function shadowCss(el: Element): string {
+  const root = el.shadowRoot!;
+  const adopted = root.adoptedStyleSheets.flatMap((sheet) =>
+    [...sheet.cssRules].map((rule) => rule.cssText),
+  );
+  const inline = [...root.querySelectorAll('style')].map((style) => style.textContent ?? '');
+  return [...adopted, ...inline].join('\n');
 }
 
 function buttons(el: KujamUiElement): HTMLButtonElement[] {
@@ -861,7 +872,9 @@ describe('BOARD-1403: contextual selection toolbar', () => {
     expect(startArrowBtn).not.toBeNull();
     expect(startArrowBtn.getAttribute('aria-label')).toBe('Panah awal');
     startArrowBtn.click();
-    const startArrowMenu = el.shadowRoot!.querySelector<HTMLElement>('#kujam-selection-startArrow')!;
+    const startArrowMenu = el.shadowRoot!.querySelector<HTMLElement>(
+      '#kujam-selection-startArrow',
+    )!;
     const dotOpt = startArrowMenu.querySelector<HTMLButtonElement>(
       '[data-id="style.startArrow.dot"]',
     )!;
@@ -1025,11 +1038,50 @@ describe('BOARD-1904: Fokus Terlihat & Kontras Aksesibilitas @kujam/ui (>= 3:1)'
   it('memastikan komponen UI menyertakan aturan :focus-visible pada shadow DOM', () => {
     const board = newBoard();
     const el = mountToolbar(board, UI_TAGS.toolbar);
-    const styleEl = el.shadowRoot!.querySelector('style');
+    const css = shadowCss(el);
 
-    expect(styleEl).not.toBeNull();
-    expect(styleEl!.textContent).toContain(':focus-visible');
-    expect(styleEl!.textContent).toContain('outline: 2px solid var(--kujam-ui-focus-ring);');
+    expect(css).toContain(':focus-visible');
+    expect(css).toMatch(/:focus-visible \{[^}]*outline[^}]*var\(--kujam-ui-focus-ring\)/);
+  });
+});
+
+describe('BOARD-2006: CSP-compatible styles', () => {
+  it('adopts one shared constructed stylesheet instead of a <style> element', () => {
+    const board = newBoard();
+    const a = mountToolbar(board);
+    const b = mountToolbar(board);
+
+    expect(a.shadowRoot!.querySelector('style')).toBeNull();
+    expect(a.shadowRoot!.adoptedStyleSheets).toHaveLength(1);
+    expect(a.shadowRoot!.adoptedStyleSheets[0]).toBe(b.shadowRoot!.adoptedStyleSheets[0]);
+    expect(shadowCss(a)).toContain('--kujam-ui-surface');
+  });
+
+  it('keeps the adopted sheet when the board is reassigned', () => {
+    const el = mountToolbar(newBoard());
+    el.board = newBoard();
+
+    expect(el.shadowRoot!.adoptedStyleSheets).toHaveLength(1);
+    expect(el.shadowRoot!.querySelector('style')).toBeNull();
+  });
+
+  it('falls back to a <style> element without Constructable Stylesheets', () => {
+    const win = {
+      HTMLElement: window.HTMLElement,
+      ShadowRoot: window.ShadowRoot,
+      CSSStyleSheet: undefined,
+    } as unknown as UiWindow;
+    const tag = 'kujam-test-csp-fallback';
+    customElements.define(
+      tag,
+      createElementClass(win, { css: '.probe { color: red; }', render: () => () => {} }),
+    );
+    const el = document.createElement(tag) as KujamUiElement;
+    el.board = newBoard();
+    document.body.append(el);
+
+    expect(el.shadowRoot!.adoptedStyleSheets).toHaveLength(0);
+    expect(el.shadowRoot!.querySelector('style')!.textContent).toContain('.probe');
   });
 });
 
@@ -1074,6 +1126,3 @@ describe('BOARD-1909: custom i18n messages in UI components', () => {
     expect(itemsEn.find((i) => i.id === 'laser')?.label).toBe('Laser Beam');
   });
 });
-
-
-

@@ -6,6 +6,9 @@
  * window such as an iframe. Each element:
  *
  * - renders into an open Shadow DOM styled only with `--kujam-ui-*` custom properties;
+ * - adopts its styles as a Constructable Stylesheet, so a strict Content Security Policy without
+ *   `style-src 'unsafe-inline'` works (BOARD-2006); only browsers without `adoptedStyleSheets` fall
+ *   back to a `<style>` element, which such a policy blocks;
  * - receives its board through the `board` property and listens to it only while connected;
  * - follows the board theme by reflecting `board.theme.mode` to `data-theme` on the host.
  */
@@ -47,6 +50,8 @@ export interface ElementHooks {
  */
 export function createElementClass(win: UiWindow, hooks: ElementHooks): new () => KujamUiElement {
   const css = BASE_CSS + hooks.css;
+  // One sheet per element class and window, shared by every instance; created on first use.
+  let sheet: CSSStyleSheet | null | undefined;
 
   return class extends win.HTMLElement implements KujamUiElement {
     #board: Board | null = null;
@@ -56,6 +61,8 @@ export function createElementClass(win: UiWindow, hooks: ElementHooks): new () =
     constructor() {
       super();
       this.#root = this.attachShadow({ mode: 'open' });
+      if (sheet === undefined) sheet = createSheet(win, css);
+      if (sheet) this.#root.adoptedStyleSheets = [sheet];
     }
 
     get board(): Board | null {
@@ -83,9 +90,11 @@ export function createElementClass(win: UiWindow, hooks: ElementHooks): new () =
       this.#root.replaceChildren();
       if (board.disposed) return;
 
-      const style = this.ownerDocument.createElement('style');
-      style.textContent = css;
-      this.#root.append(style);
+      if (!sheet) {
+        const style = this.ownerDocument.createElement('style');
+        style.textContent = css;
+        this.#root.append(style);
+      }
 
       const applyTheme = (): void => {
         this.dataset.theme = board.theme.mode;
@@ -108,4 +117,20 @@ export function createElementClass(win: UiWindow, hooks: ElementHooks): new () =
       this.#root.replaceChildren();
     }
   };
+}
+
+/**
+ * Constructs a stylesheet with `css` in `win`, or `null` when the browser lacks Constructable
+ * Stylesheets. CSP does not apply to constructed sheets, unlike `<style>` elements.
+ */
+function createSheet(win: UiWindow, css: string): CSSStyleSheet | null {
+  if (!win.CSSStyleSheet || !win.ShadowRoot || !('adoptedStyleSheets' in win.ShadowRoot.prototype))
+    return null;
+  try {
+    const sheet = new win.CSSStyleSheet();
+    sheet.replaceSync(css);
+    return sheet;
+  } catch {
+    return null;
+  }
 }

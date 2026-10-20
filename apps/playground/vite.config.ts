@@ -14,8 +14,43 @@ function lanInfo(): Plugin {
   };
 }
 
+// BOARD-2006: Nonce Vite puts on the scripts and styles it injects, allowed by the strict policy.
+const CSP_NONCE = 'kujam-playground';
+
+/**
+ * Strict Content Security Policy for pages opened with `?csp=1` (BOARD-2006): no `unsafe-eval` and
+ * no `unsafe-inline`. Only the playground's own `<style>` and Vite's injected tags pass, through
+ * the nonce; package code has to work without either.
+ */
+const STRICT_CSP = [
+  "default-src 'self'",
+  `script-src 'self' 'nonce-${CSP_NONCE}'`,
+  `style-src 'self' 'nonce-${CSP_NONCE}'`,
+  "img-src 'self' blob: data:",
+  "font-src 'self'",
+  "connect-src 'self' ws: wss:",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+function strictCsp(): Plugin {
+  return {
+    name: 'kujam-playground-strict-csp',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (new URL(req.url ?? '/', 'http://localhost').searchParams.get('csp') === '1') {
+          res.setHeader('content-security-policy', STRICT_CSP);
+        }
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [lanInfo()],
+  plugins: [lanInfo(), strictCsp()],
+  html: { cspNonce: CSP_NONCE },
   resolve: {
     // BOARD-2401: Import packages directly from workspace source for instant hot reload
     alias: {
