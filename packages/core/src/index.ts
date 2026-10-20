@@ -32,8 +32,11 @@ import {
 } from './history/history.js';
 import {
   BOARD_SYNC_HISTORY_DELEGATE,
+  BOARD_SYNC_PRESENCE_DELEGATE,
   type BoardSyncHistoryDelegateHook,
+  type BoardSyncPresenceDelegateHook,
   type HistoryApi,
+  type PresenceApi,
 } from './sync/sync.js';
 import { createId as createRandomId, type IdGenerator } from './utils/ids.js';
 import { createInteraction } from './tools/interaction.js';
@@ -1157,11 +1160,23 @@ export interface Board {
    */
   dispose(): void;
   /**
+   * Presence awareness API of the attached sync adapter, or undefined when no adapter with presence is attached.
+   *
+   * @public
+   */
+  readonly presence?: PresenceApi;
+  /**
    * Internal hook for sync adapter history delegation.
    *
    * @internal
    */
   readonly [BOARD_SYNC_HISTORY_DELEGATE]?: BoardSyncHistoryDelegateHook;
+  /**
+   * Internal hook for sync adapter presence delegation.
+   *
+   * @internal
+   */
+  readonly [BOARD_SYNC_PRESENCE_DELEGATE]?: BoardSyncPresenceDelegateHook;
 }
 
 /**
@@ -1680,6 +1695,16 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
   );
   let historyDelegate: HistoryApi | null = null;
   let historyDelegateUnsubscribe: (() => void) | null = null;
+  let presenceDelegate: PresenceApi | null = null;
+
+  function setPresenceDelegate(delegate: PresenceApi | null): () => void {
+    presenceDelegate = delegate;
+    return () => {
+      if (presenceDelegate === delegate) {
+        presenceDelegate = null;
+      }
+    };
+  }
 
   function setHistoryDelegate(delegate: HistoryApi | null): () => void {
     if (historyDelegateUnsubscribe) {
@@ -2162,9 +2187,16 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       }
       return id;
     },
+    get presence(): PresenceApi | undefined {
+      return presenceDelegate ?? undefined;
+    },
     [BOARD_SYNC_HISTORY_DELEGATE]: {
       setHistoryDelegate,
       getHistoryDelegate: () => historyDelegate,
+    },
+    [BOARD_SYNC_PRESENCE_DELEGATE]: {
+      setPresenceDelegate,
+      getPresenceDelegate: () => presenceDelegate,
     },
     undo(): boolean {
       assertUsable();
@@ -2318,6 +2350,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
           historyDelegateUnsubscribe = null;
         }
         historyDelegate = null;
+        presenceDelegate = null;
         history.dispose();
         store.dispose();
       }

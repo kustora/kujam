@@ -71,6 +71,74 @@ export interface TextEditorAttachment {
 }
 
 /**
+ * Computes the caret position as a character offset from the start of the container.
+ *
+ * @internal
+ */
+export function getCaretCharacterOffset(container: HTMLElement): number {
+  const doc = container.ownerDocument;
+  const sel = doc.defaultView?.getSelection() ?? doc.getSelection();
+  if (!sel || sel.rangeCount === 0) return 0;
+  const range = sel.getRangeAt(0);
+  if (!container.contains(range.startContainer)) return 0;
+
+  const preCaretRange = range.cloneRange();
+  preCaretRange.selectNodeContents(container);
+  preCaretRange.setEnd(range.startContainer, range.startOffset);
+  return preCaretRange.toString().length;
+}
+
+/**
+ * Restores the caret position inside the container at the specified character offset.
+ *
+ * @internal
+ */
+export function setCaretCharacterOffset(container: HTMLElement, offset: number): void {
+  const doc = container.ownerDocument;
+  const sel = doc.defaultView?.getSelection() ?? doc.getSelection();
+  if (!sel) return;
+
+  let current = 0;
+  const range = doc.createRange();
+  range.selectNodeContents(container);
+  range.collapse(true);
+
+  const nodeStack: Node[] = [container];
+  let node: Node | undefined;
+  let found = false;
+
+  while (!found && (node = nodeStack.pop())) {
+    if (node.nodeType === 3 /* Node.TEXT_NODE */) {
+      const textLen = node.textContent?.length ?? 0;
+      const nextLength = current + textLen;
+      if (offset <= nextLength) {
+        range.setStart(node, Math.min(Math.max(0, offset - current), textLen));
+        range.collapse(true);
+        found = true;
+        break;
+      }
+      current = nextLength;
+    } else {
+      let i = node.childNodes.length;
+      while (i--) {
+        const child = node.childNodes[i];
+        if (child) {
+          nodeStack.push(child);
+        }
+      }
+    }
+  }
+
+  if (!found) {
+    range.selectNodeContents(container);
+    range.collapse(false);
+  }
+
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+/**
  * Converts canonical RichText delta into sanitized HTML DOM nodes for the contenteditable editor.
  *
  * @internal
@@ -657,6 +725,30 @@ export function attachTextEditor(
       }
     });
 
+    // Live sync input changes to the board store for realtime collaboration (BOARD-1503)
+    editor.addEventListener('input', () => {
+      if (isComposing) return;
+      const elId = elementId;
+      const rec = board.getElement(elId);
+      if (!rec) return;
+      if (isFrame) {
+        const plain = editor.textContent?.replace(/\n/g, ' ').trim() || '';
+        board.update(
+          elId,
+          { props: { ...(rec.props as Record<string, unknown>), name: plain } },
+          { label: 'edit-frame-name', mergeKey: `edit:${elId}` },
+        );
+      } else {
+        const newDelta = domToRichText(editor);
+        const isLabelProp = rec.type === 'geo' || rec.type === 'connector';
+        const textPropName = isLabelProp ? 'label' : 'text';
+        const curDelta = (rec.props as Record<string, unknown>)[textPropName];
+        if (JSON.stringify(newDelta) !== JSON.stringify(curDelta)) {
+          board.update(elId, { props: { [textPropName]: newDelta } }, { label: 'edit-text', mergeKey: `edit:${elId}` });
+        }
+      }
+    });
+
     editor.addEventListener('blur', () => {
       commitAndClose();
     });
@@ -716,6 +808,33 @@ export function attachTextEditor(
     }
   });
 
+  // Preserve caret position when remote text updates arrive for the actively edited element (BOARD-1503)
+  const offChange = board.on('change', (event) => {
+    if (event.origin !== 'remote' || !activeElementId || !activeEditorEl) return;
+    const update = event.updated[activeElementId];
+    if (!update) return;
+
+    const afterRecord = update.after;
+    if (afterRecord.kind !== 'element') return;
+
+    const isFrame = afterRecord.type === 'frame';
+    const isLabelProp = afterRecord.type === 'geo' || afterRecord.type === 'connector';
+    const textPropName = isLabelProp ? 'label' : 'text';
+
+    const newRichText: RichText = isFrame
+      ? [{ insert: ((afterRecord.props as { name?: string }).name || 'Frame') + '\n' }]
+      : ((afterRecord.props as Record<string, unknown>)[textPropName] as RichText) ?? [{ insert: '\n' }];
+
+    const currentDomText = domToRichText(activeEditorEl);
+    if (JSON.stringify(currentDomText) === JSON.stringify(newRichText)) {
+      return;
+    }
+
+    const caretOffset = getCaretCharacterOffset(activeEditorEl);
+    richTextToDom(newRichText, activeEditorEl);
+    setCaretCharacterOffset(activeEditorEl, caretOffset);
+  });
+
   return {
     get activeElementId() {
       return activeElementId;
@@ -730,6 +849,7 @@ export function attachTextEditor(
       commitAndClose();
       offAction();
       offSelection();
+      offChange();
     },
   };
 }

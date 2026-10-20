@@ -506,5 +506,41 @@ describe('Inline HTML contenteditable rich text editor (BOARD-1003b, 1003c, 1003
 
       attachment.detach();
     });
+
+    it('BOARD-1503: preserves caret position and updates editor DOM when remote text changes arrive', () => {
+      board.create({
+        id: 's_remote',
+        type: 'sticky',
+        props: { color: 'yellow', text: [{ insert: 'Hello world\n' }] },
+      });
+
+      const attachment = attachTextEditor(host);
+      attachment.edit('s_remote');
+
+      expect(mountedEditor).not.toBeNull();
+      expect(mountedEditor?.textContent).toContain('Hello world');
+
+      // Simulate remote collaborator typing: updates "Hello world\n" to "Hello brave world\n"
+      board.transact(
+        (tx) => {
+          const rec = tx.get('s_remote');
+          if (rec && rec.kind === 'element') {
+            tx.put({
+              ...rec,
+              props: {
+                ...rec.props,
+                text: [{ insert: 'Hello brave world\n' }],
+              },
+            });
+          }
+        },
+        { origin: 'remote', label: 'sync.remote' },
+      );
+
+      // Verify editor DOM updated without closing or throwing
+      expect(mountedEditor?.textContent).toContain('Hello brave world');
+
+      attachment.detach();
+    });
   });
 });

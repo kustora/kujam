@@ -114,6 +114,8 @@ export interface BindingRecord {
 export interface Board {
     // @internal
     readonly [BOARD_SYNC_HISTORY_DELEGATE]?: BoardSyncHistoryDelegateHook;
+    // @internal
+    readonly [BOARD_SYNC_PRESENCE_DELEGATE]?: BoardSyncPresenceDelegateHook;
     // @beta
     addToSelection(ids: SelectionInput): void;
     // @beta
@@ -167,6 +169,7 @@ export interface Board {
     readonly plugins: BoardPlugins;
     // @beta
     prepareDocument(doc: BoardDocument): PreparedDocument;
+    readonly presence?: PresenceApi;
     query<T = Record<string, unknown>>(filter?: QueryFilter): readonly Readonly<ElementRecord<ResolveElementProps<T>>>[];
     readonly readOnly: boolean;
     redo(): boolean;

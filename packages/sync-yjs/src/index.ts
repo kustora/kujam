@@ -5,17 +5,31 @@
  */
 
 import * as Y from 'yjs';
+import { Awareness } from 'y-protocols/awareness.js';
 import type {
   Board,
   BoardRecord,
+  PresenceUser,
   SyncAdapter,
   SyncStatus,
   SyncEventMap,
 } from '@kujam/core';
-import { recordToYMap, yMapToRecord, isValidBoardRecord } from './binding.js';
+import { recordToYMap, yMapToRecord, isValidBoardRecord, syncRichTextToYText } from './binding.js';
+import {
+  createYjsPresence,
+  type YjsPresence,
+  type YjsPresenceOptions,
+} from './presence.js';
 
-export { recordToYMap, yMapToRecord, isValidBoardRecord };
-export type { SyncAdapter, SyncStatus, SyncEventMap };
+export { recordToYMap, yMapToRecord, isValidBoardRecord, syncRichTextToYText };
+export { createYjsPresence, Awareness };
+export type {
+  SyncAdapter,
+  SyncStatus,
+  SyncEventMap,
+  YjsPresence,
+  YjsPresenceOptions,
+};
 
 type SyncListener<T> = (data: T) => void;
 
@@ -68,6 +82,21 @@ export interface YjsSyncOptions {
   doc?: Y.Doc;
 
   /**
+   * Existing Awareness instance. If omitted, a fresh Awareness instance is created on `doc`.
+   */
+  awareness?: Awareness;
+
+  /**
+   * Initial local user identity and appearance for presence.
+   */
+  user?: PresenceUser;
+
+  /**
+   * Cursor position throttling duration in milliseconds (default ~30 Hz / 33ms).
+   */
+  cursorThrottleMs?: number;
+
+  /**
    * Origin token passed to `doc.transact` to distinguish local transactions from remote changes.
    * Defaults to a unique Symbol.
    */
@@ -82,13 +111,19 @@ export interface YjsSyncOptions {
 /**
  * Yjs-based synchronization adapter contract.
  *
- * Extends {@link SyncAdapter} with direct access to the underlying `Y.Doc`.
+ * Extends {@link SyncAdapter} with direct access to the underlying `Y.Doc`, `Awareness`, and `YjsPresence`.
  *
  * @public
  */
 export interface YjsSyncAdapter extends SyncAdapter {
   /** Underlying Y.Doc instance synchronized with the board. */
   readonly doc: Y.Doc;
+
+  /** Underlying Awareness instance used for presence and collaboration. */
+  readonly awareness: Awareness;
+
+  /** Presence awareness API for collaborator cursors, selection, and camera. */
+  readonly presence: YjsPresence;
 }
 
 /**
@@ -103,16 +138,36 @@ export interface YjsSyncAdapter extends SyncAdapter {
  */
 export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapter {
   const doc = options.doc ?? new Y.Doc();
+  const awareness = options.awareness ?? new Awareness(doc);
   const clientOrigin = options.clientOrigin ?? Symbol('kujam.sync.yjs.origin');
   const customValidate = options.validateRecord;
+
+  const presence = createYjsPresence({
+    awareness,
+    user: options.user,
+    cursorThrottleMs: options.cursorThrottleMs,
+  });
+
+  const syncEmitter = new SyncEventEmitter();
+
+  presence.on('peer-join', (peerId, state) => {
+    if (state?.user) {
+      syncEmitter.emit('peer-join', { peerId, user: state.user });
+    }
+  });
+
+  presence.on('peer-leave', (peerId, state) => {
+    syncEmitter.emit('peer-leave', { peerId, user: state?.user });
+  });
 
   let currentStatus: SyncStatus = 'offline';
   let currentBoard: Board | null = null;
   let unlistenBoard: (() => void) | null = null;
   let unlistenDispose: (() => void) | null = null;
   let unobserveDeep: (() => void) | null = null;
-
-  const syncEmitter = new SyncEventEmitter();
+  let unlistenSelection: (() => void) | null = null;
+  let unlistenCamera: (() => void) | null = null;
+  let unlistenTool: (() => void) | null = null;
 
   function setStatus(next: SyncStatus): void {
     if (currentStatus === next) return;
@@ -149,6 +204,14 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
 
     get doc(): Y.Doc {
       return doc;
+    },
+
+    get awareness(): Awareness {
+      return awareness;
+    },
+
+    get presence(): YjsPresence {
+      return presence;
     },
 
     connect(board: Board): void {
@@ -330,6 +393,29 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
         adapter.disconnect();
       });
 
+      // Synchronize initial board state to presence awareness
+      presence.setLocalState({
+        ...(options.user ? { user: options.user } : {}),
+        selection: board.selection,
+        camera: board.getCamera(),
+        tool: board.tool ?? undefined,
+      });
+
+      unlistenSelection = board.on('selection', (e) => {
+        const selection = (e as unknown as { ids?: readonly string[] }).ids ?? (e as unknown as readonly string[]);
+        presence.setLocalState({ selection });
+      });
+
+      unlistenCamera = board.on('camera', (e) => {
+        const cam = (e as unknown as { camera?: { x: number; y: number; zoom: number } }).camera ?? (e as unknown as { x: number; y: number; zoom: number });
+        presence.setLocalState({ camera: cam });
+      });
+
+      unlistenTool = board.on('tool', (e) => {
+        const tool = (e as unknown as { tool?: string; id?: string | null }).tool ?? (e as unknown as { id?: string | null }).id ?? undefined;
+        presence.setLocalState({ tool: tool ?? undefined });
+      });
+
       setStatus('synced');
     },
 
@@ -348,6 +434,20 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
         unobserveDeep();
         unobserveDeep = null;
       }
+      if (unlistenSelection) {
+        unlistenSelection();
+        unlistenSelection = null;
+      }
+      if (unlistenCamera) {
+        unlistenCamera();
+        unlistenCamera = null;
+      }
+      if (unlistenTool) {
+        unlistenTool();
+        unlistenTool = null;
+      }
+
+      awareness.setLocalState(null);
 
       currentBoard = null;
       setStatus('offline');

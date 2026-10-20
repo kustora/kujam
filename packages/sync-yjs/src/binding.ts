@@ -103,6 +103,90 @@ export function isValidBoardRecord(value: unknown): value is BoardRecord {
 }
 
 /**
+ * Synchronizes a rich text Delta array into a Y.Text instance using character-level diffing.
+ *
+ * @public
+ */
+export function syncRichTextToYText(delta: unknown[], yText: Y.Text): void {
+  const targetOps = delta as Array<{ insert?: unknown; attributes?: Record<string, unknown> }>;
+  const targetStr = targetOps.map((op) => (typeof op.insert === 'string' ? op.insert : '')).join('');
+  const curStr = yText.toString();
+
+  if (curStr === targetStr && JSON.stringify(yText.toDelta()) === JSON.stringify(delta)) {
+    return;
+  }
+
+  if (yText.length === 0) {
+    yText.applyDelta(targetOps as never);
+    return;
+  }
+
+  let prefix = 0;
+  while (prefix < curStr.length && prefix < targetStr.length && curStr[prefix] === targetStr[prefix]) {
+    prefix++;
+  }
+  let suffix = 0;
+  while (
+    suffix < curStr.length - prefix &&
+    suffix < targetStr.length - prefix &&
+    curStr[curStr.length - 1 - suffix] === targetStr[targetStr.length - 1 - suffix]
+  ) {
+    suffix++;
+  }
+
+  const deleteCount = curStr.length - prefix - suffix;
+  if (deleteCount > 0) {
+    yText.delete(prefix, deleteCount);
+  }
+
+  const insertEnd = targetStr.length - suffix;
+  if (insertEnd > prefix) {
+    let charPos = 0;
+    let curInsertOffset = 0;
+    for (const op of targetOps) {
+      const text = typeof op.insert === 'string' ? op.insert : '';
+      const opStart = charPos;
+      const opEnd = charPos + text.length;
+      charPos = opEnd;
+
+      const sliceStart = Math.max(prefix, opStart);
+      const sliceEnd = Math.min(insertEnd, opEnd);
+      if (sliceEnd > sliceStart) {
+        const sliceText = text.slice(sliceStart - opStart, sliceEnd - opStart);
+        yText.insert(prefix + curInsertOffset, sliceText, op.attributes || {});
+        curInsertOffset += sliceText.length;
+      }
+    }
+  }
+
+  // Synchronize formatting attributes across the text
+  let pos = 0;
+  for (const op of targetOps) {
+    const text = typeof op.insert === 'string' ? op.insert : '';
+    const len = text.length;
+    if (len > 0) {
+      yText.format(pos, len, op.attributes || {});
+      pos += len;
+    }
+  }
+}
+
+function isRichTextDelta(val: unknown): val is Array<{ insert: string; attributes?: Record<string, unknown> }> {
+  return Array.isArray(val) && val.length > 0 && typeof (val[0] as { insert?: unknown })?.insert === 'string';
+}
+
+function normalizeRichTextDelta(delta: Array<{ insert?: unknown; attributes?: Record<string, unknown> }>): unknown[] {
+  if (delta.length === 0) {
+    return [{ insert: '\n' }];
+  }
+  const last = delta[delta.length - 1];
+  if (last && typeof last.insert === 'string' && !last.insert.endsWith('\n')) {
+    return [...delta.slice(0, -1), { ...last, insert: last.insert + '\n' }];
+  }
+  return delta;
+}
+
+/**
  * Synchronizes a record's properties dictionary into a nested `Y.Map`
  * so concurrent property updates can merge independently.
  */
@@ -117,6 +201,19 @@ function syncPropsToYMap(props: Record<string, unknown>, yMap: Y.Map<unknown>): 
     }
     for (const [key, val] of Object.entries(props)) {
       if (val === undefined) continue;
+
+      if ((key === 'text' || key === 'label') && isRichTextDelta(val)) {
+        const curText = existingProps.get(key);
+        if (curText instanceof Y.Text && curText.doc !== null) {
+          syncRichTextToYText(val, curText);
+        } else {
+          const yText = new Y.Text();
+          existingProps.set(key, yText);
+          syncRichTextToYText(val, yText);
+        }
+        continue;
+      }
+
       const cur = existingProps.get(key);
       if (typeof val === 'object' && val !== null) {
         if (JSON.stringify(cur) !== JSON.stringify(val)) {
@@ -128,12 +225,18 @@ function syncPropsToYMap(props: Record<string, unknown>, yMap: Y.Map<unknown>): 
     }
   } else {
     const yProps = new Y.Map<unknown>();
+    yMap.set('props', yProps);
     for (const [key, val] of Object.entries(props)) {
       if (val !== undefined) {
-        yProps.set(key, val);
+        if ((key === 'text' || key === 'label') && isRichTextDelta(val)) {
+          const yText = new Y.Text();
+          yProps.set(key, yText);
+          syncRichTextToYText(val, yText);
+        } else {
+          yProps.set(key, val);
+        }
       }
     }
-    yMap.set('props', yProps);
   }
 }
 
@@ -204,6 +307,22 @@ export function yMapToRecord(yMap: Y.Map<unknown>): BoardRecord | null {
   const raw = yMap.toJSON() as Record<string, unknown>;
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return null;
+  }
+
+  // Handle nested Y.Text in props
+  const propsMap = yMap.get('props');
+  if (propsMap instanceof Y.Map) {
+    const rawProps = (raw.props && typeof raw.props === 'object' && !Array.isArray(raw.props)
+      ? { ...(raw.props as Record<string, unknown>) }
+      : {}) as Record<string, unknown>;
+
+    for (const key of propsMap.keys()) {
+      const val = propsMap.get(key);
+      if (val instanceof Y.Text) {
+        rawProps[key] = normalizeRichTextDelta(val.toDelta());
+      }
+    }
+    raw.props = rawProps;
   }
 
   // Supply default meta if omitted

@@ -4,11 +4,19 @@
 
 ```ts
 
+import { Awareness } from 'y-protocols/awareness.js';
 import { BoardRecord } from '@kujam/core';
+import { PresenceApi } from '@kujam/core';
+import { PresenceUser } from '@kujam/core';
 import { SyncAdapter } from '@kujam/core';
 import { SyncEventMap } from '@kujam/core';
 import { SyncStatus } from '@kujam/core';
 import * as Y from 'yjs';
+
+export { Awareness }
+
+// @public
+export function createYjsPresence(options?: YjsPresenceOptions): YjsPresence;
 
 // @public
 export function createYjsSyncAdapter(options?: YjsSyncOptions): YjsSyncAdapter;
@@ -23,17 +31,42 @@ export { SyncAdapter }
 
 export { SyncEventMap }
 
+// @public
+export function syncRichTextToYText(delta: unknown[], yText: Y.Text): void;
+
 export { SyncStatus }
 
 // @public
+export interface YjsPresence extends PresenceApi {
+    readonly awareness: Awareness;
+    destroy(): void;
+    setCursor(cursor: {
+        x: number;
+        y: number;
+    } | null): void;
+}
+
+// @public
+export interface YjsPresenceOptions {
+    awareness?: Awareness;
+    cursorThrottleMs?: number;
+    user?: PresenceUser;
+}
+
+// @public
 export interface YjsSyncAdapter extends SyncAdapter {
+    readonly awareness: Awareness;
     readonly doc: Y.Doc;
+    readonly presence: YjsPresence;
 }
 
 // @public
 export interface YjsSyncOptions {
+    awareness?: Awareness;
     clientOrigin?: unknown;
+    cursorThrottleMs?: number;
     doc?: Y.Doc;
+    user?: PresenceUser;
     validateRecord?: (record: unknown) => record is BoardRecord;
 }
 

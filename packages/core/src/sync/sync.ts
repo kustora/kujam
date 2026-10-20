@@ -207,6 +207,23 @@ export interface BoardSyncHistoryDelegateHook {
 }
 
 /**
+ * Internal symbol used to register and detach external presence delegates on a Board.
+ *
+ * @internal
+ */
+export const BOARD_SYNC_PRESENCE_DELEGATE = Symbol.for('kujam.board.syncPresenceDelegate');
+
+/**
+ * Internal interface on Board for sync presence delegation.
+ *
+ * @internal
+ */
+export interface BoardSyncPresenceDelegateHook {
+  setPresenceDelegate(delegate: PresenceApi | null): () => void;
+  getPresenceDelegate(): PresenceApi | null;
+}
+
+/**
  * Attaches a sync adapter to a board, establishing synchronization and delegating history
  * if supported by the adapter.
  *
@@ -226,6 +243,15 @@ export function attachSync(board: Board, adapter: SyncAdapter): SyncAttachment {
   let unregisterDelegate: (() => void) | undefined;
   if (adapter.history && hook) {
     unregisterDelegate = hook.setHistoryDelegate(adapter.history);
+  }
+
+  const presenceHook = (
+    board as unknown as { [BOARD_SYNC_PRESENCE_DELEGATE]?: BoardSyncPresenceDelegateHook }
+  )[BOARD_SYNC_PRESENCE_DELEGATE];
+
+  let unregisterPresenceDelegate: (() => void) | undefined;
+  if (adapter.presence && presenceHook) {
+    unregisterPresenceDelegate = presenceHook.setPresenceDelegate(adapter.presence);
   }
 
   const connectResult = adapter.connect(board);
@@ -248,6 +274,12 @@ export function attachSync(board: Board, adapter: SyncAdapter): SyncAttachment {
       unregisterDelegate = undefined;
     } else if (adapter.history && hook) {
       hook.setHistoryDelegate(null);
+    }
+    if (unregisterPresenceDelegate) {
+      unregisterPresenceDelegate();
+      unregisterPresenceDelegate = undefined;
+    } else if (adapter.presence && presenceHook) {
+      presenceHook.setPresenceDelegate(null);
     }
     adapter.disconnect();
   }
