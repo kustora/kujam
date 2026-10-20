@@ -8,6 +8,7 @@ import type { Board } from '@kujam/core';
 import type { KujamUiElement, UiWindow } from './base.js';
 import { createCommandPaletteClass } from './command-palette.js';
 import { createMinimapClass } from './minimap.js';
+import { createPresenceBarClass } from './presence-bar.js';
 import { createSelectionToolbarClass } from './selection-toolbar.js';
 import { createToolbarClass } from './toolbar.js';
 import { createHistoryControlClass, createZoomControlClass } from './zoom.js';
@@ -19,6 +20,7 @@ export {
   type CommandPaletteSource,
 } from './command-palette.js';
 export { createMinimapClass, MINIMAP_SIZE } from './minimap.js';
+export { createPresenceBarClass, type PresenceBarElement } from './presence-bar.js';
 export {
   buildToolbarItems,
   type ToolbarItem,
@@ -42,10 +44,11 @@ export const UI_TAGS = Object.freeze({
   selection: 'kujam-selection-toolbar',
   commandPalette: 'kujam-command-palette',
   minimap: 'kujam-minimap',
+  presence: 'kujam-presence-bar',
 } as const);
 
 /**
- * Registers the UI custom elements in a window's `customElements` (BOARD-1401, BOARD-1403). Safe
+ * Registers the UI custom elements in a window's `customElements` (BOARD-1401, BOARD-1403, BOARD-1407). Safe
  * to call more than once; tags that are already defined are left alone.
  *
  * @param win - Window to define the elements in. Defaults to the global `window`.
@@ -66,6 +69,7 @@ export function defineUiElements(win?: Window): void {
     [UI_TAGS.selection]: createSelectionToolbarClass,
     [UI_TAGS.commandPalette]: createCommandPaletteClass,
     [UI_TAGS.minimap]: createMinimapClass,
+    [UI_TAGS.presence]: createPresenceBarClass,
   };
   for (const [tag, create] of Object.entries(factories)) {
     if (!target.customElements.get(tag)) target.customElements.define(tag, create(target));
@@ -104,6 +108,8 @@ export interface MountedUi {
   readonly minimap: KujamUiElement;
   /** The command palette overlay element (BOARD-1405). */
   readonly commandPalette: KujamUiElement;
+  /** The presence bar element, at the top right (BOARD-1407). */
+  readonly presence: KujamUiElement;
   /** Removes the UI elements. Safe to call more than once. */
   unmount(): void;
 }
@@ -112,7 +118,8 @@ export interface MountedUi {
  * Mounts the default UI over a board: the main toolbar at the bottom center (BOARD-1402), the
  * zoom control at the bottom right, undo/redo at the bottom left (BOARD-1404), the
  * contextual selection toolbar above the active selection (BOARD-1403), the minimap above the
- * zoom control (BOARD-1406), and the command palette dialog overlay (BOARD-1405).
+ * zoom control (BOARD-1406), the command palette dialog overlay (BOARD-1405), and the
+ * presence bar at the top right (BOARD-1407).
  *
  * @example
  * ```ts
@@ -157,6 +164,11 @@ export function mountDefaultUi(options: MountUiOptions): MountedUi {
     pointerEvents: 'none',
     zIndex: '1000',
   });
+  const presence = place(UI_TAGS.presence, {
+    top: '20px',
+    right: '20px',
+    bottom: 'auto',
+  });
 
   return {
     toolbar,
@@ -165,8 +177,9 @@ export function mountDefaultUi(options: MountUiOptions): MountedUi {
     selection,
     minimap,
     commandPalette,
+    presence,
     unmount() {
-      for (const el of [toolbar, zoom, history, selection, minimap, commandPalette]) {
+      for (const el of [toolbar, zoom, history, selection, minimap, commandPalette, presence]) {
         el.board = null;
         el.remove();
       }
@@ -182,5 +195,6 @@ declare global {
     'kujam-selection-toolbar': KujamUiElement;
     'kujam-command-palette': KujamUiElement;
     'kujam-minimap': KujamUiElement;
+    'kujam-presence-bar': KujamUiElement;
   }
 }

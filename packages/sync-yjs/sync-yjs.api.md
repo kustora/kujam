@@ -14,12 +14,19 @@ import { PresenceApi } from '@kujam/core';
 import { PresenceLiveStroke } from '@kujam/core';
 import { PresenceUser } from '@kujam/core';
 import { SyncAdapter } from '@kujam/core';
+import { SyncErrorDetail } from '@kujam/core';
 import { SyncEventMap } from '@kujam/core';
 import { SyncStatus } from '@kujam/core';
 import { UndoHook } from '@kujam/core';
 import * as Y from 'yjs';
 
 export { Awareness }
+
+// @public
+export function calculateBackoffDelay(attempt: number, options?: ReconnectOptions): number;
+
+// @public
+export function createReconnectController(options: ReconnectControllerOptions): ReconnectController;
 
 // @public
 export function createWhenLoaded(getPersistence: () => IndexeddbPersistence | null | undefined, getSyncPromise?: () => Promise<void> | null | undefined): WhenLoadedPromise;
@@ -39,6 +46,9 @@ export function createYjsSyncAdapter(options?: YjsSyncOptions): YjsSyncAdapter;
 export { IndexeddbPersistence }
 
 // @public
+export function isAuthError(error: unknown): boolean;
+
+// @public
 export function isIndexedDbSupported(): boolean;
 
 // @public
@@ -48,9 +58,53 @@ export function isValidBoardRecord(value: unknown): value is BoardRecord;
 export type LiveStroke = PresenceLiveStroke;
 
 // @public
+export class ReconnectController {
+    constructor(options: ReconnectControllerOptions);
+    cancelReconnect(): void;
+    destroy(): void;
+    handleConnectionDrop(error?: unknown): void;
+    handleError(error: unknown): void;
+    handleSuccess(): void;
+    get isReconnecting(): boolean;
+    reconnect(): Promise<void>;
+    get reconnectAttempts(): number;
+    reset(): void;
+    setStatus(next: SyncStatus): void;
+    get status(): SyncStatus;
+}
+
+// @public
+export interface ReconnectControllerOptions extends ReconnectOptions {
+    connect: () => Promise<void> | void;
+    onError?: (detail: SyncErrorDetail) => void;
+    onStatusChange?: (status: SyncStatus) => void;
+    onSuccess?: () => void;
+}
+
+// @public
+export interface ReconnectOptions {
+    backoffFactor?: number;
+    initialDelayMs?: number;
+    jitter?: boolean;
+    jitterRatio?: number;
+    maxAttempts?: number;
+    maxDelayMs?: number;
+    randomFn?: () => number;
+}
+
+// @public
 export function recordToYMap(record: BoardRecord, yMap: Y.Map<unknown>): void;
 
 export { SyncAdapter }
+
+// @public
+export class SyncAuthError extends Error {
+    constructor(message?: string, code?: number | string);
+    readonly code: number | string;
+    readonly reason: 'auth';
+}
+
+export { SyncErrorDetail }
 
 export { SyncEventMap }
 
@@ -117,13 +171,17 @@ export interface YjsPresenceOptions {
 // @public
 export interface YjsSyncAdapter extends SyncAdapter {
     readonly awareness: Awareness;
+    cancelReconnect(): void;
     destroy?(): void;
     readonly doc: Y.Doc;
+    handleError?(error: unknown): void;
     readonly history?: YjsHistory;
     isOnlineRequired?(action: string): boolean;
     readonly pendingUpdates?: number;
     readonly persistence?: IndexeddbPersistence | null;
     readonly presence: YjsPresence;
+    reconnect(): Promise<void> | void;
+    readonly reconnectAttempts: number;
     readonly whenLoaded: WhenLoadedPromise;
 }
 
@@ -131,11 +189,13 @@ export interface YjsSyncAdapter extends SyncAdapter {
 export interface YjsSyncOptions {
     awareness?: Awareness;
     clientOrigin?: unknown;
+    connect?: (board: Board) => Promise<void> | void;
     cursorThrottleMs?: number;
     doc?: Y.Doc;
     history?: boolean | Omit<YjsHistoryOptions, 'doc' | 'clientOrigin'>;
     indexeddb?: boolean | YjsIndexedDbOptions;
     isOnlineRequired?: (action: string) => boolean;
+    reconnect?: boolean | ReconnectOptions;
     strokeThrottleMs?: number;
     user?: PresenceUser;
     validateRecord?: (record: unknown) => record is BoardRecord;

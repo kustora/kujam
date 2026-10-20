@@ -423,6 +423,7 @@ export {
   type PresenceUser,
   type SyncAdapter,
   type SyncAttachment,
+  type SyncErrorDetail,
   type SyncEventMap,
   type SyncStatus,
 } from './sync/sync.js';

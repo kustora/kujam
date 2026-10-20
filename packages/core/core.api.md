@@ -2196,7 +2196,16 @@ export interface SyncAttachment {
 }
 
 // @public
+export interface SyncErrorDetail {
+    [key: string]: unknown;
+    error?: unknown;
+    message?: string;
+    reason: 'auth' | 'network' | string;
+}
+
+// @public
 export interface SyncEventMap {
+    'auth-error': SyncErrorDetail;
     'peer-join': {
         peerId: string;
         user: PresenceUser;
@@ -2205,7 +2214,7 @@ export interface SyncEventMap {
         peerId: string;
         user?: PresenceUser;
     };
-    error: Error | unknown;
+    error: SyncErrorDetail | Error | unknown;
     status: SyncStatus;
 }
 

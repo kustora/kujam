@@ -39,6 +39,9 @@ export function createCommandPaletteClass(win: UiWindow): new () => KujamUiEleme
 // @internal
 export function createMinimapClass(win: UiWindow): new () => KujamUiElement;
 
+// @internal
+export function createPresenceBarClass(win: UiWindow): new () => KujamUiElement;
+
 // @public
 export function defineUiElements(win?: Window): void;
 
@@ -61,6 +64,7 @@ export interface MountedUi {
     readonly commandPalette: KujamUiElement;
     readonly history: KujamUiElement;
     readonly minimap: KujamUiElement;
+    readonly presence: KujamUiElement;
     readonly selection: KujamUiElement;
     readonly toolbar: KujamUiElement;
     unmount(): void;
@@ -75,6 +79,11 @@ export interface MountUiOptions {
 }
 
 export { nextZoomStep }
+
+// @public
+export interface PresenceBarElement extends KujamUiElement {
+    update(): void;
+}
 
 // @public
 export interface ToolbarItem {
@@ -136,6 +145,7 @@ export const UI_TAGS: Readonly<{
     readonly selection: "kujam-selection-toolbar";
     readonly commandPalette: "kujam-command-palette";
     readonly minimap: "kujam-minimap";
+    readonly presence: "kujam-presence-bar";
 }>;
 
 // @public

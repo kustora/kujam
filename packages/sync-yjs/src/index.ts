@@ -13,6 +13,7 @@ import type {
   ChangeOrigin,
   PresenceUser,
   SyncAdapter,
+  SyncErrorDetail,
   SyncStatus,
   SyncEventMap,
 } from '@kujam/core';
@@ -34,6 +35,15 @@ import {
   type WhenLoadedPromise,
   type YjsIndexedDbOptions,
 } from './persistence.js';
+import {
+  calculateBackoffDelay,
+  createReconnectController,
+  isAuthError,
+  ReconnectController,
+  SyncAuthError,
+  type ReconnectControllerOptions,
+  type ReconnectOptions,
+} from './reconnect.js';
 
 export {
   recordToYMap,
@@ -47,12 +57,20 @@ export {
   isIndexedDbSupported,
   IndexeddbPersistence,
   Awareness,
+  calculateBackoffDelay,
+  createReconnectController,
+  isAuthError,
+  ReconnectController,
+  SyncAuthError,
   type LiveStroke,
   type WhenLoadedPromise,
   type YjsIndexedDbOptions,
+  type ReconnectOptions,
+  type ReconnectControllerOptions,
 };
 export type {
   SyncAdapter,
+  SyncErrorDetail,
   SyncStatus,
   SyncEventMap,
   YjsPresence,
@@ -158,9 +176,20 @@ export interface YjsSyncOptions {
 
   /**
    * Optional action validator hook indicating whether an action requires an active online server connection (BOARD-1508).
-   * Used by plugins to disable server-only actions (such as converting to a server post/task) when offline.
+   * Used by plugins to disable server-only actions when offline.
    */
   isOnlineRequired?: (action: string) => boolean;
+
+  /**
+   * Reconnection options with exponential backoff (BOARD-1509).
+   * Pass `false` to disable automatic reconnection attempts.
+   */
+  reconnect?: boolean | ReconnectOptions;
+
+  /**
+   * Optional connection handler invoked when connecting or reconnecting (BOARD-1509).
+   */
+  connect?: (board: Board) => Promise<void> | void;
 }
 
 /**
@@ -200,6 +229,26 @@ export interface YjsSyncAdapter extends SyncAdapter {
    * Number of pending updates stored in IndexedDB (BOARD-1508).
    */
   readonly pendingUpdates?: number;
+
+  /**
+   * Number of consecutive failed reconnection attempts since last successful synchronization (BOARD-1509).
+   */
+  readonly reconnectAttempts: number;
+
+  /**
+   * Manually triggers or forces a reconnection attempt (BOARD-1509).
+   */
+  reconnect(): Promise<void> | void;
+
+  /**
+   * Cancels any pending scheduled reconnection (BOARD-1509).
+   */
+  cancelReconnect(): void;
+
+  /**
+   * Handles an external synchronization error, classifying it into auth vs network (BOARD-1509).
+   */
+  handleError?(error: unknown): void;
 
   /**
    * Checks if a particular action requires an active online connection (BOARD-1508).
@@ -277,12 +326,6 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
     : null;
   let syncPromise: Promise<void> | null = null;
 
-  if (persistence) {
-    persistence.whenSynced.catch((err: unknown) => {
-      syncEmitter.emit('error', err);
-    });
-  }
-
   function syncActiveStroke(): void {
     if (!currentBoard) return;
     const toolData = currentBoard.toolData as {
@@ -315,6 +358,7 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
   function setStatus(next: SyncStatus): void {
     if (currentStatus === next) return;
     currentStatus = next;
+    reconnectController?.setStatus(next);
     syncEmitter.emit('status', next);
   }
 
@@ -337,6 +381,89 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
       });
     }
     syncEmitter.emit('error', error);
+  }
+
+  function initSyncState(board: Board): void {
+    if (!currentBoard || currentBoard !== board) return;
+    const recordsMap = doc.getMap<Y.Map<unknown>>('records');
+
+    if (recordsMap.size === 0) {
+      const docRecords = board.getDocument().records;
+      doc.transact(() => {
+        for (const record of Object.values(docRecords)) {
+          let yMap = recordsMap.get(record.id);
+          if (!(yMap instanceof Y.Map)) {
+            yMap = new Y.Map<unknown>();
+            recordsMap.set(record.id, yMap);
+          }
+          recordToYMap(record, yMap);
+        }
+      }, Symbol.for('kujam.sync.yjs.init'));
+    } else {
+      board.transact(
+        (tx) => {
+          const remoteIds = new Set<string>();
+          for (const [id, yRecordMap] of recordsMap.entries()) {
+            if (yRecordMap instanceof Y.Map) {
+              const record = yMapToRecord(yRecordMap);
+              if (record && isRecordValid(record)) {
+                remoteIds.add(id);
+                tx.put(record);
+              } else {
+                reportInvalidRecord(id, yRecordMap);
+              }
+            } else {
+              reportInvalidRecord(id, yRecordMap);
+            }
+          }
+          if (remoteIds.size > 0) {
+            const localRecords = board.getDocument().records;
+            for (const localId of Object.keys(localRecords)) {
+              if (!remoteIds.has(localId)) {
+                tx.remove(localId);
+              }
+            }
+          }
+        },
+        { origin: 'remote', label: 'sync.init' },
+      );
+    }
+  }
+
+  const reconnectOpts =
+    typeof options.reconnect === 'object' ? options.reconnect : undefined;
+  const autoReconnect = options.reconnect !== false;
+
+  const reconnectController = new ReconnectController({
+    initialDelayMs: reconnectOpts?.initialDelayMs,
+    maxDelayMs: reconnectOpts?.maxDelayMs,
+    backoffFactor: reconnectOpts?.backoffFactor,
+    jitter: reconnectOpts?.jitter,
+    maxAttempts: autoReconnect ? reconnectOpts?.maxAttempts : 0,
+    randomFn: reconnectOpts?.randomFn,
+    jitterRatio: reconnectOpts?.jitterRatio,
+    connect: async () => {
+      if (!currentBoard) return;
+      if (options.connect) {
+        await options.connect(currentBoard);
+      }
+      initSyncState(currentBoard);
+    },
+    onStatusChange: (status) => {
+      setStatus(status);
+    },
+    onError: (detail) => {
+      syncEmitter.emit('error', detail);
+      if (detail.reason === 'auth') {
+        syncEmitter.emit('auth-error', detail);
+      }
+    },
+  });
+
+  if (persistence) {
+    persistence.whenSynced.catch((err: unknown) => {
+      reconnectController.handleError(err);
+    });
   }
 
   const adapter: YjsSyncAdapter = {
@@ -371,7 +498,7 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
       if (shouldEnableIdb && !persistence) {
         persistence = new IndexeddbPersistence(idbName, doc);
         persistence.whenSynced.catch((err: unknown) => {
-          syncEmitter.emit('error', err);
+          reconnectController.handleError(err);
         });
       }
 
@@ -379,55 +506,6 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
       setStatus('connecting');
 
       const recordsMap = doc.getMap<Y.Map<unknown>>('records');
-
-      const initSyncState = () => {
-        if (!currentBoard || currentBoard !== board) return;
-
-        // Initialize state between board and Y.Doc
-        if (recordsMap.size === 0) {
-          const docRecords = board.getDocument().records;
-          doc.transact(() => {
-            for (const record of Object.values(docRecords)) {
-              let yMap = recordsMap.get(record.id);
-              if (!(yMap instanceof Y.Map)) {
-                yMap = new Y.Map<unknown>();
-                recordsMap.set(record.id, yMap);
-              }
-              recordToYMap(record, yMap);
-            }
-          }, Symbol.for('kujam.sync.yjs.init'));
-        } else {
-          board.transact(
-            (tx) => {
-              const remoteIds = new Set<string>();
-              for (const [id, yRecordMap] of recordsMap.entries()) {
-                if (yRecordMap instanceof Y.Map) {
-                  const record = yMapToRecord(yRecordMap);
-                  if (record && isRecordValid(record)) {
-                    remoteIds.add(id);
-                    tx.put(record);
-                  } else {
-                    reportInvalidRecord(id, yRecordMap);
-                  }
-                } else {
-                  reportInvalidRecord(id, yRecordMap);
-                }
-              }
-              if (remoteIds.size > 0) {
-                const localRecords = board.getDocument().records;
-                for (const localId of Object.keys(localRecords)) {
-                  if (!remoteIds.has(localId)) {
-                    tx.remove(localId);
-                  }
-                }
-              }
-            },
-            { origin: 'remote', label: 'sync.init' },
-          );
-        }
-
-        setStatus('synced');
-      };
 
       // Remote -> Local: listen for Y.Doc CRDT changes
       const deepObserver = (events: Y.YEvent<Y.Map<unknown>>[], transaction: Y.Transaction) => {
@@ -664,19 +742,44 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
 
       if (persistence && !persistence.synced) {
         syncPromise = persistence.whenSynced
-          .then(() => {
-            initSyncState();
+          .then(async () => {
+            if (options.connect) {
+              await options.connect(board);
+            }
+            initSyncState(board);
+            reconnectController.handleSuccess();
             syncPromise = null;
           })
           .catch((err: unknown) => {
             syncPromise = null;
-            setStatus('error');
-            syncEmitter.emit('error', err);
+            reconnectController.handleError(err);
           });
         return syncPromise;
       }
 
-      initSyncState();
+      if (options.connect) {
+        const connResult = options.connect(board);
+        if (connResult && typeof (connResult as Promise<void>).then === 'function') {
+          syncPromise = (connResult as Promise<void>)
+            .then(() => {
+              initSyncState(board);
+              reconnectController.handleSuccess();
+              syncPromise = null;
+            })
+            .catch((err: unknown) => {
+              syncPromise = null;
+              reconnectController.handleError(err);
+            });
+          return syncPromise;
+        }
+      }
+
+      try {
+        initSyncState(board);
+        reconnectController.handleSuccess();
+      } catch (err) {
+        reconnectController.handleError(err);
+      }
     },
 
     disconnect(): void {
@@ -685,6 +788,9 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
         persistence = null;
       }
       syncPromise = null;
+
+      reconnectController.cancelReconnect();
+      reconnectController.reset();
 
       if (currentStatus === 'offline') return;
 
@@ -744,11 +850,28 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
       return persistence ? persistence._dbsize : 0;
     },
 
+    get reconnectAttempts(): number {
+      return reconnectController.reconnectAttempts;
+    },
+
+    reconnect(): Promise<void> | void {
+      return reconnectController.reconnect();
+    },
+
+    cancelReconnect(): void {
+      reconnectController.cancelReconnect();
+    },
+
+    handleError(error: unknown): void {
+      reconnectController.handleError(error);
+    },
+
     isOnlineRequired(action: string): boolean {
       return options.isOnlineRequired ? options.isOnlineRequired(action) : false;
     },
 
     destroy(): void {
+      reconnectController.destroy();
       adapter.disconnect();
     },
 

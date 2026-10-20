@@ -193,6 +193,15 @@ const RAW_DICTIONARY = {
   'command.distribute.vertical': { id: 'Sebar vertikal', en: 'Distribute vertically' },
   'command.arrange.grid': { id: 'Susun grid', en: 'Arrange in grid' },
   'command.arrange.row': { id: 'Susun baris', en: 'Arrange in row' },
+
+  // Collaboration & Sync status (BOARD-1407, BOARD-1509)
+  'sync.status.offline': { id: 'Offline', en: 'Offline' },
+  'sync.status.connecting': { id: 'Menyambungkan...', en: 'Connecting...' },
+  'sync.status.synced': { id: 'Tersinkron', en: 'Synced' },
+  'sync.status.error': { id: 'Gagal tersambung', en: 'Connection error' },
+  'sync.status.authFailed': { id: 'Autentikasi gagal', en: 'Authentication failed' },
+  'presence.following': { id: 'Mengikuti {name}', en: 'Following {name}' },
+  'presence.stopFollowing': { id: 'Berhenti mengikuti', en: 'Stop following' },
 } as const satisfies Record<string, { readonly id: string; readonly en: string }>;
 
 function buildDefaultMessages(): Readonly<Record<BoardLocale, LocaleMessages>> {

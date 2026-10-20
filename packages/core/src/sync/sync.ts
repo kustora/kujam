@@ -151,6 +151,22 @@ export interface HistoryApi {
 }
 
 /**
+ * Detailed payload for synchronization error events (BOARD-1509).
+ *
+ * @public
+ */
+export interface SyncErrorDetail {
+  /** Error category or classification: 'auth' | 'network' | string. */
+  reason: 'auth' | 'network' | string;
+  /** Underlying error object or cause. */
+  error?: unknown;
+  /** Optional human-readable message. */
+  message?: string;
+  /** Extensible error metadata. */
+  [key: string]: unknown;
+}
+
+/**
  * Event map for events emitted by a {@link SyncAdapter}.
  *
  * @public
@@ -163,7 +179,9 @@ export interface SyncEventMap {
   /** Emitted when a collaborator disconnects. */
   'peer-leave': { peerId: string; user?: PresenceUser };
   /** Emitted when a synchronization error occurs. */
-  error: Error | unknown;
+  error: SyncErrorDetail | Error | unknown;
+  /** Emitted specifically when an authentication failure occurs (BOARD-1509). */
+  'auth-error': SyncErrorDetail;
 }
 
 /**
