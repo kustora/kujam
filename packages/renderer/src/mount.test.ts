@@ -415,3 +415,47 @@ describe('BOARD-801: mountRenderer', () => {
     }
   });
 });
+
+describe('BOARD-1903: live region', () => {
+  it('puts a status region in the a11y layer and announces the user’s changes', async () => {
+    const { board, view } = setup();
+    const region = view.layers.a11y.querySelector<HTMLElement>('[data-kujam-a11y-live]');
+    expect(region?.getAttribute('role')).toBe('status');
+
+    board.transact((tx) =>
+      tx.put({
+        id: 'n1',
+        kind: 'element',
+        type: 'unknown',
+        pageId: board.pages.current,
+        parentId: null,
+        index: 'a1',
+        x: 0,
+        y: 0,
+        rotation: 0,
+        w: 10,
+        h: 10,
+        locked: false,
+        opacity: 1,
+        props: {},
+        meta: {},
+      }),
+    );
+    await vi.waitFor(() => expect(region?.textContent).toBe('Elemen unknown dibuat'));
+
+    // The second announcement waits for the throttle interval.
+    view.announce('Halo');
+    await vi.waitFor(() => expect(region?.textContent).toBe('Halo'), { timeout: 3000 });
+    view.unmount();
+    expect(region?.isConnected).toBe(false);
+    expect(() => view.announce('setelah unmount')).not.toThrow();
+  });
+
+  it('announces only host messages with announcements: false', async () => {
+    const { board, view } = setup(undefined, { announcements: false });
+    const region = view.layers.a11y.querySelector<HTMLElement>('[data-kujam-a11y-live]');
+    board.transact((tx) => tx.remove('missing'));
+    view.announce('Disimpan');
+    await vi.waitFor(() => expect(region?.textContent).toBe('Disimpan'));
+  });
+});

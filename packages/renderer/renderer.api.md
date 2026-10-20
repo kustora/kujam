@@ -18,6 +18,8 @@ export type BoardBackground = 'none' | 'dots' | 'grid';
 
 // @public
 export interface BoardView {
+    // @beta
+    announce(message: string): void;
     background: BoardBackground;
     readonly board: Board;
     readonly container: HTMLElement;
@@ -232,6 +234,8 @@ export interface RendererLayers {
 // @public
 export interface RendererOptions {
     readonly acceptDrop?: (files: readonly File[], point: Point, board: Board) => boolean | Promise<boolean>;
+    // @beta
+    readonly announcements?: boolean;
     readonly background?: BoardBackground;
     readonly debug?: boolean;
     readonly onClipboardError?: (error: unknown) => void;

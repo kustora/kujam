@@ -50,6 +50,10 @@ Aktifkan VoiceOver (`Cmd + F5` di macOS, atau pengaturan Aksesibilitas di iPadOS
   - [ ] Daftar elemen (`"Elemen papan"` / `"Board elements"`) melaporkan jumlah total elemen (`aria-setsize`) dan indeks posisi (`aria-posinset`) secara akurat, termasuk ketika papan memiliki >200 elemen.
   - [ ] Setiap tipe elemen membacakan peran dan label yang bermakna (isi teks pada sticky/teks/bentuk, titik awal-akhir pada konektor, jumlah elemen dalam grup/frame).
   - [ ] Elemen yang dikunci (`locked: true`) menyertakan keterangan `"Terkunci"` / `"Locked"` pada deskripsi aksesibilitasnya.
+- [ ] **Live Region Perubahan Penting (`BOARD-1903`):**
+  - [ ] Membuat atau menghapus elemen (termasuk undo/redo) dibacakan, misalnya `"Sticky kuning dibuat"` atau `"3 elemen dihapus"`. Perubahan dari orang lain tidak dibacakan.
+  - [ ] Di `/s/sync-lab`, kolaborator yang bergabung atau keluar dibacakan (`"Budi bergabung"`), begitu juga koneksi terputus dan tersambung kembali, tanpa daftar orang yang "keluar" karena koneksi sendiri putus.
+  - [ ] Banyak perubahan beruntun digabung jadi satu kalimat dan dibacakan paling sering sekali per detik; status koneksi tidak dibacakan dua kali oleh `<kujam-presence-bar>`.
 - [ ] **Eksplorasi Sentuh iPadOS (*Touch Exploration*):**
   - [ ] Menyeret jari di atas kanvas pada iPadOS dengan VoiceOver aktif menemukan item elemen pada koordinat layar yang sesuai (mengikuti transformasi kamera pan/zoom).
 

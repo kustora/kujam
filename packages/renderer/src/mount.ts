@@ -20,6 +20,7 @@ import { CanvasRenderer, type RenderStats } from './layers/render-canvas.js';
 import { OverlayRenderer, type OverlayRenderStats } from './layers/overlay.js';
 import { assertBackground, type BoardBackground } from './layers/background.js';
 import { A11yTree } from './a11y/a11y-tree.js';
+import { Announcer } from './a11y/announcer.js';
 
 export type { RenderStats } from './layers/render-canvas.js';
 export type { OverlayRenderStats } from './layers/overlay.js';
@@ -88,6 +89,15 @@ export interface RendererOptions {
    * selections, and live strokes (BOARD-808). When omitted, falls back to `board.presence`.
    */
   readonly presence?: PresenceApi;
+  /**
+   * Whether the view announces important changes to screen readers through a live region
+   * (BOARD-1903): elements the user created or deleted, collaborators joining or leaving, and the
+   * connection being lost or restored. Defaults to `true`. {@link BoardView.announce} works either
+   * way.
+   *
+   * @beta
+   */
+  readonly announcements?: boolean;
 }
 
 /**
@@ -156,6 +166,13 @@ export interface BoardView {
    * render. No effect after unmount.
    */
   requestRender(): void;
+  /**
+   * Announces a message to screen readers through the view's live region (BOARD-1903). Messages
+   * are throttled together with the view's own announcements; no effect after unmount.
+   *
+   * @beta
+   */
+  announce(message: string): void;
   /** Active whiteboard theme (BOARD-1006). */
   readonly theme: Readonly<ThemeDefinition>;
   /** Changes the active whiteboard theme (BOARD-1006). */
@@ -336,6 +353,7 @@ export function mountRenderer(
     overlay,
   });
   const a11yTree = new A11yTree(board, root, a11y, { interactive: htmlLayer.elementsHost });
+  const announcer = new Announcer(board, a11y, { auto: options.announcements !== false });
   const overlayRenderer = new OverlayRenderer(board);
   let overlayStats: Readonly<OverlayRenderStats> = Object.freeze({
     rendered: false,
@@ -601,6 +619,7 @@ export function mountRenderer(
     detachClipboard();
     detachDragDrop();
     a11yTree.dispose();
+    announcer.dispose();
     htmlLayer.dispose();
     root.remove();
     if ((container as { __kujamView?: unknown }).__kujamView === view) {
@@ -674,6 +693,9 @@ export function mountRenderer(
       };
     },
     requestRender,
+    announce(message: string) {
+      if (mounted) announcer.announce(message);
+    },
     unmount,
   };
 

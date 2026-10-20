@@ -11,7 +11,25 @@ import { translate, type Board, type TranslationParams } from '@kujam/core';
  *
  * @internal
  */
-export type A11yStringKey = 'board' | 'roleDescription' | 'list' | 'help' | 'element' | 'locked';
+export type A11yStringKey =
+  | 'board'
+  | 'roleDescription'
+  | 'list'
+  | 'help'
+  | 'element'
+  | 'locked'
+  | 'elementCreated'
+  | 'elementsCreated'
+  | 'elementDeletedOne'
+  | 'elementDeleted'
+  | 'peerJoined'
+  | 'peersJoined'
+  | 'peerLeft'
+  | 'peersLeft'
+  | 'someone'
+  | 'connectionLost'
+  | 'connectionRestored'
+  | 'connectionError';
 
 /**
  * String for the board locale (anything other than `en*` uses Indonesian) or from a `Board`
@@ -30,4 +48,3 @@ export function a11yText(
   }
   return localeOrBoard.t(fullKey, params);
 }
-

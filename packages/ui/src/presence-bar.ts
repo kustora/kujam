@@ -277,8 +277,8 @@ function renderPresenceBar(root: ShadowRoot, board: Board, host: HTMLElement): (
 
   const statusContainer = doc.createElement('div');
   statusContainer.className = 'status-indicator';
-  statusContainer.setAttribute('role', 'status');
-  statusContainer.setAttribute('aria-live', 'polite');
+  // No live region here: the renderer's live region announces connection changes (BOARD-1903),
+  // and a second one would make screen readers say them twice.
 
   const statusDot = doc.createElement('span');
   statusDot.className = 'status-dot';
@@ -315,7 +315,6 @@ function renderPresenceBar(root: ShadowRoot, board: Board, host: HTMLElement): (
 
     const labelText = translateStatus(status, board);
     statusLabel.textContent = labelText;
-    statusContainer.setAttribute('aria-label', labelText);
   }
 
   function getFollowingUserId(): string | null {

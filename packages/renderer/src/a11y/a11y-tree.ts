@@ -66,8 +66,12 @@ interface Entry {
 /** Shared by every view only to make `aria-describedby` IDs unique on the page. */
 let helpIds = 0;
 
-/** Visually hidden but readable (the usual "sr-only" pattern). */
-function hideVisually(el: HTMLElement): void {
+/**
+ * Visually hidden but readable (the usual "sr-only" pattern).
+ *
+ * @internal
+ */
+export function hideVisually(el: HTMLElement): void {
   Object.assign(el.style, {
     position: 'absolute',
     width: '1px',
@@ -88,6 +92,35 @@ function setAttr(el: Element, name: string, value: string): void {
   } else if (el.hasAttribute(name)) {
     el.removeAttribute(name);
   }
+}
+
+/**
+ * Role and label from the element type's `a11y` callback, with a localized fallback.
+ *
+ * @internal
+ */
+export function describeElement(
+  board: Board,
+  el: Readonly<ElementRecord>,
+): { role: string; label: string; description: string } {
+  let a11y: { role?: unknown; label?: unknown; description?: unknown } | undefined;
+  try {
+    a11y = board.elements.get(el.type)?.a11y?.(el as never, undefined, board.elementContext);
+  } catch {
+    // A failing callback only costs this element its custom label.
+    a11y = undefined;
+  }
+  const role = typeof a11y?.role === 'string' && a11y.role.trim() ? a11y.role.trim() : 'listitem';
+  const label =
+    typeof a11y?.label === 'string' && a11y.label.trim()
+      ? a11y.label
+      : a11yText('element', board, { type: el.type });
+  let description = typeof a11y?.description === 'string' ? a11y.description : '';
+  if (el.locked) {
+    const locked = a11yText('locked', board);
+    description = description ? `${locked}. ${description}` : locked;
+  }
+  return { role, label, description };
 }
 
 /** Options for {@link A11yTree}. */
@@ -523,7 +556,7 @@ export class A11yTree {
     if (style.height !== height) style.height = height;
     if (style.transform !== transform) style.transform = transform;
 
-    const { role, label, description } = this.describe(el);
+    const { role, label, description } = describeElement(this.board, el);
     if (role !== entry.role) {
       const hadFocus = this.doc.activeElement === entry.target;
       if (entry.target !== entry.item) entry.target.remove();
@@ -553,33 +586,6 @@ export class A11yTree {
       entry.description = description;
       setAttr(entry.target, 'aria-description', description);
     }
-  }
-
-  /** Role and label from the element type's `a11y` callback, with a localized fallback. */
-  private describe(el: Readonly<ElementRecord>): {
-    role: string;
-    label: string;
-    description: string;
-  } {
-    const { board } = this;
-    let a11y: { role?: unknown; label?: unknown; description?: unknown } | undefined;
-    try {
-      a11y = board.elements.get(el.type)?.a11y?.(el as never, undefined, board.elementContext);
-    } catch {
-      // A failing callback only costs this element its custom label.
-      a11y = undefined;
-    }
-    const role = typeof a11y?.role === 'string' && a11y.role.trim() ? a11y.role.trim() : 'listitem';
-    const label =
-      typeof a11y?.label === 'string' && a11y.label.trim()
-        ? a11y.label
-        : a11yText('element', board, { type: el.type });
-    let description = typeof a11y?.description === 'string' ? a11y.description : '';
-    if (el.locked) {
-      const locked = a11yText('locked', board);
-      description = description ? `${locked}. ${description}` : locked;
-    }
-    return { role, label, description };
   }
 
   private syncCamera(): void {
