@@ -214,6 +214,16 @@ export interface SyncAdapter {
   readonly history?: HistoryApi;
 
   /**
+   * Optional read-only state for clients that observe without broadcasting mutations (BOARD-1512).
+   */
+  readonly readOnly?: boolean;
+
+  /**
+   * Optional method to dynamically toggle read-only mode (BOARD-1512).
+   */
+  setReadOnly?(readOnly: boolean): void;
+
+  /**
    * Subscribes to synchronization events.
    *
    * @param event - Event name from {@link SyncEventMap}.
@@ -427,6 +437,13 @@ export interface MemorySyncAdapterOptions {
    * Optional local user metadata for presence.
    */
   user?: PresenceUser;
+  /**
+   * Whether the adapter operates in read-only mode (BOARD-1512).
+   *
+   * In read-only mode, the client receives remote changes and broadcasts presence,
+   * but does not broadcast local mutations to other peers.
+   */
+  readOnly?: boolean;
 }
 
 interface MemoryChangeMessage {
@@ -487,6 +504,7 @@ export function createMemorySyncAdapter(options: MemorySyncAdapterOptions = {}):
   const adapterId = createId();
 
   let status: SyncStatus = 'offline';
+  let isReadOnly = Boolean(options.readOnly);
   let currentBoard: Board | null = null;
   let unlistenBoard: Unsubscribe | null = null;
   let unsubscribeBus: Unsubscribe | null = null;
@@ -693,12 +711,20 @@ export function createMemorySyncAdapter(options: MemorySyncAdapterOptions = {}):
       currentBoard = board;
       setStatus('connecting');
 
+      if (options.readOnly !== undefined) {
+        if (isReadOnly) {
+          board.setReadOnly(true);
+        }
+      } else if (board.readOnly) {
+        isReadOnly = true;
+      }
+
       unsubscribeBus = bus.subscribe(channel, (msg: unknown) => {
         handleBusMessage(msg);
       });
 
       unlistenBoard = board.on('change', (event) => {
-        if (event.origin === 'remote') {
+        if (isReadOnly || event.origin === 'remote') {
           return;
         }
         const hasAdded = event.added && Object.keys(event.added).length > 0;
@@ -753,6 +779,15 @@ export function createMemorySyncAdapter(options: MemorySyncAdapterOptions = {}):
     },
     presence: presenceApi,
     history: options.history,
+    get readOnly(): boolean {
+      return isReadOnly;
+    },
+    setReadOnly(next: boolean): void {
+      isReadOnly = Boolean(next);
+      if (currentBoard) {
+        currentBoard.setReadOnly(isReadOnly);
+      }
+    },
     on<K extends keyof SyncEventMap>(
       event: K,
       listener: (data: SyncEventMap[K]) => void,

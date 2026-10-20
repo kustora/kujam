@@ -190,6 +190,16 @@ export interface YjsSyncOptions {
    * Optional connection handler invoked when connecting or reconnecting (BOARD-1509).
    */
   connect?: (board: Board) => Promise<void> | void;
+
+  /**
+   * Whether the client operates in read-only mode (BOARD-1512).
+   *
+   * In read-only mode, the client receives remote document updates and broadcasts presence,
+   * but does not transmit local document mutations to the shared Y.Doc.
+   *
+   * Defaults to `false`.
+   */
+  readOnly?: boolean;
 }
 
 /**
@@ -211,6 +221,18 @@ export interface YjsSyncAdapter extends SyncAdapter {
 
   /** History API backed by Yjs UndoManager for per-user undo/redo (BOARD-1507). */
   readonly history?: YjsHistory;
+
+  /**
+   * Whether the adapter operates in read-only mode (BOARD-1512).
+   */
+  readonly readOnly: boolean;
+
+  /**
+   * Dynamically toggles read-only mode on the adapter and any connected board (BOARD-1512).
+   *
+   * @param readOnly - New read-only status.
+   */
+  setReadOnly(readOnly: boolean): void;
 
   /**
    * IndexedDB persistence provider for local offline caching and restoration (BOARD-1508).
@@ -306,6 +328,7 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
   let unlistenTool: (() => void) | null = null;
   let origDispatch: ((event: BoardInputEvent) => boolean) | null = null;
   let isApplyingUndoRedo = false;
+  let isReadOnly = Boolean(options.readOnly);
 
   let history: YjsHistory | undefined;
   if (options.history !== false) {
@@ -327,7 +350,10 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
   let syncPromise: Promise<void> | null = null;
 
   function syncActiveStroke(): void {
-    if (!currentBoard) return;
+    if (isReadOnly || !currentBoard) {
+      presence.setLiveStroke(null);
+      return;
+    }
     const toolData = currentBoard.toolData as {
       activeStroke?: {
         id?: string;
@@ -388,6 +414,9 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
     const recordsMap = doc.getMap<Y.Map<unknown>>('records');
 
     if (recordsMap.size === 0) {
+      if (isReadOnly) {
+        return;
+      }
       const docRecords = board.getDocument().records;
       doc.transact(() => {
         for (const record of Object.values(docRecords)) {
@@ -505,6 +534,14 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
       currentBoard = board;
       setStatus('connecting');
 
+      if (options.readOnly !== undefined) {
+        if (isReadOnly) {
+          board.setReadOnly(true);
+        }
+      } else if (board.readOnly) {
+        isReadOnly = true;
+      }
+
       const recordsMap = doc.getMap<Y.Map<unknown>>('records');
 
       // Remote -> Local: listen for Y.Doc CRDT changes
@@ -612,8 +649,8 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
 
       // Local -> Remote: listen for local board changes
       unlistenBoard = board.on('change', (event) => {
-        if (event.origin === 'remote' || isApplyingUndoRedo) {
-          return; // Skip echo
+        if (isReadOnly || event.origin === 'remote' || isApplyingUndoRedo) {
+          return; // Skip echo or read-only writes
         }
         const hasAdded = event.added && Object.keys(event.added).length > 0;
         const hasUpdated = event.updated && Object.keys(event.updated).length > 0;
@@ -833,6 +870,20 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
 
       currentBoard = null;
       setStatus('offline');
+    },
+
+    get readOnly(): boolean {
+      return isReadOnly;
+    },
+
+    setReadOnly(next: boolean): void {
+      isReadOnly = Boolean(next);
+      if (currentBoard) {
+        currentBoard.setReadOnly(isReadOnly);
+      }
+      if (isReadOnly) {
+        presence.setLiveStroke(null);
+      }
     },
 
     get persistence(): IndexeddbPersistence | null {

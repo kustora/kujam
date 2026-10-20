@@ -1425,6 +1425,7 @@ export interface MemorySyncAdapterOptions {
     bus?: MemorySyncBus;
     channel?: string;
     history?: HistoryApi;
+    readOnly?: boolean;
     user?: PresenceUser;
 }
 
@@ -2186,6 +2187,8 @@ export interface SyncAdapter {
     readonly history?: HistoryApi;
     on<K extends keyof SyncEventMap>(event: K, listener: (data: SyncEventMap[K]) => void): () => void;
     readonly presence?: PresenceApi;
+    readonly readOnly?: boolean;
+    setReadOnly?(readOnly: boolean): void;
     readonly status: SyncStatus;
 }
 

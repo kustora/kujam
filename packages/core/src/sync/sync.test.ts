@@ -343,4 +343,77 @@ describe('BOARD-1501: SyncAdapter, PresenceApi, HistoryApi', () => {
     board.dispose();
     expect(adapter.status).toBe('offline');
   });
+
+  describe('read-only client mode (BOARD-1512)', () => {
+    it('sets connected board to read-only when adapter is configured with readOnly: true', () => {
+      const bus = createMemorySyncBus();
+      const adapter = createMemorySyncAdapter({ bus, readOnly: true });
+      const board = createBoard();
+
+      expect(board.readOnly).toBe(false);
+      adapter.connect(board);
+      expect(board.readOnly).toBe(true);
+      expect(adapter.readOnly).toBe(true);
+
+      adapter.disconnect();
+      board.dispose();
+    });
+
+    it('receives remote document updates while ignoring local changes', () => {
+      const bus = createMemorySyncBus();
+      const adapterWriter = createMemorySyncAdapter({ bus, channel: 'ro-test' });
+      const adapterReader = createMemorySyncAdapter({ bus, channel: 'ro-test', readOnly: true });
+
+      const boardWriter = createBoard();
+      const boardReader = createBoard();
+
+      adapterWriter.connect(boardWriter);
+      adapterReader.connect(boardReader);
+
+      expect(boardReader.readOnly).toBe(true);
+
+      // Writer creates an element
+      boardWriter.transact((tx) => tx.put(makeElement('el:remote-item')));
+
+      // Reader receives it
+      expect(boardReader.getElement('el:remote-item')).toBeDefined();
+
+      // Reader attempts a local transaction and is blocked
+      expect(() => {
+        boardReader.transact((tx) => tx.put(makeElement('el:local-leak')));
+      }).toThrow();
+
+      // Even if loaded into reader's document, it is not broadcast to writer
+      boardReader.transact((tx) => tx.put(makeElement('el:local-leak')), { origin: 'load' });
+
+      // Writer never receives it
+      expect(boardWriter.getElement('el:local-leak')).toBeUndefined();
+
+      adapterWriter.disconnect();
+      adapterReader.disconnect();
+      boardWriter.dispose();
+      boardReader.dispose();
+    });
+
+    it('dynamically toggles readOnly via adapter.setReadOnly()', () => {
+      const bus = createMemorySyncBus();
+      const adapter = createMemorySyncAdapter({ bus });
+      const board = createBoard();
+
+      adapter.connect(board);
+      expect(adapter.readOnly).toBe(false);
+      expect(board.readOnly).toBe(false);
+
+      adapter.setReadOnly?.(true);
+      expect(adapter.readOnly).toBe(true);
+      expect(board.readOnly).toBe(true);
+
+      adapter.setReadOnly?.(false);
+      expect(adapter.readOnly).toBe(false);
+      expect(board.readOnly).toBe(false);
+
+      adapter.disconnect();
+      board.dispose();
+    });
+  });
 });

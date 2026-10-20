@@ -101,7 +101,7 @@ export { SyncAdapter }
 export class SyncAuthError extends Error {
     constructor(message?: string, code?: number | string);
     readonly code: number | string;
-    readonly reason: 'auth';
+    readonly reason: "auth";
 }
 
 export { SyncErrorDetail }
@@ -180,8 +180,10 @@ export interface YjsSyncAdapter extends SyncAdapter {
     readonly pendingUpdates?: number;
     readonly persistence?: IndexeddbPersistence | null;
     readonly presence: YjsPresence;
+    readonly readOnly: boolean;
     reconnect(): Promise<void> | void;
     readonly reconnectAttempts: number;
+    setReadOnly(readOnly: boolean): void;
     readonly whenLoaded: WhenLoadedPromise;
 }
 
@@ -195,6 +197,7 @@ export interface YjsSyncOptions {
     history?: boolean | Omit<YjsHistoryOptions, 'doc' | 'clientOrigin'>;
     indexeddb?: boolean | YjsIndexedDbOptions;
     isOnlineRequired?: (action: string) => boolean;
+    readOnly?: boolean;
     reconnect?: boolean | ReconnectOptions;
     strokeThrottleMs?: number;
     user?: PresenceUser;
