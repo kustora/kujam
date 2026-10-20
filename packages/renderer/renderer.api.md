@@ -156,6 +156,7 @@ export class OverlayRenderer {
     // (undocumented)
     getRemoteSelections(): readonly RemoteSelection[];
     inactivityTimeoutMs: number;
+    quickConnectHidden: boolean;
     // (undocumented)
     removeCursor(id: string): void;
     // (undocumented)

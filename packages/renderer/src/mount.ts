@@ -688,11 +688,13 @@ export function mountRenderer(
       const remove = htmlLayer.mountEditor(editor, bounds);
       if (elementId !== undefined) {
         canvasRenderer.setEditingText(elementId, true);
-        scheduleRender();
       }
+      overlayRenderer.quickConnectHidden = true;
+      scheduleRender();
       return () => {
-        if (elementId !== undefined && mounted) {
-          canvasRenderer.setEditingText(elementId, false);
+        if (mounted) {
+          if (elementId !== undefined) canvasRenderer.setEditingText(elementId, false);
+          overlayRenderer.quickConnectHidden = false;
           scheduleRender();
         }
         // Closing a focused editor (Esc) would drop focus to the page body: keep it on the

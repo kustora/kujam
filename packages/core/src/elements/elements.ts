@@ -434,6 +434,13 @@ export interface ElementDefinition<
   readonly render?: ElementRenderers<InferShape<S>, D>;
   /** Called when the element is double-clicked, for example to enter edit mode. */
   onDoubleClick?(el: ElementRecord<InferShape<S>>, ctx: ElementContext): void;
+  /**
+   * Whether connectors can start from this element through the quick-connect handles shown on
+   * each side while it is selected alone. Defaults to `false`.
+   *
+   * @beta
+   */
+  readonly connectable?: boolean;
   /** Props migrations from older versions; see {@link ElementMigrations}. */
   readonly migrate?: ElementMigrations;
   /** Accessibility role and label. */

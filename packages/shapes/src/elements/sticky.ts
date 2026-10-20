@@ -29,6 +29,8 @@ export const stickyElement = defineElement({
   }),
   defaults: { text: EMPTY_RICH_TEXT, color: 'yellow', authorId: null },
   geometry: (el) => rect(el.w, el.h),
+  // Quick-connect handles on each side while selected alone.
+  connectable: true,
   resize: 'fixed-ratio',
   onDoubleClick: (el, ctx) => {
     ctx.emit('edit', { id: el.id });

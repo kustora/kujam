@@ -22,6 +22,7 @@ import { Geometry } from '@kujam/core';
 import { Infer } from '@kujam/core';
 import * as _kujam_core from '@kujam/core';
 import { Point } from '@kujam/core';
+import { QuickConnectSide } from '@kujam/core';
 import { ResizeHandle } from '@kujam/core';
 import { SchemaResult } from '@kujam/core';
 import { SnapGuide } from '@kujam/core';
@@ -453,7 +454,7 @@ export type DefaultToolId = (typeof DEFAULT_TOOL_IDS)[number];
 // @public
 export const defaultTools: Readonly<{
     readonly id: "default-tools";
-    readonly tools: readonly [_kujam_core.ToolDefinition<"idle" | "pointing" | "translating" | "brushing" | "resizing" | "rotating" | "reconnecting", SelectToolData>, _kujam_core.ToolDefinition<"idle" | "panning", HandToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<DrawToolState, DrawToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<ConnectorToolState, ConnectorToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<EraserToolState, EraserToolData>];
+    readonly tools: readonly [_kujam_core.ToolDefinition<"idle" | "quick-connecting" | "pointing" | "translating" | "brushing" | "resizing" | "rotating" | "reconnecting", SelectToolData>, _kujam_core.ToolDefinition<"idle" | "panning", HandToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<DrawToolState, DrawToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<ConnectorToolState, ConnectorToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<EraserToolState, EraserToolData>];
     readonly keybindings: {
         readonly v: "tool:select";
         readonly h: "tool:hand";
@@ -857,11 +858,12 @@ export function segmentDistance(a: readonly number[], b: readonly number[], c: r
 export type SelectHandle = ResizeHandle | 'rotate' | 'connector-start' | 'connector-end';
 
 // @beta
-export const selectTool: _kujam_core.ToolDefinition<"idle" | "pointing" | "translating" | "brushing" | "resizing" | "rotating" | "reconnecting", SelectToolData>;
+export const selectTool: _kujam_core.ToolDefinition<"idle" | "quick-connecting" | "pointing" | "translating" | "brushing" | "resizing" | "rotating" | "reconnecting", SelectToolData>;
 
 // @beta
 export interface SelectToolData {
     brush: BoxBounds | null;
+    connectorPreview?: ConnectorPreview;
     connectorSnap?: ConnectorSnapTarget;
     duplicating: boolean;
     enteredGroupId: string | null;
@@ -871,6 +873,8 @@ export interface SelectToolData {
     hitLocked: boolean;
     initialSelection: readonly string[];
     originals: readonly Readonly<ElementRecord>[];
+    quickConnect?: QuickConnectTarget;
+    quickConnectHover?: string | null;
     reconnectBindingId?: string;
     start: Point;
     // (undocumented)

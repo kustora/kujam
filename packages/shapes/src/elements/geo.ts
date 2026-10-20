@@ -179,6 +179,8 @@ export const geoElement = defineElement({
     label: EMPTY_RICH_TEXT,
   },
   geometry: (el) => geoGeometry(el.props.geo, el.w, el.h),
+  // Quick-connect handles on each side while selected alone.
+  connectable: true,
   // Shift locks the aspect ratio in the BOARD-406 transform.
   resize: 'free',
   onDoubleClick: (el, ctx) => {

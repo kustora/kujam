@@ -563,10 +563,11 @@ describe('BOARD-1504: local cursor presence', () => {
     const spy = vi.spyOn(board.presence!, 'setLocalState');
     const canvas = view.layers.canvas;
 
-    // Hover (no button) is not dispatched to tools but still moves the cursor.
+    // Hover (no button) moves the cursor, and reaches the select tool for its quick-connect
+    // hover feedback.
     canvas.dispatchEvent(new PointerEvent('pointermove', { clientX: 40, clientY: 20, buttons: 0 }));
     expect(spy).toHaveBeenLastCalledWith({ cursor: { x: 120, y: 60 } });
-    expect(dispatchedEvents.some((e) => e.type === 'pointer-move')).toBe(false);
+    expect(dispatchedEvents.some((e) => e.type === 'pointer-move')).toBe(true);
 
     canvas.dispatchEvent(new PointerEvent('pointerleave'));
     expect(spy).toHaveBeenLastCalledWith({ cursor: null });

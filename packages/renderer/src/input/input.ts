@@ -360,7 +360,8 @@ export function attachInput(
           currentHoverId = nextHover;
           options?.onHover?.(nextHover);
         }
-        if (board.tool === 'connector') {
+        // Tools with hover feedback: connector anchors, and the select tool's quick-connect dots.
+        if (board.tool === 'connector' || board.tool === 'select') {
           dispatch(createPointerEvent('pointer-move', e, screen, point, pointerKind(e.pointerType)));
         }
       }

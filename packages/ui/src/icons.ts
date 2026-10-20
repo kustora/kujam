@@ -9,6 +9,36 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 /** Shapes per icon; each entry is one SVG child element with its attributes. */
 type IconShape = readonly [tag: string, attributes: Readonly<Record<string, string>>];
 
+const IDENTITY = '';
+/** Mirrors an icon horizontally within its 24 × 24 box. */
+const MIRROR = 'matrix(-1 0 0 1 24 0)';
+
+/** Line-with-arrowhead icons (`<prefix>None`, `<prefix>Arrow`, …), pointing right before `transform`. */
+function arrowheads(prefix: 'start' | 'end', transform: string): Record<string, IconShape[]> {
+  const t = (attributes: Record<string, string>): Record<string, string> =>
+    transform ? { ...attributes, transform } : attributes;
+  const line = (to: number): IconShape => [
+    'line',
+    t({ x1: '3', y1: '12', x2: String(to), y2: '12' }),
+  ];
+  return {
+    [`${prefix}ArrowNone`]: [line(21)],
+    [`${prefix}ArrowArrow`]: [line(20), ['path', t({ d: 'M15 7l5 5-5 5' })]],
+    [`${prefix}ArrowTriangle`]: [
+      line(15),
+      ['path', t({ d: 'M15 7l6 5-6 5z', fill: 'currentColor' })],
+    ],
+    [`${prefix}ArrowDot`]: [
+      line(15),
+      ['circle', t({ cx: '18', cy: '12', r: '3', fill: 'currentColor' })],
+    ],
+    [`${prefix}ArrowDiamond`]: [
+      line(13),
+      ['path', t({ d: 'M13 12l4-4 4 4-4 4z', fill: 'currentColor' })],
+    ],
+  };
+}
+
 const ICONS: Readonly<Record<string, readonly IconShape[]>> = {
   select: [['path', { d: 'M5 3l14 7-6 2-2 6z' }]],
   hand: [
@@ -116,6 +146,28 @@ const ICONS: Readonly<Record<string, readonly IconShape[]>> = {
     ['line', { x1: '11', y1: '12', x2: '13', y2: '12' }],
     ['line', { x1: '19', y1: '12', x2: '21', y2: '12' }],
   ],
+  // Shape fill: none (crossed out), semi-transparent, solid.
+  fillNone: [
+    ['rect', { x: '4', y: '4', width: '16', height: '16', rx: '2' }],
+    ['path', { d: 'M4 20L20 4' }],
+  ],
+  fillSemi: [
+    [
+      'rect',
+      { x: '4', y: '4', width: '16', height: '16', rx: '2', fill: 'currentColor', opacity: '0.35' },
+    ],
+    ['rect', { x: '4', y: '4', width: '16', height: '16', rx: '2' }],
+  ],
+  fillSolid: [
+    ['rect', { x: '4', y: '4', width: '16', height: '16', rx: '2', fill: 'currentColor' }],
+  ],
+  // Connector path styles.
+  connectorStraight: [['path', { d: 'M5 19L19 5' }]],
+  connectorElbow: [['path', { d: 'M5 19v-7h14V5' }]],
+  connectorCurved: [['path', { d: 'M5 19C5 11 19 13 19 5' }]],
+  // End arrowheads, pointing right; start arrowheads are the mirrored versions below.
+  ...arrowheads('end', IDENTITY),
+  ...arrowheads('start', MIRROR),
 };
 
 /**

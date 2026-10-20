@@ -29,11 +29,18 @@ import {
 import {
   findSnapAnchor,
   normalizeConnectorBounds,
+  type ConnectorPreview,
   type ConnectorSnapTarget,
 } from '../elements/connector-routing.js';
 import type { ConnectorProps } from '../elements/connector.js';
 import { buildDuplicate } from './duplicate.js';
 import { handlePinch, handleWheel } from './navigation.js';
+import {
+  finishQuickConnect,
+  quickConnectAt,
+  quickConnectPreview,
+  type QuickConnectTarget,
+} from './quick-connect.js';
 
 /** Screen distance a press must travel before it becomes a drag. @public */
 export const DRAG_THRESHOLD_PX = 4;
@@ -84,10 +91,23 @@ export interface SelectToolData {
   duplicating: boolean;
   /** ID of the group currently entered for editing, or `null` at the root level (BOARD-909). */
   enteredGroupId: string | null;
+  /** Quick-connect dot under the pointer while idle, highlighted by the overlay. */
+  quickConnectHover?: string | null;
+  /** Quick-connect dot being pressed or dragged from. */
+  quickConnect?: QuickConnectTarget;
+  /** Connector drawn while dragging from a quick-connect dot. */
+  connectorPreview?: ConnectorPreview;
 }
 
 type State =
-  'idle' | 'pointing' | 'translating' | 'brushing' | 'resizing' | 'rotating' | 'reconnecting';
+  | 'idle'
+  | 'pointing'
+  | 'translating'
+  | 'brushing'
+  | 'resizing'
+  | 'rotating'
+  | 'reconnecting'
+  | 'quick-connecting';
 type Ctx = ToolContext<State, SelectToolData>;
 
 function initialData(): SelectToolData {
@@ -152,6 +172,13 @@ function transformableForHandles(board: Board): Readonly<ElementRecord>[] {
     }
   }
   return result;
+}
+
+function clearQuickConnect(ctx: Ctx): void {
+  delete ctx.data.quickConnect;
+  delete ctx.data.connectorPreview;
+  delete ctx.data.connectorSnap;
+  ctx.data.quickConnectHover = null;
 }
 
 /** The resize, rotate, or connector endpoint handle under `screen`, closest first. */
@@ -432,6 +459,13 @@ export const selectTool = defineTool({
           return handle === 'rotate' ? 'rotating' : 'resizing';
         }
 
+        const quick = quickConnectAt(board, e.screen);
+        if (quick) {
+          data.quickConnect = quick;
+          data.quickConnectHover = quick.side;
+          return 'quick-connecting';
+        }
+
         const rawHit = board.hitTest(e.point, {
           tolerance: HIT_TOLERANCE_PX,
           includeLocked: true,
@@ -490,8 +524,45 @@ export const selectTool = defineTool({
         }
         return editSelected(ctx, e);
       },
+      onPointerMove(ctx, e) {
+        const side = quickConnectAt(ctx.board, e.screen)?.side ?? null;
+        if ((ctx.data.quickConnectHover ?? null) !== side) ctx.data.quickConnectHover = side;
+      },
       onWheel: (ctx, e) => handleWheel(ctx.board, e),
       onPinch: (ctx, e) => handlePinch(ctx.board, e),
+    },
+
+    'quick-connecting': {
+      cursor: 'crosshair',
+      onPointerMove(ctx, e) {
+        const { board, data } = ctx;
+        const s = data.startScreen;
+        if (!data.quickConnect) return;
+        if (!data.connectorPreview && Math.hypot(e.screen.x - s.x, e.screen.y - s.y) < DRAG_THRESHOLD_PX) {
+          return;
+        }
+        const next = quickConnectPreview(board, data.quickConnect, e.point);
+        if (!next) return;
+        data.connectorPreview = next.preview;
+        if (next.snap) data.connectorSnap = next.snap;
+        else delete data.connectorSnap;
+      },
+      onPointerUp(ctx, e) {
+        const { board, data } = ctx;
+        const from = data.quickConnect;
+        const dragged = Boolean(data.connectorPreview);
+        clearQuickConnect(ctx);
+        if (from) {
+          finishQuickConnect(
+            board,
+            (fn) => ctx.change(fn, { label: 'quick-connect' }),
+            from,
+            dragged ? e.point : null,
+          );
+        }
+        return 'idle';
+      },
+      onCancel: clearQuickConnect,
     },
 
     pointing: {

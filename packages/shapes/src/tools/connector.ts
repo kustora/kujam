@@ -65,7 +65,8 @@ function highestIndex(board: Board): string | null {
   return elements.length > 0 ? (elements[elements.length - 1]?.index ?? null) : null;
 }
 
-function resolvePreviewStyle(ctx: Ctx): {
+/** Remembered connector style, used for previews and new connectors. @internal */
+export function resolvePreviewStyle(ctx: { readonly board: Board }): {
   style: ConnectorStyle;
   startArrow: ArrowheadStyle;
   endArrow: ArrowheadStyle;
@@ -90,7 +91,8 @@ function clearConnectorOverlay(ctx: Ctx): void {
   ctx.data.startSnap = null;
 }
 
-function buildConnectorElement(
+/** @internal */
+export function buildConnectorElement(
   board: Board,
   id: string,
   bounds: { x: number; y: number; w: number; h: number; start: Point; end: Point },

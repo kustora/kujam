@@ -8,7 +8,7 @@
  * - Repositions to avoid viewport edges and never cover the selection
  */
 
-import type { ElementAction, ElementRecord } from '@kujam/core';
+import { QUICK_CONNECT_OFFSET_PX, type ElementAction, type ElementRecord } from '@kujam/core';
 import { createElementClass, type UiWindow } from './base.js';
 import { createIcon } from './icons.js';
 import { t, tOr, type UiStringKey } from './i18n.js';
@@ -156,6 +156,13 @@ export function createSelectionToolbarClass(win: UiWindow) {
         return fallback;
       }
 
+      const fillIcon = (key: string): string =>
+        key === 'none' ? 'fillNone' : key === 'semi' ? 'fillSemi' : 'fillSolid';
+      const connectorStyleIcon = (key: string): string =>
+        key === 'elbow' ? 'connectorElbow' : key === 'curved' ? 'connectorCurved' : 'connectorStraight';
+      const arrowIcon = (isStart: boolean, key: string): string =>
+        `${isStart ? 'start' : 'end'}Arrow${key.charAt(0).toUpperCase()}${key.slice(1)}`;
+
       function openMenu(): PopupMenu | undefined {
         return rendered.find((r) => r.menu?.isOpen)?.menu ?? undefined;
       }
@@ -205,7 +212,11 @@ export function createSelectionToolbarClass(win: UiWindow) {
         const containerWidth = container?.clientWidth || 1200;
         const containerHeight = container?.clientHeight || 800;
 
-        const GAP = 10;
+        // Clear the rotate handle (24 px above the frame) and, for a lone connectable element,
+        // the quick-connect dots (QUICK_CONNECT_OFFSET_PX outside each side).
+        const lone = board.selection.length === 1 ? board.getElement(board.selection[0]!) : null;
+        const dots = Boolean(lone && !lone.locked && board.elements.get(lone.type)?.connectable);
+        const GAP = dots ? QUICK_CONNECT_OFFSET_PX + 14 : 34;
         const toolbarHeight = host.offsetHeight || 42;
         const halfWidth = (host.offsetWidth || 260) / 2;
 
@@ -548,10 +559,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
             const fillKey = activeAction ? activeAction.id.split('.').pop()! : 'solid';
             const fillLabelKey: UiStringKey = fillKey === 'none' ? 'style.fill.none' : fillKey === 'semi' ? 'style.fill.semi' : 'style.fill.solid';
 
-            const labelEl = doc.createElement('span');
-            labelEl.className = 'btn-label';
-            labelEl.textContent = t(fillLabelKey, board);
-            button.append(labelEl);
+            button.append(iconOrLetter(fillIcon(fillKey), t(fillLabelKey, board), 18));
 
             const caret = doc.createElement('span');
             caret.className = 'caret';
@@ -572,6 +580,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
               return {
                 id: action.id,
                 label: t(labelKey, board),
+                icon: iconOrLetter(fillIcon(key), key, 16),
                 checked: action.isActive?.(),
                 disabled: action.isEnabled ? !action.isEnabled() : false,
                 select: () => action.run(),
@@ -604,10 +613,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
                   ? 'style.connectorStyle.curved'
                   : 'style.connectorStyle.straight';
 
-            const labelEl = doc.createElement('span');
-            labelEl.className = 'btn-label';
-            labelEl.textContent = t(styleLabelKey, board);
-            button.append(labelEl);
+            button.append(iconOrLetter(connectorStyleIcon(styleKey), t(styleLabelKey, board), 18));
 
             const caret = doc.createElement('span');
             caret.className = 'caret';
@@ -633,6 +639,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
               return {
                 id: action.id,
                 label: t(labelKey, board),
+                icon: iconOrLetter(connectorStyleIcon(key), key, 16),
                 checked: action.isActive?.(),
                 disabled: action.isEnabled ? !action.isEnabled() : false,
                 select: () => action.run(),
@@ -669,10 +676,9 @@ export function createSelectionToolbarClass(win: UiWindow) {
                 ? 'none'
                 : 'arrow';
 
-            const labelEl = doc.createElement('span');
-            labelEl.className = 'btn-label';
-            labelEl.textContent = tOr(`style.arrow.${arrowKey}`, board, arrowKey);
-            button.append(labelEl);
+            button.append(
+              iconOrLetter(arrowIcon(isStart, arrowKey), tOr(`style.arrow.${arrowKey}`, board, arrowKey), 18),
+            );
 
             const caret = doc.createElement('span');
             caret.className = 'caret';
@@ -695,6 +701,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
               return {
                 id: action.id,
                 label: tOr(`style.arrow.${key}`, board, fallback),
+                icon: iconOrLetter(arrowIcon(isStart, key), key, 16),
                 checked: action.isActive?.(),
                 disabled: action.isEnabled ? !action.isEnabled() : false,
                 select: () => action.run(),

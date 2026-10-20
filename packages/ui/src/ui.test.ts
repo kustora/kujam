@@ -876,7 +876,9 @@ describe('BOARD-1403: contextual selection toolbar', () => {
     )!;
     expect(styleBtn).not.toBeNull();
     expect(styleBtn.getAttribute('aria-label')).toBe('Gaya konektor');
-    expect(styleBtn.textContent).toContain('Lurus');
+    // Icon, not text (the name stays in aria-label and the tooltip)
+    expect(styleBtn.querySelector('svg')).not.toBeNull();
+    expect(styleBtn.querySelector('.btn-label')).toBeNull();
 
     styleBtn.click();
     const styleMenu = el.shadowRoot!.querySelector<HTMLElement>('#kujam-selection-connectorStyle')!;

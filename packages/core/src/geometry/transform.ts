@@ -154,6 +154,51 @@ export interface TransformHandlePoint extends Point {
   readonly handle: ResizeHandle | 'rotate';
 }
 
+/**
+ * Side of an element a quick-connect handle sits on, in the element's own (unrotated) frame.
+ *
+ * @beta
+ */
+export type QuickConnectSide = 'top' | 'right' | 'bottom' | 'left';
+
+/**
+ * A quick-connect handle: a dot outside the middle of one side of the selected element, from which
+ * a connector can be dragged.
+ *
+ * @beta
+ */
+export interface QuickConnectHandle extends Point {
+  readonly side: QuickConnectSide;
+}
+
+/**
+ * Distance of the quick-connect handles from the element's sides, in screen pixels. Larger than
+ * the rotate handle offset (24 px), so the top handle stays clear of it.
+ *
+ * @beta
+ */
+export const QUICK_CONNECT_OFFSET_PX = 40;
+
+/**
+ * Board positions of the four quick-connect handles of a frame, `offset` board units outside the
+ * middle of each side (in the frame's rotated directions).
+ *
+ * @beta
+ */
+export function quickConnectHandles(frame: ElementTransform, offset: number): QuickConnectHandle[] {
+  const { w, h } = frame;
+  const local: Record<QuickConnectSide, Point> = {
+    top: { x: w / 2, y: -offset },
+    right: { x: w + offset, y: h / 2 },
+    bottom: { x: w / 2, y: h + offset },
+    left: { x: -offset, y: h / 2 },
+  };
+  return (['top', 'right', 'bottom', 'left'] as const).map((side) => ({
+    side,
+    ...localToBoard(frame, local[side]),
+  }));
+}
+
 /** Normalizes degrees to `[0, 360)` without returning `-0`. */
 function normalizeRotation(degrees: number): number {
   const r = ((degrees % 360) + 360) % 360;

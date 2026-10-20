@@ -1013,6 +1013,8 @@ export interface ElementDefinition<T extends string = string, S extends SchemaSh
     a11y?(el: ElementRecord<InferShape<S>>, data: D | undefined, ctx: ElementContext): ElementA11y;
     // @beta
     actions?(el: ElementRecord<InferShape<S>>, data: D | undefined, ctx: ElementActionContext<InferShape<S>>): readonly ElementAction[];
+    // @beta
+    readonly connectable?: boolean;
     readonly defaults?: Partial<InferShape<S>>;
     readonly export?: ElementExporters<InferShape<S>, D>;
     geometry?(el: ElementRecord<InferShape<S>>): Geometry;
@@ -1801,6 +1803,21 @@ export interface QueryFilter {
     readonly parentId?: string | null;
     readonly type?: string;
 }
+
+// @beta
+export const QUICK_CONNECT_OFFSET_PX = 40;
+
+// @beta
+export interface QuickConnectHandle extends Point {
+    // (undocumented)
+    readonly side: QuickConnectSide;
+}
+
+// @beta
+export function quickConnectHandles(frame: ElementTransform, offset: number): QuickConnectHandle[];
+
+// @beta
+export type QuickConnectSide = 'top' | 'right' | 'bottom' | 'left';
 
 // @beta
 export type ReadingDirection = 'next' | 'previous';

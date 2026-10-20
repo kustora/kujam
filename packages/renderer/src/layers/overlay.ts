@@ -6,6 +6,8 @@
  */
 
 import {
+  QUICK_CONNECT_OFFSET_PX,
+  quickConnectHandles,
   selectionFrame,
   transformHandles,
   type Board,
@@ -29,6 +31,8 @@ export const ROTATE_HANDLE_RADIUS_PX = 4;
 export const ROTATE_HANDLE_OFFSET_PX = 24;
 /** Connector endpoint handle radius in screen pixels. @public */
 export const CONNECTOR_HANDLE_RADIUS_PX = 5;
+/** Quick-connect handle radius in screen pixels; larger while hovered. @public */
+export const QUICK_CONNECT_RADIUS_PX = 5;
 /** Alignment snap guide line color. @public */
 export const SNAP_GUIDE_COLOR = '#e02874';
 /** Marquee selection box fill color. @public */
@@ -131,6 +135,8 @@ interface ToolOverlayData {
   activeStroke?: ActiveStrokeOverlay | null;
   connectorSnap?: ConnectorSnapOverlay | null;
   connectorPreview?: ConnectorPreviewOverlay | null;
+  /** Side of the quick-connect handle under the pointer. */
+  quickConnectHover?: string | null;
 }
 
 function renderStrokeOutline(
@@ -248,6 +254,9 @@ export class OverlayRenderer {
   private remoteLiveStrokes: readonly PresenceLiveStroke[] = [];
   private presence: PresenceApi | null = null;
   private lastRenderedWasEmpty = false;
+
+  /** Hides the quick-connect handles, for example while an inline text editor is open. */
+  quickConnectHidden = false;
 
   /**
    * Remote cursor inactivity timeout in milliseconds (BOARD-808).
@@ -801,6 +810,39 @@ export class OverlayRenderer {
             ctx.strokeStyle = selectionStroke;
             ctx.lineWidth = selectionLineWidth;
             ctx.strokeRect(s.x - hs / 2, s.y - hs / 2, hs, hs);
+          }
+        }
+
+        // Quick-connect handles: one dot outside each side of a lone connectable element, shown
+        // while the select tool is idle.
+        const lone = selectedElements.length === 1 ? selectedElements[0]! : null;
+        if (
+          lone &&
+          lockedSelected.length === 0 &&
+          !this.quickConnectHidden &&
+          !board.readOnly &&
+          board.tool === 'select' &&
+          board.toolState === 'idle' &&
+          board.elements.get(lone.type)?.connectable
+        ) {
+          const hover = toolData?.quickConnectHover ?? null;
+          for (const pt of quickConnectHandles(frame, QUICK_CONNECT_OFFSET_PX / zoom)) {
+            const s = camera.boardToScreen(pt);
+            ctx.beginPath();
+            ctx.arc(
+              s.x,
+              s.y,
+              pt.side === hover ? QUICK_CONNECT_RADIUS_PX + 2 : QUICK_CONNECT_RADIUS_PX,
+              0,
+              Math.PI * 2,
+            );
+            ctx.fillStyle = selectionStroke;
+            ctx.globalAlpha = pt.side === hover ? 1 : 0.55;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
           }
         }
         ctx.restore();

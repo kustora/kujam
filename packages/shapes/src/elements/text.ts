@@ -33,6 +33,8 @@ export const textElement = defineElement({
     color: 'black',
   },
   geometry: (el) => rect(el.w, el.h),
+  // Quick-connect handles on each side while selected alone.
+  connectable: true,
   // Height follows content (computed by the BOARD-1003a text layout), so resize only changes width.
   resize: (el, proposed) => ({ w: proposed.w, h: el.h }),
   onDoubleClick: (el, ctx) => {

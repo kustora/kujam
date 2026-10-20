@@ -360,6 +360,8 @@ export const imageElement = defineElement({
   resize: 'fixed-ratio',
   minSize: { w: 16, h: 16 },
   geometry: (el) => rect(el.w, el.h),
+  // Quick-connect handles on each side while selected alone.
+  connectable: true,
   onDoubleClick: (el, ctx) => {
     ctx.emit('image.crop', { elementId: el.id });
     ctx.emit('edit');
