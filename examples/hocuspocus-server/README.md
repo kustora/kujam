@@ -44,12 +44,13 @@ pnpm start
 
 ### Variabel Lingkungan (Environment Variables)
 
-| Variabel        | Bawaan                | Keterangan                                         |
-| --------------- | --------------------- | -------------------------------------------------- |
-| `PORT`          | `1234`                | Port HTTP & WebSocket server                       |
-| `DATABASE_PATH` | `./data/kujam.sqlite` | Lokasi file database SQLite (atau `:memory:`)      |
-| `DEBOUNCE_MS`   | `2000`                | Jeda debounce penyimpanan ke SQLite (milidetik)    |
-| `AUTH_ENDPOINT` | _(kosong)_            | URL endpoint HTTP eksternal untuk verifikasi token |
+| Variabel            | Bawaan                | Keterangan                                                                      |
+| ------------------- | --------------------- | ------------------------------------------------------------------------------- |
+| `PORT`              | `1234`                | Port HTTP & WebSocket server                                                    |
+| `DATABASE_PATH`     | `./data/kujam.sqlite` | Lokasi file database SQLite (atau `:memory:`)                                   |
+| `DEBOUNCE_MS`       | `2000`                | Jeda debounce penyimpanan ke SQLite (milidetik)                                 |
+| `AUTH_ENDPOINT`     | _(kosong)_            | URL endpoint HTTP eksternal untuk verifikasi token                              |
+| `ALLOW_MOCK_TOKENS` | _(kosong)_            | `true` untuk menerima token mock walau `NODE_ENV=production` (hanya demo lokal) |
 
 ---
 
@@ -71,6 +72,15 @@ docker compose down
 ```
 
 ---
+
+## Keamanan (BOARD-2009, BOARD-2010)
+
+Server ini memasang penjagaan terhadap klien jahat (lihat `docs/adr/ADR-009-threat-model.md`, T2 dan T4):
+
+- **Dokumen tetap valid.** Setiap perubahan divalidasi; record yang tidak valid dikembalikan ke versi valid terakhirnya (atau dihapus bila belum pernah valid), dan elemen di atas `maxElements` dibuang. Perbaikan ini tersebar ke semua klien.
+- **Identitas tidak bisa dipalsukan.** `user` di awareness setiap koneksi diganti dengan identitas hasil `onAuthenticate`, dan satu koneksi hanya boleh menulis client ID miliknya sendiri.
+- **Batas pesan.** Pesan di atas 10 MB ditolak dan koneksi yang mengirim lebih dari 300 pesan per detik diputus (`guardLimits`).
+- **Token mock khusus pengembangan.** Dengan `NODE_ENV=production`, server menolak start bila hanya memakai token mock, kecuali `ALLOW_MOCK_TOKENS=true` (dipakai `docker-compose.yml` untuk demo lokal).
 
 ## Format Token Otentikasi
 

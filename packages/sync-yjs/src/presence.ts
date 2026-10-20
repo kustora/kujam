@@ -13,6 +13,11 @@ import type {
   PresenceUser,
   Unsubscribe,
 } from '@kujam/core';
+import {
+  DEFAULT_PRESENCE_LIMITS,
+  sanitizePresenceState,
+  type PresenceLimits,
+} from './presence-validation.js';
 
 /**
  * Ephemeral active freehand stroke data transmitted via Yjs Awareness (BOARD-1505).
@@ -50,6 +55,12 @@ export interface YjsPresenceOptions {
    * @defaultValue 33
    */
   strokeThrottleMs?: number;
+
+  /**
+   * Bounds for presence states received from peers (BOARD-2009). Every peer state is validated
+   * per field; see {@link DEFAULT_PRESENCE_LIMITS} for the defaults.
+   */
+  limits?: Partial<PresenceLimits>;
 }
 
 /**
@@ -142,28 +153,29 @@ export function createYjsPresence(options: YjsPresenceOptions = {}): YjsPresence
     }
   }
 
-  function resolvePeerId(raw: Record<string, unknown>, clientId: number): string {
-    const user = raw.user as PresenceUser | undefined;
-    if (user?.id != null && String(user.id).trim().length > 0) {
-      return String(user.id);
+  // Peer states are validated and capped before anything reads them (BOARD-2009).
+  const limits: PresenceLimits = { ...DEFAULT_PRESENCE_LIMITS, ...options.limits };
+  const sanitized = new WeakMap<Record<string, unknown>, PresencePeerState>();
+
+  function peerStateOf(raw: Record<string, unknown>, clientId: number): PresencePeerState {
+    let state = sanitized.get(raw);
+    if (!state) {
+      state = sanitizePresenceState(raw, String(clientId), limits);
+      sanitized.set(raw, state);
     }
-    return String(clientId);
+    return state;
+  }
+
+  function resolvePeerId(raw: Record<string, unknown>, clientId: number): string {
+    return peerStateOf(raw, clientId).user.id;
   }
 
   function toPresencePeerState(
     raw: Record<string, unknown>,
-    peerId: string,
+    _peerId: string,
     clientId: number,
   ): PresencePeerState {
-    const user = (raw.user as PresenceUser | undefined) ?? {
-      id: peerId,
-      name: `User ${clientId}`,
-      color: '#888888',
-    };
-    return {
-      ...raw,
-      user,
-    } as PresencePeerState;
+    return peerStateOf(raw, clientId);
   }
 
   // Populate initial peers from existing awareness state if any

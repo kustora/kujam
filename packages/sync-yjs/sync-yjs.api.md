@@ -14,6 +14,7 @@ import { HistoryStep } from '@kujam/core';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { PresenceApi } from '@kujam/core';
 import { PresenceLiveStroke } from '@kujam/core';
+import { PresencePeerState } from '@kujam/core';
 import { PresenceUser } from '@kujam/core';
 import { RecordPropsValidator } from '@kujam/core';
 import { SyncAdapter } from '@kujam/core';
@@ -47,6 +48,9 @@ export function createYjsPresence(options?: YjsPresenceOptions): YjsPresence;
 export function createYjsSyncAdapter(options?: YjsSyncOptions): YjsSyncAdapter;
 
 // @public
+export const DEFAULT_PRESENCE_LIMITS: Readonly<PresenceLimits>;
+
+// @public
 export function documentToUpdate(doc: BoardDocument, options?: DocumentToYDocOptions): Uint8Array;
 
 // @public
@@ -77,6 +81,14 @@ export function isValidBoardRecord(value: unknown): value is BoardRecord;
 
 // @public
 export type LiveStroke = PresenceLiveStroke;
+
+// @public
+export interface PresenceLimits {
+    readonly maxCoordinate: number;
+    readonly maxNameLength: number;
+    readonly maxSelection: number;
+    readonly maxStrokePoints: number;
+}
 
 // @public
 export class ReconnectController {
@@ -115,6 +127,9 @@ export interface ReconnectOptions {
 
 // @public
 export function recordToYMap(record: BoardRecord, yMap: Y.Map<unknown>): void;
+
+// @public
+export function sanitizePresenceState(raw: Record<string, unknown>, fallbackId: string, limits?: PresenceLimits): PresencePeerState;
 
 export { SyncAdapter }
 
@@ -215,6 +230,7 @@ export interface YjsPresence extends PresenceApi {
 export interface YjsPresenceOptions {
     awareness?: Awareness;
     cursorThrottleMs?: number;
+    limits?: Partial<PresenceLimits>;
     strokeThrottleMs?: number;
     user?: PresenceUser;
 }
@@ -248,6 +264,7 @@ export interface YjsSyncOptions {
     history?: boolean | Omit<YjsHistoryOptions, 'doc' | 'clientOrigin'>;
     indexeddb?: boolean | YjsIndexedDbOptions;
     isOnlineRequired?: (action: string) => boolean;
+    presenceLimits?: Partial<PresenceLimits>;
     readOnly?: boolean;
     reconnect?: boolean | ReconnectOptions;
     strokeThrottleMs?: number;

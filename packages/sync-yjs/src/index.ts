@@ -59,6 +59,12 @@ import {
   type UpdateToYDocOptions,
   type YDocToDocumentOptions,
 } from './document.js';
+export {
+  DEFAULT_PRESENCE_LIMITS,
+  sanitizePresenceState,
+  type PresenceLimits,
+} from './presence-validation.js';
+import type { PresenceLimits } from './presence-validation.js';
 
 export {
   recordToYMap,
@@ -174,6 +180,12 @@ export interface YjsSyncOptions {
    * Active live stroke throttling duration in milliseconds (default ~30 Hz / 33ms) (BOARD-1505).
    */
   strokeThrottleMs?: number;
+
+  /**
+   * Bounds for presence states received from peers (BOARD-2009): name length, selection size,
+   * live stroke points, and coordinate range. Invalid fields are dropped per field.
+   */
+  presenceLimits?: Partial<PresenceLimits>;
 
   /**
    * Origin token passed to `doc.transact` to distinguish local transactions from remote changes.
@@ -332,6 +344,7 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
     user: options.user,
     cursorThrottleMs: options.cursorThrottleMs,
     strokeThrottleMs: options.strokeThrottleMs,
+    limits: options.presenceLimits,
   });
 
   const syncEmitter = new SyncEventEmitter();

@@ -24,6 +24,8 @@ const collaborationServer = createCollaborationServer({
     authEndpointUrl: AUTH_ENDPOINT,
     allowAnonymous: false,
   },
+  // Mock tokens are refused in production unless explicitly allowed (local Docker demo).
+  ...(process.env.ALLOW_MOCK_TOKENS === 'true' ? { allowMockTokens: true } : {}),
 });
 
 async function main() {

@@ -5,19 +5,21 @@
  * 1. `onAuthenticate` hook for verifying tokens and assigning per-connection read-only or edit permissions.
  * 2. Per-connection read-only enforcement: mutations from viewer clients are dropped at the server.
  * 3. Binary Yjs persistence to SQLite using `@kujam/sync-yjs` binary conversion utilities.
- * 4. Document validation in `onChange` hook using `validateDocument` (@kujam/core) and `yDocToDocument` (@kujam/sync-yjs).
+ * 4. Document validation in `onChange` hook using `validateDocument` (@kujam/core) and `yDocToDocument` (@kujam/sync-yjs);
+ *    invalid records are put back to their last valid version (BOARD-2010).
+ * 5. Guards against hostile clients (BOARD-2009, BOARD-2010): message size and rate limits, and
+ *    awareness limited to the connection's own client IDs with the authenticated user identity.
  *
  * @packageDocumentation
  */
 
 import { Server, type onChangePayload } from '@hocuspocus/server';
 import {
-  validateDocument,
   type DocumentPropsValidator,
   type ValidateDocumentOptions,
   type ValidationResult,
 } from '@kujam/core';
-import { yDocToDocument, yDocToUpdate } from '@kujam/sync-yjs';
+import { yDocToUpdate } from '@kujam/sync-yjs';
 import {
   createAuthVerifier,
   type AuthOptions,
@@ -25,6 +27,7 @@ import {
   type AuthVerifier,
 } from './auth.js';
 import { DocumentDatabase, type DatabaseOptions } from './database.js';
+import { createGuards, REPAIR_ORIGIN, type GuardLimits } from './guards.js';
 
 /**
  * Configuration options for the collaboration server.
@@ -58,7 +61,20 @@ export interface CollaborationServerOptions {
   validationLimits?: ValidateDocumentOptions;
 
   /**
-   * Callback invoked when a document change fails validation in the `onChange` hook.
+   * Message size and rate limits per connection (BOARD-2010).
+   */
+  guardLimits?: Partial<GuardLimits>;
+
+  /**
+   * Whether the built-in mock tokens (`editor`, `viewer`, `mock:…`) are accepted when no
+   * `authEndpointUrl` or custom verifier is configured. Defaults to `true` except when
+   * `NODE_ENV` is `production`, where the server refuses to start with mock authentication.
+   */
+  allowMockTokens?: boolean;
+
+  /**
+   * Callback invoked when a document change fails validation in the `onChange` hook. The invalid
+   * records have already been put back to their last valid version (or removed).
    */
   onValidationError?: (
     validation: ValidationResult,
@@ -138,6 +154,22 @@ export function createCollaborationServer(
   const authVerifier: AuthVerifier =
     typeof options.auth === 'function' ? options.auth : createAuthVerifier(options.auth);
 
+  // Mock tokens let anyone in as anyone: development only (BOARD-2010).
+  const usesMockTokens =
+    typeof options.auth !== 'function' && !options.auth?.verifyToken && !options.auth?.authEndpointUrl;
+  const allowMockTokens = options.allowMockTokens ?? process.env.NODE_ENV !== 'production';
+  if (usesMockTokens && !allowMockTokens) {
+    throw new Error(
+      'Mock authentication is disabled in production: set AUTH_ENDPOINT or pass a custom auth verifier.',
+    );
+  }
+
+  const guards = createGuards({
+    limits: options.guardLimits,
+    validatorRegistry: options.validatorRegistry,
+    validationLimits: options.validationLimits,
+  });
+
   let activePort = options.port ?? (process.env.PORT ? parseInt(process.env.PORT, 10) : 1234);
 
   const server = new Server({
@@ -154,13 +186,43 @@ export function createCollaborationServer(
     async onAuthenticate(data) {
       const auth = await authVerifier(data.token, data.documentName);
 
-      data.context = {
-        user: auth.user,
-        readOnly: auth.readOnly,
-      };
-
       data.connectionConfig.readOnly = auth.readOnly;
       data.connectionConfig.isAuthenticated = true;
+
+      // Hocuspocus merges the returned object into the connection context, which later hooks
+      // (awareness identity, BOARD-2009) read.
+      return { user: auth.user, readOnly: auth.readOnly };
+    },
+
+    /** Rejects oversized messages and connections that send too many (BOARD-2010). */
+    async beforeHandleMessage(data) {
+      guards.checkMessage(data.socketId, data.update.byteLength);
+    },
+
+    /**
+     * Awareness: a connection only writes its own client IDs, with its authenticated identity, so
+     * nobody can impersonate or overwrite another user's presence (BOARD-2009).
+     */
+    async beforeHandleAwareness(data) {
+      guards.guardAwareness(
+        data.documentName,
+        data.socketId,
+        data.context as { user: AuthResult['user']; readOnly: boolean } | undefined,
+        data.states,
+        data.removedClients,
+      );
+    },
+
+    async afterLoadDocument(data) {
+      guards.rememberValid(data.documentName, data.document);
+    },
+
+    async onDisconnect(data) {
+      guards.releaseSocket(data.socketId);
+    },
+
+    async afterUnloadDocument(data) {
+      guards.forgetDocument(data.documentName);
     },
 
     /**
@@ -187,18 +249,14 @@ export function createCollaborationServer(
     /**
      * Change Hook:
      * 1. Validates full canonical BoardDocument on each change using `validateDocument` and `yDocToDocument`.
-     * 2. Calls `onValidationError` callback if validation fails.
+     * 2. Puts invalid records back to their last valid version, or removes them (BOARD-2010).
+     * 3. Calls `onValidationError` callback if validation failed.
      */
     async onChange(data) {
-      // Convert Yjs CRDT structure into canonical BoardDocument (BOARD-1513)
-      const boardDoc = yDocToDocument(data.document);
-
-      // Validate against schema version, record constraints, and optional element registry
-      const validation = validateDocument(
-        boardDoc,
-        options.validatorRegistry,
-        options.validationLimits,
-      );
+      if (data.transactionOrigin === REPAIR_ORIGIN) return;
+      // Validate the canonical BoardDocument (BOARD-1513) and put invalid records back to their
+      // last valid version, so the stored document stays valid (BOARD-2010).
+      const { validation } = guards.repair(data.documentName, data.document);
 
       if (!validation.valid) {
         if (options.onValidationError) {

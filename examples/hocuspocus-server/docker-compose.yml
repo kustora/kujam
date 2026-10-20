@@ -10,6 +10,9 @@ services:
       - PORT=1234
       - DATABASE_PATH=/app/data/kujam.sqlite
       - DEBOUNCE_MS=2000
+      # Local demo only: accept the mock tokens (`editor`, `mock:<id>:<role>:<name>`), which let
+      # anyone in as anyone. Remove this and set AUTH_ENDPOINT for a real deployment.
+      - ALLOW_MOCK_TOKENS=true
     volumes:
       - ./data:/app/data
     restart: unless-stopped
