@@ -71,12 +71,16 @@ import {
 import {
   createElementRecord,
   deleteElementRecords,
+  replaceElementRecords,
   updateElementRecord,
   type DeleteOptions,
+  type ElementInput,
   type ElementPatch,
   type MutateOptions,
   type MutationContext,
   type PartialElement,
+  type ReplaceElementFactory,
+  type ReplaceElementsOptions,
   type UpdateOptions,
 } from './document/mutate.js';
 import {
@@ -324,9 +328,12 @@ export {
 } from './document/store.js';
 export {
   type DeleteOptions,
+  type ElementInput,
   type ElementPatch,
   type MutateOptions,
   type PartialElement,
+  type ReplaceElementFactory,
+  type ReplaceElementsOptions,
   type UpdateOptions,
 } from './document/mutate.js';
 export {
@@ -780,6 +787,39 @@ export interface Board {
    * @beta
    */
   delete(ids: string | Iterable<string>, options?: DeleteOptions): readonly string[];
+  /**
+   * Replaces elements at the same position (`x, y`), size (`w, h` - if permitted by new type
+   * schema/defaults), `parentId`, `pageId`, and `index` in a single transaction, and repoints
+   * attached connector bindings to the new elements (BOARD-606).
+   *
+   * @param ids - ID or IDs of elements to replace.
+   * @param factory - Function that returns replacement element data or a Promise of it.
+   * @param options - Options for the replacement.
+   * @returns Array of replaced element records, or a Promise resolving to it when factory is async.
+   * @public
+   */
+  replaceElements(
+    ids: string | Iterable<string>,
+    factory: (oldElement: Readonly<ElementRecord>) => Promise<ElementInput>,
+    options?: ReplaceElementsOptions,
+  ): Promise<readonly Readonly<ElementRecord>[]>;
+  replaceElements(
+    ids: string | Iterable<string>,
+    factory: (oldElement: Readonly<ElementRecord>) => ElementInput,
+    options?: ReplaceElementsOptions,
+  ): readonly Readonly<ElementRecord>[];
+  replaceElements(
+    ids: string | Iterable<string>,
+    factory: (oldElement: Readonly<ElementRecord>) => ElementInput | Promise<ElementInput>,
+    options?: ReplaceElementsOptions,
+  ): readonly Readonly<ElementRecord>[] | Promise<readonly Readonly<ElementRecord>[]>;
+  /**
+   * Whether an element is currently undergoing asynchronous replacement (BOARD-606).
+   *
+   * @param id - Element record ID.
+   * @beta
+   */
+  isReplacing(id: string): boolean;
   /** Element record with the given ID, or `undefined` when missing or not an element. */
   getElement<T = Record<string, unknown>>(
     id: string,
@@ -2109,6 +2149,8 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     return checkPermissions(action, element, user);
   }
 
+  const replacingIds = new Set<string>();
+
   const mutationCtx: MutationContext = {
     getDocument: () => store.getDocument(),
     getElement: (id) => board.getElement(id),
@@ -2121,6 +2163,13 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     createId: () => board.createId(),
     emitError,
     assertUsable,
+    getSelection: () => selection.ids,
+    select: (ids) => selection.select(ids),
+    isReplacing: (id) => replacingIds.has(id),
+    setReplacing: (id, replacing) => {
+      if (replacing) replacingIds.add(id);
+      else replacingIds.delete(id);
+    },
   };
 
   const board: Board = {
@@ -2250,6 +2299,14 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     delete(ids, opts) {
       assertUsable();
       return deleteElementRecords(mutationCtx, ids, opts);
+    },
+    replaceElements(ids, factory, opts) {
+      assertUsable();
+      return replaceElementRecords(mutationCtx, ids, factory as ReplaceElementFactory, opts) as never;
+    },
+    isReplacing(id) {
+      if (disposed) return false;
+      return replacingIds.has(id);
     },
     getDocument(): Readonly<BoardDocument> {
       return store.getDocument();

@@ -189,8 +189,15 @@ export function createMenu(
         el.tabIndex = -1;
         el.dataset.id = entry.id;
         el.disabled = Boolean(entry.disabled);
-        el.setAttribute('role', options.radio ? 'menuitemradio' : 'menuitem');
-        if (options.radio) el.setAttribute('aria-checked', String(Boolean(entry.checked)));
+        const isRadio = options.radio;
+        const isCheckbox = !isRadio && entry.checked !== undefined;
+        el.setAttribute(
+          'role',
+          isRadio ? 'menuitemradio' : isCheckbox ? 'menuitemcheckbox' : 'menuitem',
+        );
+        if (isRadio || isCheckbox) {
+          el.setAttribute('aria-checked', String(Boolean(entry.checked)));
+        }
         el.setAttribute('aria-label', accessibleName(entry.label, entry.shortcut));
         if (entry.swatch !== undefined) {
           el.title = entry.label;

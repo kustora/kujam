@@ -16,6 +16,12 @@ export {
   type RendererOptions,
   type RenderStats,
 } from './mount.js';
+export { LodManager, LOD_HYSTERESIS_BUFFER } from './layers/lod.js';
+export {
+  ThumbnailCache,
+  type DrawTextOptions,
+  type DrawThumbnailOptions,
+} from './layers/thumbnail-cache.js';
 export { MIN_GRID_SCREEN_SPACING } from './layers/background.js';
 export {
   OverlayRenderer,

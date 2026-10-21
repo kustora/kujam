@@ -18,6 +18,7 @@
   ],
   "scripts": {
     "build": "tsup",
+    "test": "vitest run --root ../.. packages/ui",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist *.tsbuildinfo"

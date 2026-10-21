@@ -10,6 +10,7 @@ import type {
   ElementHtmlView,
   ElementRecord,
 } from '@kujam/core';
+import { LodManager } from './lod.js';
 import { comparePaintOrder } from './render-canvas.js';
 
 declare module '@kujam/core' {
@@ -122,10 +123,12 @@ export class HtmlLayer {
   readonly editorHost: HTMLDivElement;
   private readonly mountedViews = new Map<string, ActiveHtmlEntry>();
   private readonly erroredElements = new Set<string>();
+  private readonly visibleIds = new Set<string>();
 
   constructor(
     private readonly board: Board,
     private readonly htmlLayer: HTMLDivElement,
+    readonly lodManager: LodManager = new LodManager(),
   ) {
     const doc = htmlLayer.ownerDocument;
 
@@ -190,14 +193,12 @@ export class HtmlLayer {
   }
 
   /**
-   * Synchronizes virtualized HTML elements with the current viewport and document.
+   * Mounts and updates visible HTML elements for the current viewport (BOARD-804, BOARD-809).
    *
-   * Views are created when an element enters the viewport (plus margin) and destroyed when it
-   * leaves, is deleted, or the renderer unmounts. `update` runs only when the record or its
-   * resolved data changed, never for camera moves (BOARD-1201). While data loads, failed, or is
-   * not allowed, the host shows a placeholder of the same size instead (BOARD-1202).
+   * Called before canvas rendering during a frame so that emerging HTML elements are ready
+   * before the canvas stops drawing them (flicker-free transition).
    */
-  updateElements(): void {
+  mountElements(): void {
     this.syncCamera();
 
     const viewport = this.board.camera.viewport;
@@ -214,19 +215,28 @@ export class HtmlLayer {
       maxY: viewportBounds.maxY + HTML_VIEWPORT_MARGIN,
     };
 
-    // Find elements intersecting expanded viewport that define render.html
+    const zoom = this.board.camera.get().zoom;
+
+    // Find elements intersecting expanded viewport that define render.html.
+    // Elements that also define render.canvas switch to compact canvas below compactBelowZoom (BOARD-809).
+    // Elements that only define render.html stay in HTML at all zoom levels.
     const candidates = this.board
       .query({ inBounds: queryBounds })
-      .filter((el) => Boolean(this.board.elements.get(el.type)?.render?.html));
+      .filter((el) => {
+        const def = this.board.elements.get(el.type);
+        if (!def?.render?.html) return false;
+        if (this.lodManager.isCompact(el, def, zoom)) return false;
+        return true;
+      });
 
-    const visibleIds = new Set<string>();
+    this.visibleIds.clear();
     const doc = this.board.getDocument();
 
     // Sort visible elements by layer paint order (hierarchical frame index)
     const sorted = [...candidates].sort((a, b) => comparePaintOrder(doc, a, b));
 
     for (const el of sorted) {
-      visibleIds.add(el.id);
+      this.visibleIds.add(el.id);
       const def = this.board.elements.get(el.type);
       if (!def?.render?.html) continue;
 
@@ -284,15 +294,32 @@ export class HtmlLayer {
         this.elementsHost.appendChild(entry.host);
       }
     }
+  }
 
-    // Unmount and destroy elements that left the viewport or were deleted
+  /**
+   * Unmounts and destroys elements that left the viewport or switched to compact canvas (BOARD-809).
+   *
+   * Called after canvas rendering so that canvas drawing is already painted before DOM is detached.
+   */
+  unmountDetached(): void {
     for (const [id, entry] of this.mountedViews.entries()) {
-      if (!visibleIds.has(id)) {
+      if (!this.visibleIds.has(id)) {
         this.destroyView(entry);
         entry.host.remove();
         this.mountedViews.delete(id);
       }
     }
+  }
+
+  /**
+   * Synchronizes virtualized HTML elements with the current viewport and document.
+   *
+   * Views are created when an element enters the viewport (plus margin) and destroyed when it
+   * leaves, is deleted, switches to compact canvas, or the renderer unmounts (BOARD-809).
+   */
+  updateElements(): void {
+    this.mountElements();
+    this.unmountDetached();
   }
 
   /** Calls `render.html` for an element whose data is ready. */
@@ -408,6 +435,7 @@ export class HtmlLayer {
     }
     for (const rec of Object.values(event.removed)) {
       this.erroredElements.delete(rec.id);
+      this.lodManager.delete(rec.id);
     }
   }
 
@@ -436,6 +464,11 @@ export class HtmlLayer {
     host.style.transformOrigin = '0 0';
     host.style.transform = el.rotation ? `rotate(${el.rotation}deg)` : '';
     host.style.opacity = el.opacity !== undefined && el.opacity < 1 ? `${el.opacity}` : '';
+  }
+
+  /** Returns whether element `id` currently has an active HTML view host. */
+  hasView(id: string): boolean {
+    return this.mountedViews.has(id);
   }
 
   /** Clears and destroys all active views (e.g. page change or unmount). */

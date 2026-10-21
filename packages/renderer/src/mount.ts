@@ -21,6 +21,8 @@ import { OverlayRenderer, type OverlayRenderStats } from './layers/overlay.js';
 import { assertBackground, type BoardBackground } from './layers/background.js';
 import { A11yTree } from './a11y/a11y-tree.js';
 import { Announcer } from './a11y/announcer.js';
+import { LodManager } from './layers/lod.js';
+import { ThumbnailCache } from './layers/thumbnail-cache.js';
 
 export type { RenderStats } from './layers/render-canvas.js';
 export type { OverlayRenderStats } from './layers/overlay.js';
@@ -345,7 +347,8 @@ export function mountRenderer(
   root.append(canvas, html, a11y, overlay);
   container.appendChild(root);
 
-  const htmlLayer = new HtmlLayer(board, html);
+  const lodManager = new LodManager();
+  const htmlLayer = new HtmlLayer(board, html, lodManager);
   const layers: RendererLayers = Object.freeze({
     root,
     canvas,
@@ -436,7 +439,11 @@ export function mountRenderer(
   let frame: number | null = null;
 
   let debug = Boolean(options.debug);
-  const canvasRenderer = new CanvasRenderer(board);
+  const thumbnailCache = new ThumbnailCache(() => {
+    canvasRenderer.markAllDirty();
+    scheduleRender();
+  });
+  const canvasRenderer = new CanvasRenderer(board, lodManager, thumbnailCache);
   canvasRenderer.background = initialBackground;
 
   function updateEffectivePixelRatio(): void {
@@ -445,12 +452,15 @@ export function mountRenderer(
 
   function draw(): void {
     syncPresenceListeners();
+    // Mount emerging HTML views first so DOM is ready before canvas clears them (BOARD-809)
+    htmlLayer.mountElements();
     // Without a 2D context (unsupported environment, or a lost context) there is nothing to draw.
     const main = canvas.getContext('2d');
     if (main) {
       canvasRenderer.render(canvas, main, effectivePixelRatio, debug);
     }
-    htmlLayer.updateElements();
+    // Unmount obsolete HTML views after canvas is already painted (BOARD-809)
+    htmlLayer.unmountDetached();
     a11yTree.frame();
     const top = overlay.getContext('2d');
     if (top) {
@@ -544,6 +554,8 @@ export function mountRenderer(
     }),
     board.on('page', () => {
       canvasRenderer.markAllDirty();
+      lodManager.clear();
+      thumbnailCache.clear();
       htmlLayer.clearAll();
       a11yTree.onPage();
       scheduleRender();
@@ -639,6 +651,8 @@ export function mountRenderer(
     a11yTree.dispose();
     announcer.dispose();
     htmlLayer.dispose();
+    lodManager.clear();
+    thumbnailCache.clear();
     root.remove();
     if ((container as { __kujamView?: unknown }).__kujamView === view) {
       delete (container as { __kujamView?: unknown }).__kujamView;

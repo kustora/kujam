@@ -164,6 +164,8 @@ export interface Board {
     // @beta
     invalidate(resolver: string, id?: string): void;
     // @beta
+    isReplacing(id: string): boolean;
+    // @beta
     readonly keybindings: BoardKeybindings;
     readonly limits: Readonly<BoardLimits>;
     loadDocument(doc: BoardDocument): void;
@@ -185,6 +187,11 @@ export interface Board {
     reloadElementData(id: string): void;
     // @beta
     removeFromSelection(ids: SelectionInput): void;
+    replaceElements(ids: string | Iterable<string>, factory: (oldElement: Readonly<ElementRecord>) => Promise<ElementInput>, options?: ReplaceElementsOptions): Promise<readonly Readonly<ElementRecord>[]>;
+    // (undocumented)
+    replaceElements(ids: string | Iterable<string>, factory: (oldElement: Readonly<ElementRecord>) => ElementInput, options?: ReplaceElementsOptions): readonly Readonly<ElementRecord>[];
+    // (undocumented)
+    replaceElements(ids: string | Iterable<string>, factory: (oldElement: Readonly<ElementRecord>) => ElementInput | Promise<ElementInput>, options?: ReplaceElementsOptions): readonly Readonly<ElementRecord>[] | Promise<readonly Readonly<ElementRecord>[]>;
     // @beta
     reportError(code: BoardErrorCode, message: string, cause?: unknown): void;
     // @beta
@@ -1110,6 +1117,34 @@ export interface ElementHtmlView<P, D> {
     update(el: ElementRecord<P>, data: D | undefined): void;
 }
 
+// @public
+export interface ElementInput<P = Record<string, unknown>> {
+    // (undocumented)
+    readonly h?: number;
+    readonly id?: string;
+    // (undocumented)
+    readonly index?: string;
+    // (undocumented)
+    readonly locked?: boolean;
+    readonly meta?: Record<string, unknown>;
+    // (undocumented)
+    readonly opacity?: number;
+    // (undocumented)
+    readonly pageId?: string;
+    // (undocumented)
+    readonly parentId?: string | null;
+    readonly props?: Partial<P>;
+    // (undocumented)
+    readonly rotation?: number;
+    readonly type: string;
+    // (undocumented)
+    readonly w?: number;
+    // (undocumented)
+    readonly x?: number;
+    // (undocumented)
+    readonly y?: number;
+}
+
 // @beta
 export interface ElementLod {
     readonly compactBelowZoom: number;
@@ -1945,6 +1980,15 @@ export interface RectGeometry {
 
 // @beta
 export function reparentElementsToFrames(board: Board, movedIds: readonly string[]): void;
+
+// @public
+export type ReplaceElementFactory<P = Record<string, unknown>> = (oldElement: Readonly<ElementRecord>) => ElementInput<P> | Promise<ElementInput<P>>;
+
+// @public
+export interface ReplaceElementsOptions extends MutateOptions {
+    readonly force?: boolean;
+    readonly select?: boolean;
+}
 
 // @internal
 export function resetDeprecationWarnings(): void;

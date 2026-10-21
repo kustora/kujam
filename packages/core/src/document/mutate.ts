@@ -54,6 +54,62 @@ export interface DeleteOptions extends MutateOptions {
 }
 
 /**
+ * Options for `board.replaceElements` (BOARD-606).
+ *
+ * @public
+ */
+export interface ReplaceElementsOptions extends MutateOptions {
+  /**
+   * When `true`, allows replacing an element that is `locked`.
+   * Defaults to `false`.
+   */
+  readonly force?: boolean;
+  /**
+   * Selection behavior after replacement.
+   * - `true`: explicitly select the newly created elements.
+   * - `false`: do not alter the current selection.
+   * - `undefined`: if the replaced element was selected, substitute it in place.
+   */
+  readonly select?: boolean;
+}
+
+/**
+ * Input element data for `board.replaceElements` (BOARD-606). Omitted fields
+ * inherit from the element being replaced (`x, y, w, h, parentId, pageId, index`).
+ *
+ * @public
+ */
+export interface ElementInput<P = Record<string, unknown>> {
+  /** Element type registered in `board.elements`. Required. */
+  readonly type: string;
+  /** Record ID; when omitted, a new unique ID is generated. */
+  readonly id?: string;
+  readonly pageId?: string;
+  readonly parentId?: string | null;
+  readonly index?: string;
+  readonly x?: number;
+  readonly y?: number;
+  readonly rotation?: number;
+  readonly w?: number;
+  readonly h?: number;
+  readonly locked?: boolean;
+  readonly opacity?: number;
+  /** Type-specific props; shallow-merged on top of the type definition's `defaults`. */
+  readonly props?: Partial<P>;
+  /** Free-form consumer metadata; defaults to a copy of the old element's meta. */
+  readonly meta?: Record<string, unknown>;
+}
+
+/**
+ * Factory callback for replacing an element (BOARD-606). Can return synchronously or a Promise.
+ *
+ * @public
+ */
+export type ReplaceElementFactory<P = Record<string, unknown>> = (
+  oldElement: Readonly<ElementRecord>,
+) => ElementInput<P> | Promise<ElementInput<P>>;
+
+/**
  * Input element data for `board.create`. Omitted fields are filled with default values.
  *
  * @public
@@ -131,6 +187,10 @@ export interface MutationContext {
   createId(): string;
   emitError(code: BoardErrorCode, message: string, cause: unknown): void;
   assertUsable(): void;
+  getSelection?(): readonly string[];
+  select?(ids: readonly string[]): void;
+  isReplacing?(id: string): boolean;
+  setReplacing?(id: string, replacing: boolean): void;
 }
 
 function isPlainObject(value: unknown): boolean {
@@ -494,4 +554,316 @@ export function deleteElementRecords(
   );
 
   return Object.freeze(deletedList);
+}
+
+/**
+ * Replaces elements at the same position, size, container, page, and layer index,
+ * repointing attached connector bindings in a single transaction (BOARD-606).
+ *
+ * @internal
+ */
+export function replaceElementRecords(
+  ctx: MutationContext,
+  ids: string | Iterable<string>,
+  factory: ReplaceElementFactory,
+  options?: ReplaceElementsOptions,
+): readonly Readonly<ElementRecord>[] | Promise<readonly Readonly<ElementRecord>[]> {
+  ctx.assertUsable();
+  if (
+    typeof ids !== 'string' &&
+    (typeof ids !== 'object' ||
+      ids === null ||
+      typeof (ids as Iterable<unknown>)[Symbol.iterator] !== 'function')
+  ) {
+    throw new TypeError(
+      'Argumen ids pada board.replaceElements wajib berupa string atau Iterable<string>.',
+    );
+  }
+  if (typeof factory !== 'function') {
+    throw new TypeError('Argumen factory pada board.replaceElements wajib berupa fungsi.');
+  }
+
+  const targetIds = new Set<string>(typeof ids === 'string' ? [ids] : ids);
+  if (targetIds.size === 0) return Object.freeze([]);
+
+  const doc = ctx.getDocument();
+  const targets: ElementRecord[] = [];
+  for (const id of targetIds) {
+    const rec = doc.records[id];
+    if (!rec || rec.kind !== 'element') continue;
+    if (rec.locked && options?.force !== true) continue;
+    targets.push(rec);
+  }
+  if (targets.length === 0) return Object.freeze([]);
+
+  // Check permissions on the old elements before starting
+  for (const target of targets) {
+    if (!ctx.checkPermission('replace', target)) {
+      ctx.emitError(
+        'forbidden',
+        `Operasi "replace" pada elemen "${target.id}" ditolak oleh hook izin.`,
+        { action: 'replace', element: target, user: ctx.user },
+      );
+      return Object.freeze([]);
+    }
+    if (!ctx.checkPermission('update', target)) {
+      ctx.emitError(
+        'forbidden',
+        `Operasi "update" pada elemen "${target.id}" ditolak oleh hook izin.`,
+        { action: 'update', element: target, user: ctx.user },
+      );
+      return Object.freeze([]);
+    }
+    if (!ctx.checkPermission('delete', target)) {
+      ctx.emitError(
+        'forbidden',
+        `Operasi "delete" pada elemen "${target.id}" ditolak oleh hook izin.`,
+        { action: 'delete', element: target, user: ctx.user },
+      );
+      return Object.freeze([]);
+    }
+  }
+
+  // Mark elements in transient replacing state
+  for (const target of targets) {
+    ctx.setReplacing?.(target.id, true);
+  }
+
+  let hasPromise = false;
+  const factoryResults: (ElementInput | Promise<ElementInput>)[] = [];
+
+  try {
+    for (const target of targets) {
+      const res = factory(target);
+      if (res && typeof (res as Promise<unknown>).then === 'function') {
+        hasPromise = true;
+      }
+      factoryResults.push(res);
+    }
+  } catch (err) {
+    for (const target of targets) {
+      ctx.setReplacing?.(target.id, false);
+    }
+    throw err;
+  }
+
+  function commitReplacements(
+    targetsToCommit: ElementRecord[],
+    inputs: ElementInput[],
+  ): readonly Readonly<ElementRecord>[] {
+    ctx.assertUsable();
+    const currentDoc = ctx.getDocument();
+
+    const validTargets: ElementRecord[] = [];
+    const validInputs: ElementInput[] = [];
+
+    for (let i = 0; i < targetsToCommit.length; i++) {
+      const orig = targetsToCommit[i]!;
+      const input = inputs[i]!;
+      const current = currentDoc.records[orig.id];
+      if (!current || current.kind !== 'element') continue;
+      if (current.locked && options?.force !== true) continue;
+      validTargets.push(current);
+      validInputs.push(input);
+    }
+
+    if (validTargets.length === 0) return Object.freeze([]);
+
+    const newElements: ElementRecord[] = [];
+    const oldToNewId = new Map<string, string>();
+
+    for (let i = 0; i < validTargets.length; i++) {
+      const oldElement = validTargets[i]!;
+      const input = validInputs[i]!;
+
+      if (!isPlainObject(input)) {
+        throw new TypeError('Nilai balik factory pada board.replaceElements wajib berupa objek.');
+      }
+      if (typeof input.type !== 'string' || input.type.trim().length === 0) {
+        throw new TypeError('ElementInput.type wajib berupa string tidak kosong.');
+      }
+
+      const def = ctx.elements.get(input.type);
+      if (!def) {
+        ctx.emitError('invalid-props', `Tipe elemen "${input.type}" tidak terdaftar.`, {
+          type: input.type,
+        });
+        return Object.freeze([]);
+      }
+
+      const mergedProps = {
+        ...(def.defaults ?? {}),
+        ...(input.props ?? {}),
+      } as Record<string, unknown>;
+
+      if (!withinPointLimit(ctx, input.type, mergedProps)) {
+        return Object.freeze([]);
+      }
+
+      const validation = ctx.elements.validateElementProps(input.type, mergedProps);
+      if (validation && !validation.ok) {
+        ctx.emitError(
+          'invalid-props',
+          `Props elemen "${input.type}" tidak lolos skema tipe saat replace.`,
+          validation.issues,
+        );
+        return Object.freeze([]);
+      }
+
+      const targetPageId = input.pageId !== undefined ? input.pageId : oldElement.pageId;
+      if (!pageExists(ctx, currentDoc, targetPageId)) {
+        return Object.freeze([]);
+      }
+
+      const targetX = input.x !== undefined ? input.x : oldElement.x;
+      const targetY = input.y !== undefined ? input.y : oldElement.y;
+      let targetW = input.w !== undefined ? input.w : oldElement.w;
+      let targetH = input.h !== undefined ? input.h : oldElement.h;
+      if (def.minSize) {
+        targetW = Math.max(targetW, def.minSize.w ?? 0);
+        targetH = Math.max(targetH, def.minSize.h ?? 0);
+      }
+      const targetRotation = input.rotation !== undefined ? input.rotation : oldElement.rotation;
+      const targetLocked = input.locked !== undefined ? input.locked : oldElement.locked;
+      const targetOpacity = input.opacity !== undefined ? input.opacity : oldElement.opacity;
+      const targetParentId = input.parentId !== undefined ? input.parentId : oldElement.parentId;
+      const targetIndex = input.index !== undefined ? input.index : oldElement.index;
+      const targetMeta = input.meta !== undefined ? input.meta : { ...oldElement.meta };
+      const newId = typeof input.id === 'string' && input.id.length > 0 ? input.id : ctx.createId();
+
+      const newElement: ElementRecord = {
+        id: newId,
+        kind: 'element',
+        type: input.type,
+        pageId: targetPageId,
+        parentId: targetParentId,
+        index: targetIndex,
+        x: targetX,
+        y: targetY,
+        rotation: targetRotation,
+        w: targetW,
+        h: targetH,
+        locked: targetLocked,
+        opacity: targetOpacity,
+        props: mergedProps,
+        typeVersion: def.version,
+        meta: targetMeta,
+      };
+
+      if (!ctx.checkPermission('create', newElement)) {
+        ctx.emitError(
+          'forbidden',
+          `Operasi "create" pada elemen bertipe "${newElement.type}" ditolak oleh hook izin.`,
+          { action: 'create', element: newElement, user: ctx.user },
+        );
+        return Object.freeze([]);
+      }
+
+      newElements.push(newElement);
+      oldToNewId.set(oldElement.id, newId);
+    }
+
+    // Snapshot selection prior to transaction so we know which old elements were selected
+    const prevSelection = ctx.getSelection?.() ?? [];
+
+    ctx.transact(
+      (tx) => {
+        // 1. Remove old elements
+        for (const old of validTargets) {
+          if (old.id !== oldToNewId.get(old.id)) {
+            tx.remove(old.id);
+          }
+        }
+        // 2. Put new elements
+        for (const next of newElements) {
+          tx.put(next);
+        }
+        // 3. Repoint connector bindings
+        for (const rec of Object.values(currentDoc.records)) {
+          if (rec.kind === 'binding') {
+            const nextFromId = oldToNewId.get(rec.fromId) ?? rec.fromId;
+            const nextToId = oldToNewId.get(rec.toId) ?? rec.toId;
+            if (nextFromId !== rec.fromId || nextToId !== rec.toId) {
+              tx.put({
+                ...rec,
+                fromId: nextFromId,
+                toId: nextToId,
+              });
+            }
+          }
+        }
+        // 4. Repoint container parentId for children
+        for (const rec of Object.values(currentDoc.records)) {
+          if (rec.kind === 'element' && rec.parentId && oldToNewId.has(rec.parentId)) {
+            const newParentId = oldToNewId.get(rec.parentId)!;
+            const newParent = tx.get(newParentId);
+            if (
+              newParent &&
+              newParent.kind === 'element' &&
+              (newParent.type === 'frame' || newParent.type === 'group')
+            ) {
+              tx.put({
+                ...rec,
+                parentId: newParentId,
+              });
+            } else {
+              tx.put({
+                ...rec,
+                parentId: null,
+              });
+            }
+          }
+        }
+      },
+      {
+        label: options?.label ?? 'replace',
+        origin: options?.origin ?? 'local',
+        mergeKey: options?.mergeKey,
+      },
+    );
+
+    // Update selection
+    if (options?.select === true) {
+      ctx.select?.(newElements.map((e) => e.id));
+    } else if (options?.select !== false) {
+      let selectionChanged = false;
+      const nextSelection = prevSelection.map((id) => {
+        if (oldToNewId.has(id)) {
+          selectionChanged = true;
+          return oldToNewId.get(id)!;
+        }
+        return id;
+      });
+      if (selectionChanged) {
+        ctx.select?.(nextSelection);
+      }
+    }
+
+    const result: Readonly<ElementRecord>[] = [];
+    for (const next of newElements) {
+      const el = ctx.getElement(next.id);
+      if (el) result.push(el);
+    }
+    return Object.freeze(result);
+  }
+
+  if (!hasPromise) {
+    try {
+      return commitReplacements(targets, factoryResults as ElementInput[]);
+    } finally {
+      for (const target of targets) {
+        ctx.setReplacing?.(target.id, false);
+      }
+    }
+  }
+
+  return Promise.all(factoryResults)
+    .then((resolvedInputs) => {
+      return commitReplacements(targets, resolvedInputs);
+    })
+    .finally(() => {
+      for (const target of targets) {
+        ctx.setReplacing?.(target.id, false);
+      }
+    });
 }

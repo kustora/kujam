@@ -13,6 +13,8 @@ import type {
 } from '@kujam/core';
 import { compareIndex, computeElementAABB } from '@kujam/core';
 import { BackgroundPainter, type BoardBackground } from './background.js';
+import { LodManager } from './lod.js';
+import { createDrawingContext, ThumbnailCache } from './thumbnail-cache.js';
 
 /**
  * Statistics for the last rendered canvas frame (BOARD-802).
@@ -271,6 +273,8 @@ function drawSingleElement(
   camera: CameraState,
   erroredElements: Set<string>,
   editingText: ReadonlySet<string>,
+  lodManager: LodManager,
+  thumbnailCache: ThumbnailCache,
 ): void {
   const def = board.elements.get(el.type);
   // Registered types without a canvas renderer draw nothing (for example HTML-only elements);
@@ -278,9 +282,17 @@ function drawSingleElement(
   const render = def ? def.render?.canvas : undefined;
   if (def && !render) return;
 
+  const isCompact = lodManager.isCompact(el, def, camera.zoom);
+
+  // If the element defines render.html and is not in compact mode,
+  // it is rendered in HtmlLayer; skip drawing on canvas to avoid double rendering (BOARD-809).
+  if (def?.render?.html && !isCompact) {
+    return;
+  }
+
   const lod: ElementLodState = {
     zoom: camera.zoom,
-    compact: Boolean(def?.lod && camera.zoom < def.lod.compactBelowZoom),
+    compact: isCompact,
     ...(editingText.has(el.id) ? { editingText: true } : {}),
   };
 
@@ -325,9 +337,10 @@ function drawSingleElement(
       drawDataPlaceholder(ctx, el, board, dataState.status, def);
     } else if (def && render) {
       try {
+        const g = createDrawingContext(ctx, thumbnailCache);
         // Called as a method so plugin renderers keep their `this`.
         def.render!.canvas!(
-          ctx,
+          g,
           el,
           dataState?.status === 'ready' ? dataState.data : undefined,
           lod,
@@ -374,7 +387,11 @@ export class CanvasRenderer {
   /** Elements whose inline text editor is open: drawn without their text. */
   private readonly editingText = new Set<string>();
 
-  constructor(private readonly board: Board) {}
+  constructor(
+    private readonly board: Board,
+    readonly lodManager: LodManager = new LodManager(),
+    readonly thumbnailCache: ThumbnailCache = new ThumbnailCache(() => this.markAllDirty()),
+  ) {}
 
   /** Marks whether the inline text editor of `id` is open, and redraws. */
   setEditingText(id: string, editing: boolean): void {
@@ -409,6 +426,7 @@ export class CanvasRenderer {
     }
     for (const rec of Object.values(event.removed)) {
       this.erroredElements.delete(rec.id);
+      this.lodManager.delete(rec.id);
     }
 
     if (this.dirtyAll) return;
@@ -519,7 +537,16 @@ export class CanvasRenderer {
 
       ctx.setTransform(scale, 0, 0, scale, -camera.x * scale, -camera.y * scale);
       for (const el of visible) {
-        drawSingleElement(ctx, el, this.board, camera, this.erroredElements, this.editingText);
+        drawSingleElement(
+          ctx,
+          el,
+          this.board,
+          camera,
+          this.erroredElements,
+          this.editingText,
+          this.lodManager,
+          this.thumbnailCache,
+        );
         drawnIds.add(el.id);
       }
     } else {
@@ -561,7 +588,16 @@ export class CanvasRenderer {
 
         ctx.setTransform(scale, 0, 0, scale, -camera.x * scale, -camera.y * scale);
         for (const el of elements) {
-          drawSingleElement(ctx, el, this.board, camera, this.erroredElements, this.editingText);
+          drawSingleElement(
+            ctx,
+            el,
+            this.board,
+            camera,
+            this.erroredElements,
+            this.editingText,
+            this.lodManager,
+            this.thumbnailCache,
+          );
           drawnIds.add(el.id);
         }
         ctx.restore();

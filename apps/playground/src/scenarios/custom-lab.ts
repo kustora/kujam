@@ -25,7 +25,7 @@ import {
   type FakeOutcome,
 } from '@kujam/example-contact-card';
 import { mountRenderer } from '@kujam/renderer';
-import { attachTextEditor, defaultElements, defaultTools } from '@kujam/shapes';
+import { attachTextEditor, defaultElements, defaultTools, EMPTY_RICH_TEXT } from '@kujam/shapes';
 import { mountDefaultUi } from '@kujam/ui';
 import { h, json, section } from '../dom.js';
 import { defineScenario } from '../scenario.js';
@@ -267,15 +267,120 @@ export default defineScenario({
         h('label', { class: 'row' }, autoToggle, ' Ubah data acak tiap ', intervalInput, ' ms'),
         counterLine,
       ),
-      section(
-        'Menyusul',
+    );
+
+    // ---------- LOD (BOARD-1204, BOARD-809) ----------
+    const zoomLabel = h('span', { class: 'muted' }, 'Zoom: 100%');
+    const lodModeLabel = h('span', { class: 'muted' }, 'Mode: HTML (Penuh)');
+    function updateLodInfo(): void {
+      const z = board.getCamera().zoom;
+      zoomLabel.textContent = `Zoom: ${Math.round(z * 100)}%`;
+      lodModeLabel.textContent = z < 0.4 ? 'Mode: Canvas (Ringkas LOD)' : 'Mode: HTML (Penuh)';
+    }
+    offs.push(board.on('camera', updateLodInfo));
+    updateLodInfo();
+
+    const lodSection = section(
+      'LOD & Ambang Zoom (BOARD-1204)',
+      h('div', { class: 'row' }, zoomLabel, lodModeLabel),
+      h(
+        'p',
+        { class: 'muted' },
+        'Kartu kontak beralih ke render Canvas ringkas bila zoom < 40%, dan kembali ke HTML bila zoom > 42% (histeresis).',
+      ),
+      h(
+        'div',
+        { class: 'row wrap' },
         h(
-          'p',
-          { class: 'muted' },
-          'Slider ambang LOD dan mode render per elemen (BOARD-1204), serta tombol replaceElements (BOARD-606).',
+          'button',
+          {
+            type: 'button',
+            onclick: () => board.setCamera({ zoom: 1 }),
+          },
+          'Zoom 100% (HTML)',
+        ),
+        h(
+          'button',
+          {
+            type: 'button',
+            onclick: () => board.setCamera({ zoom: 0.3 }),
+          },
+          'Zoom 30% (Canvas)',
         ),
       ),
     );
+
+      // ---------- Transformasi Elemen (BOARD-606) ----------
+      const replaceSection = section(
+        'Ganti Elemen (BOARD-606)',
+        h(
+          'p',
+          { class: 'muted' },
+          'Ganti elemen di posisi, ukuran, dan binding yang sama dalam satu transaksi (Undo/Redo utuh).',
+        ),
+        h(
+          'div',
+          { class: 'row wrap' },
+          h(
+            'button',
+            {
+              type: 'button',
+              onclick: async () => {
+                const sel = board.selection;
+                if (sel.length === 0) return;
+                await board.replaceElements(sel, (old) => {
+                  if (old.type === 'contact-card') {
+                    const data = board.getElementData(old.id, { load: false });
+                    const contact =
+                      data.status === 'ready'
+                        ? (data.data as { name: string; role: string })
+                        : null;
+                    const text = contact ? `${contact.name}\n${contact.role}` : 'Kontak';
+                    return {
+                      type: 'sticky',
+                      props: {
+                        text: { ops: [{ insert: text }] },
+                        color: 'yellow',
+                        authorId: null,
+                      },
+                    };
+                  }
+                  const contacts = api.contacts();
+                  const randomContact = contacts[Math.floor(Math.random() * contacts.length)]!;
+                  return {
+                    type: 'contact-card',
+                    props: { contactId: randomContact.id },
+                  };
+                });
+              },
+            },
+            'Ubah Tipe (Sticky ↔ Kontak)',
+          ),
+          h(
+            'button',
+            {
+              type: 'button',
+              class: 'ghost',
+              onclick: async () => {
+                const sel = board.selection;
+                if (sel.length === 0) return;
+                await board.replaceElements(sel, async () => {
+                  await new Promise((r) => setTimeout(r, 500));
+                  const contacts = api.contacts();
+                  const randomContact = contacts[Math.floor(Math.random() * contacts.length)]!;
+                  return {
+                    type: 'contact-card',
+                    props: { contactId: randomContact.id },
+                  };
+                });
+              },
+            },
+            'Ubah Async (500ms)',
+          ),
+        ),
+      );
+
+      controls.append(lodSection, replaceSection);
 
     // ---------- Debug: selection data, actions, log ----------
     const dataBox = h('pre', {}, '(tidak ada seleksi)');

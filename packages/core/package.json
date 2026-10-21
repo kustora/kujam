@@ -18,6 +18,7 @@
   ],
   "scripts": {
     "build": "tsup",
+    "test": "vitest run --root ../.. --project core",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist *.tsbuildinfo"

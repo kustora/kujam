@@ -88,6 +88,12 @@ const SELECTION_TOOLBAR_CSS = `
     font-size: 13px;
     text-transform: uppercase;
   }
+  .btn-text {
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    padding: 0 4px;
+  }
   .fallback {
     font-weight: 600;
     font-size: 13px;
@@ -209,8 +215,12 @@ export function createSelectionToolbarClass(win: UiWindow) {
         const centerX = (screenMinX + screenMaxX) / 2;
 
         const container = host.parentElement;
-        const containerWidth = container?.clientWidth || 1200;
-        const containerHeight = container?.clientHeight || 800;
+        const containerWidth =
+          container?.clientWidth ||
+          (typeof win !== 'undefined' && win.innerWidth ? win.innerWidth : 1200);
+        const containerHeight =
+          container?.clientHeight ||
+          (typeof win !== 'undefined' && win.innerHeight ? win.innerHeight : 800);
 
         // Clear the rotate handle (24 px above the frame) and, for a lone connectable element,
         // the quick-connect dots (QUICK_CONNECT_OFFSET_PX outside each side).
@@ -259,13 +269,44 @@ export function createSelectionToolbarClass(win: UiWindow) {
           return;
         }
 
-        // Group actions by group ID
-        const groups = new Map<string, ElementAction[]>();
+        function executeAction(action: ElementAction): void {
+          const lone = selected.length === 1 ? selected[0] : undefined;
+          if (lone && typeof board.runAction === 'function') {
+            board.runAction(action, lone);
+          } else {
+            action.run();
+          }
+        }
+
+        // Group actions by group ID while keeping standalone actions separate
+        type ActionGroupItem = {
+          type: 'group';
+          groupKey: string;
+          actions: ElementAction[];
+        };
+
+        type ActionSingleItem = {
+          type: 'single';
+          action: ElementAction;
+        };
+
+        type ActionItem = ActionGroupItem | ActionSingleItem;
+
+        const items: ActionItem[] = [];
+        const groupMap = new Map<string, ActionGroupItem>();
+
         for (const action of actions) {
-          const groupKey = action.group ?? 'other';
-          const list = groups.get(groupKey) ?? [];
-          list.push(action);
-          groups.set(groupKey, list);
+          if (action.group) {
+            let g = groupMap.get(action.group);
+            if (!g) {
+              g = { type: 'group', groupKey: action.group, actions: [] };
+              groupMap.set(action.group, g);
+              items.push(g);
+            }
+            g.actions.push(action);
+          } else {
+            items.push({ type: 'single', action });
+          }
         }
 
         const createControlWrap = (id: string): { wrap: HTMLElement; button: HTMLButtonElement } => {
@@ -281,77 +322,79 @@ export function createSelectionToolbarClass(win: UiWindow) {
           return { wrap, button };
         };
 
-        // 1. Style Controls from board.getActions()
-        for (const [groupKey, groupActions] of groups.entries()) {
-          if (groupActions.length === 0) continue;
+        // Render controls from board.getActions()
+        for (const item of items) {
+          if (item.type === 'group') {
+            const { groupKey, actions: groupActions } = item;
+            if (groupActions.length === 0) continue;
 
-          // Color groups: style.color or style.fillColor
-          if (groupKey === 'style.color' || groupKey === 'style.fillColor') {
-            const isFill = groupKey === 'style.fillColor';
-            const groupLabelKey: UiStringKey = isFill ? 'style.fillColor' : 'style.color';
-            const groupLabel = t(groupLabelKey, board);
+            // Color groups: style.color or style.fillColor
+            if (groupKey === 'style.color' || groupKey === 'style.fillColor') {
+              const isFill = groupKey === 'style.fillColor';
+              const groupLabelKey: UiStringKey = isFill ? 'style.fillColor' : 'style.color';
+              const groupLabel = t(groupLabelKey, board);
 
-            const { wrap, button } = createControlWrap(groupKey);
-            button.classList.add('swatch-btn');
-            const activeAction = groupActions.find((a) => a.isActive?.());
-            const activeKey = activeAction ? activeAction.id.split('.').pop()! : 'black';
-            const activeColor = resolveColor(activeKey) ?? '#17191E';
+              const { wrap, button } = createControlWrap(groupKey);
+              button.classList.add('swatch-btn');
+              const activeAction = groupActions.find((a) => a.isActive?.());
+              const activeKey = activeAction ? activeAction.id.split('.').pop()! : 'black';
+              const activeColor = resolveColor(activeKey) ?? '#17191E';
 
-            const swatchEl = doc.createElement('span');
-            swatchEl.className = 'swatch-icon';
-            swatchEl.style.backgroundColor = activeColor;
-            button.append(swatchEl);
+              const swatchEl = doc.createElement('span');
+              swatchEl.className = 'swatch-icon';
+              swatchEl.style.backgroundColor = activeColor;
+              button.append(swatchEl);
 
-            const caret = doc.createElement('span');
-            caret.className = 'caret';
-            button.append(caret);
+              const caret = doc.createElement('span');
+              caret.className = 'caret';
+              button.append(caret);
 
-            labelButton(button, groupLabel, undefined);
+              labelButton(button, groupLabel, undefined);
 
-            const popup = createMenu(doc, {
-              id: `kujam-selection-${groupKey}`,
-              label: groupLabel,
-              anchor: button,
-              wrap,
-              radio: true,
-            });
+              const popup = createMenu(doc, {
+                id: `kujam-selection-${groupKey}`,
+                label: groupLabel,
+                anchor: button,
+                wrap,
+                radio: true,
+              });
 
-            const swatches: MenuGroup = {
-              id: groupKey,
-              label: groupLabel,
-              layout: 'swatches',
-              columns: 5,
-            };
-            const entries: MenuEntry[] = groupActions.map((action) => {
-              const key = action.id.split('.').pop()!;
-              const color = resolveColor(key);
-              const label = tOr(`color.${key}`, board, key);
-              return {
-                id: action.id,
-                label,
-                group: swatches,
-                swatch: color,
-                checked: action.isActive?.(),
-                disabled: action.isEnabled ? !action.isEnabled() : false,
-                select: () => {
-                  action.run();
-                },
+              const swatches: MenuGroup = {
+                id: groupKey,
+                label: groupLabel,
+                layout: 'swatches',
+                columns: 5,
               };
-            });
+              const entries: MenuEntry[] = groupActions.map((action) => {
+                const key = action.id.split('.').pop()!;
+                const color = resolveColor(key);
+                const label = tOr(`color.${key}`, board, key);
+                return {
+                  id: action.id,
+                  label,
+                  group: swatches,
+                  swatch: color,
+                  checked: action.isActive?.(),
+                  disabled: action.isEnabled ? !action.isEnabled() : false,
+                  select: () => {
+                    executeAction(action);
+                  },
+                };
+              });
 
-            popup.setEntries(entries);
+              popup.setEntries(entries);
 
-            button.addEventListener('click', () => {
-              if (popup.isOpen) popup.close();
-              else {
-                closeMenus();
-                popup.open();
-              }
-            });
+              button.addEventListener('click', () => {
+                if (popup.isOpen) popup.close();
+                else {
+                  closeMenus();
+                  popup.open();
+                }
+              });
 
-            rendered.push({ id: groupKey, button, menu: popup });
-            continue;
-          }
+              rendered.push({ id: groupKey, button, menu: popup });
+              continue;
+            }
 
           // Alignment group: style.align
           if (groupKey === 'style.align') {
@@ -385,7 +428,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
                 icon: iconOrLetter(icon, key, 16),
                 checked: action.isActive?.(),
                 disabled: action.isEnabled ? !action.isEnabled() : false,
-                select: () => action.run(),
+                select: () => executeAction(action),
               };
             });
             popup.setEntries(entries);
@@ -434,7 +477,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
                 icon: iconOrLetter(icon, key, 16),
                 checked: action.isActive?.(),
                 disabled: action.isEnabled ? !action.isEnabled() : false,
-                select: () => action.run(),
+                select: () => executeAction(action),
               };
             });
             popup.setEntries(entries);
@@ -484,7 +527,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
                 label: t(labelKey, board),
                 checked: action.isActive?.(),
                 disabled: action.isEnabled ? !action.isEnabled() : false,
-                select: () => action.run(),
+                select: () => executeAction(action),
               };
             });
             popup.setEntries(entries);
@@ -534,7 +577,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
                 label: t(labelKey, board),
                 checked: action.isActive?.(),
                 disabled: action.isEnabled ? !action.isEnabled() : false,
-                select: () => action.run(),
+                select: () => executeAction(action),
               };
             });
             popup.setEntries(entries);
@@ -583,7 +626,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
                 icon: iconOrLetter(fillIcon(key), key, 16),
                 checked: action.isActive?.(),
                 disabled: action.isEnabled ? !action.isEnabled() : false,
-                select: () => action.run(),
+                select: () => executeAction(action),
               };
             });
             popup.setEntries(entries);
@@ -642,7 +685,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
                 icon: iconOrLetter(connectorStyleIcon(key), key, 16),
                 checked: action.isActive?.(),
                 disabled: action.isEnabled ? !action.isEnabled() : false,
-                select: () => action.run(),
+                select: () => executeAction(action),
               };
             });
             popup.setEntries(entries);
@@ -704,7 +747,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
                 icon: iconOrLetter(arrowIcon(isStart, key), key, 16),
                 checked: action.isActive?.(),
                 disabled: action.isEnabled ? !action.isEnabled() : false,
-                select: () => action.run(),
+                select: () => executeAction(action),
               };
             });
             popup.setEntries(entries);
@@ -721,52 +764,98 @@ export function createSelectionToolbarClass(win: UiWindow) {
             continue;
           }
 
-          // Generic style or element action group
-          if (groupActions.length > 1) {
-            const groupLabel = groupActions[0]?.label.split(':')[0] ?? groupKey;
-            const { wrap, button } = createControlWrap(groupKey);
-            button.append(iconOrLetter('chevron', groupLabel, 16));
-            labelButton(button, groupLabel, undefined);
+            // Custom multi-action group (or generic group with > 1 actions)
+            if (groupActions.length > 1) {
+              const activeAction = groupActions.find((a) => a.isActive?.());
+              const hasActiveState = groupActions.some((a) => typeof a.isActive === 'function');
+              const groupLabel =
+                tOr(`group.${groupKey}`, board, '') ||
+                tOr(groupKey, board, '') ||
+                (groupActions[0]?.label.includes(':')
+                  ? groupActions[0].label.split(':')[0]!.trim()
+                  : groupKey);
 
-            const popup = createMenu(doc, {
-              id: `kujam-selection-${groupKey}`,
-              label: groupLabel,
-              anchor: button,
-              wrap,
-              radio: true,
-            });
+              const { wrap, button } = createControlWrap(groupKey);
+              const iconAction =
+                (activeAction?.icon ? activeAction : undefined) ??
+                groupActions.find((a) => a.icon);
 
-            const entries: MenuEntry[] = groupActions.map((action) => ({
-              id: action.id,
-              label: action.label,
-              checked: action.isActive?.(),
-              disabled: action.isEnabled ? !action.isEnabled() : false,
-              select: () => action.run(),
-            }));
-            popup.setEntries(entries);
-
-            button.addEventListener('click', () => {
-              if (popup.isOpen) popup.close();
-              else {
-                closeMenus();
-                popup.open();
+              if (iconAction?.icon) {
+                button.append(iconOrLetter(iconAction.icon, groupLabel, 18));
+              } else {
+                const labelEl = doc.createElement('span');
+                labelEl.className = 'btn-text';
+                labelEl.textContent = groupLabel;
+                button.append(labelEl);
               }
-            });
 
-            rendered.push({ id: groupKey, button, menu: popup });
-          } else {
-            const single = groupActions[0]!;
-            const { button } = createControlWrap(single.id);
-            if (single.icon) button.append(iconOrLetter(single.icon, single.label, 18));
-            else {
-              const text = doc.createElement('span');
-              text.textContent = single.label;
-              button.append(text);
+              const caret = doc.createElement('span');
+              caret.className = 'caret';
+              button.append(caret);
+
+              labelButton(button, groupLabel, undefined);
+
+              const allDisabled = groupActions.every((a) => (a.isEnabled ? !a.isEnabled() : false));
+              button.disabled = allDisabled;
+              if (activeAction) {
+                button.setAttribute('aria-pressed', 'true');
+              }
+
+              const popup = createMenu(doc, {
+                id: `kujam-selection-${groupKey}`,
+                label: groupLabel,
+                anchor: button,
+                wrap,
+                radio: hasActiveState,
+              });
+
+              const entries: MenuEntry[] = groupActions.map((action) => ({
+                id: action.id,
+                label: action.label,
+                icon: action.icon ? iconOrLetter(action.icon, action.label, 16) : undefined,
+                checked: action.isActive?.(),
+                disabled: action.isEnabled ? !action.isEnabled() : false,
+                select: () => executeAction(action),
+              }));
+              popup.setEntries(entries);
+
+              button.addEventListener('click', () => {
+                if (popup.isOpen) popup.close();
+                else {
+                  closeMenus();
+                  popup.open();
+                }
+              });
+
+              rendered.push({ id: groupKey, button, menu: popup });
+              continue;
             }
-            labelButton(button, single.label, undefined);
-            button.addEventListener('click', () => single.run());
-            rendered.push({ id: single.id, button, menu: null });
           }
+
+          // Single standalone action or single-action group
+          const single = item.type === 'single' ? item.action : item.actions[0]!;
+          const { button } = createControlWrap(single.id);
+
+          if (single.icon) {
+            button.append(iconOrLetter(single.icon, single.label, 18));
+          } else {
+            const text = doc.createElement('span');
+            text.className = 'btn-text';
+            text.textContent = single.label;
+            button.append(text);
+          }
+
+          labelButton(button, single.label, undefined);
+
+          if (single.isEnabled && !single.isEnabled()) {
+            button.disabled = true;
+          }
+          if (single.isActive?.()) {
+            button.setAttribute('aria-pressed', 'true');
+          }
+
+          button.addEventListener('click', () => executeAction(single));
+          rendered.push({ id: single.id, button, menu: null });
         }
 
         // Add separator before standard element actions
@@ -783,6 +872,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
         layerBtn.type = 'button';
         layerBtn.className = 'btn';
         layerBtn.tabIndex = -1;
+        layerBtn.dataset.action = 'layer';
         layerBtn.append(iconOrLetter('layer', 'layer', 18));
         const layerCaret = doc.createElement('span');
         layerCaret.className = 'caret';
@@ -942,6 +1032,7 @@ export function createSelectionToolbarClass(win: UiWindow) {
         board.on('change', rebuild),
         board.on('tool-style', rebuild),
         board.on('theme', rebuild),
+        board.on('data', rebuild),
         board.on('camera', onCamera),
       ];
 

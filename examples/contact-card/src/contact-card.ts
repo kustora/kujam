@@ -132,6 +132,7 @@ export const contactCard = defineElement({
   props: schema({ contactId: string({ maxLength: 128 }) }),
   defaults: { contactId: '' },
   geometry: (el) => rect(el.w, el.h),
+  lod: { compactBelowZoom: 0.4 },
   resolve: (el, ctx) => ctx.resolvers.contact!(el.props.contactId) as Contact | Promise<Contact>,
   placeholder: (reason) => ({
     label:
@@ -155,7 +156,7 @@ export const contactCard = defineElement({
         },
       };
     },
-    canvas(g, el, data) {
+    canvas(g, el, data, _lod) {
       g.beginPath();
       g.rect(0, 0, el.w, el.h);
       g.fillStyle = '#FFFFFF';

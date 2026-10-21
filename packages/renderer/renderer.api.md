@@ -6,6 +6,8 @@
 
 import { Board } from '@kujam/core';
 import { BoxBounds } from '@kujam/core';
+import { ElementDefinition } from '@kujam/core';
+import { ElementRecord } from '@kujam/core';
 import { Point } from '@kujam/core';
 import { PresenceApi } from '@kujam/core';
 import { PresenceLiveStroke } from '@kujam/core';
@@ -114,6 +116,26 @@ export const DEFAULT_COLLAB_COLORS: readonly ["#2F6FDB", "#6B4FA0", "#16754C", "
 export const DEFAULT_CURSOR_INACTIVITY_MS = 6000;
 
 // @public
+export interface DrawTextOptions {
+    // (undocumented)
+    readonly align?: CanvasTextAlign;
+    // (undocumented)
+    readonly baseline?: CanvasTextBaseline;
+    // (undocumented)
+    readonly color?: string;
+    // (undocumented)
+    readonly font?: string;
+    // (undocumented)
+    readonly maxWidth?: number;
+}
+
+// @public
+export interface DrawThumbnailOptions {
+    // (undocumented)
+    readonly radius?: number | number[];
+}
+
+// @public
 export interface EditorBounds {
     // (undocumented)
     readonly h: number;
@@ -132,6 +154,18 @@ export const HANDLE_SIZE_PX = 8;
 
 // @public
 export const HOVER_STROKE_COLOR = "rgba(47, 111, 219, 0.5)";
+
+// @public
+export const LOD_HYSTERESIS_BUFFER = 1.05;
+
+// @public
+export class LodManager {
+    constructor(hysteresisBuffer?: number);
+    clear(): void;
+    delete(id: string): boolean;
+    isCompact(el: ElementRecord, def: ElementDefinition | undefined, zoom: number): boolean;
+    isCompactId(id: string): boolean;
+}
 
 // @public
 export const MIN_GRID_SCREEN_SPACING = 12;
@@ -274,6 +308,16 @@ export const SELECTION_LINE_WIDTH = 2;
 
 // @public
 export const SNAP_GUIDE_COLOR = "#e02874";
+
+// @public
+export class ThumbnailCache {
+    constructor(onRequestRender?: (() => void) | undefined);
+    clear(): void;
+    delete(url: string): boolean;
+    get(url: string): CanvasImageSource | undefined;
+    has(url: string): boolean;
+    set(url: string, image: CanvasImageSource): void;
+}
 
 // (No @packageDocumentation comment for this package)
 
