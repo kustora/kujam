@@ -326,6 +326,8 @@ export interface BoardEventMap {
     camera: CameraEvent;
     change: ChangeEvent;
     // @beta
+    contextmenu: ContextMenuEvent;
+    // @beta
     data: ElementDataEvent;
     // @beta
     dispose: undefined;
@@ -534,6 +536,15 @@ export interface BrushStrokeOptions {
     readonly thinning?: number;
 }
 
+// @public
+export function buildContextMenuItems(board: Board, options?: BuildContextMenuOptions): readonly ContextMenuItem[];
+
+// @public
+export interface BuildContextMenuOptions {
+    readonly point?: Point;
+    readonly targetId?: string | null;
+}
+
 // @beta
 export interface CameraAnimation {
     readonly duration?: number;
@@ -664,6 +675,32 @@ export class ContentError extends Error {
 export type ContentErrorCode = 'read-only' | 'document-too-new' | 'limit-exceeded' | 'forbidden';
 
 // @public
+export interface ContextMenuEvent {
+    readonly client: Point;
+    readonly defaultPrevented: boolean;
+    readonly items: readonly ContextMenuItem[];
+    readonly point: Point;
+    preventDefault(): void;
+    readonly screen: Point;
+    readonly targetId: string | null;
+    readonly targets: readonly string[];
+}
+
+// @public
+export interface ContextMenuItem {
+    readonly checked?: boolean;
+    readonly danger?: boolean;
+    readonly disabled?: boolean;
+    readonly icon?: string;
+    readonly id: string;
+    readonly items?: readonly ContextMenuItem[];
+    readonly label: string;
+    run(): void;
+    readonly separator?: boolean;
+    readonly shortcut?: string;
+}
+
+// @public
 export const CORE_MIGRATIONS: SchemaMigrations;
 
 // @public
@@ -704,6 +741,16 @@ export interface CreateBoardOptions {
     user?: BoardUser | null;
     zoomRange?: ZoomRange;
 }
+
+// @public
+export function createContextMenuEvent(options: {
+    board: Board;
+    screen: Point;
+    point: Point;
+    client: Point;
+    targetId?: string | null;
+    items?: readonly ContextMenuItem[];
+}): ContextMenuEvent;
 
 // @public
 export function createElementRegistry(definitions?: Iterable<AnyElementDefinition> | {

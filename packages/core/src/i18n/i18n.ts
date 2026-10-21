@@ -93,6 +93,10 @@ const RAW_DICTIONARY = {
 
   // Selection toolbar & element actions
   selectionToolbar: { id: 'Aksi elemen', en: 'Element actions' },
+  contextMenu: { id: 'Menu konteks', en: 'Context menu' },
+  'clipboard.cut': { id: 'Potong', en: 'Cut' },
+  'clipboard.copy': { id: 'Salin', en: 'Copy' },
+  'clipboard.paste': { id: 'Tempel', en: 'Paste' },
   group: { id: 'Grup', en: 'Group' },
   ungroup: { id: 'Lepas grup', en: 'Ungroup' },
   'frame.clip': { id: 'Potong konten frame', en: 'Clip frame content' },

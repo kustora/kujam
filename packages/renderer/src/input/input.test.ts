@@ -10,7 +10,7 @@ import {
   type Board,
   type BoardInputEvent,
 } from '@kujam/core';
-import { mountRenderer, type BoardView } from '../index.js';
+import { mountRenderer, type BoardView, type RendererOptions } from '../index.js';
 import { MIN_PEN_PRESSURE } from './input.js';
 
 let boards: Board[] = [];
@@ -80,7 +80,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function setup(options: { width?: number; height?: number } = {}) {
+function setup(options: RendererOptions & { width?: number; height?: number } = {}) {
   const container = document.body.appendChild(document.createElement('div'));
   const width = options.width ?? 800;
   const height = options.height ?? 600;
@@ -98,7 +98,7 @@ function setup(options: { width?: number; height?: number } = {}) {
     return originalDispatch(event);
   });
 
-  const view = mountRenderer(board, container);
+  const view = mountRenderer(board, container, options);
   views.push(view);
 
   const observer = FakeResizeObserver.instances.at(-1);
@@ -647,5 +647,130 @@ describe('Board cursor', () => {
     expect(view.layers.root.style.cursor).toBe('crosshair');
     board.setTool('select');
     expect(view.layers.root.style.cursor).toBe('default');
+  });
+});
+
+describe('BOARD-912: Context menu right-click and long-press', () => {
+  it('triggers contextmenu event and callback on right click', () => {
+    const contextEvents: any[] = [];
+    const { board, view } = setup({
+      onContextMenu: (e) => contextEvents.push(e),
+    });
+
+    const boardEvents: any[] = [];
+    board.on('contextmenu', (e) => boardEvents.push(e));
+
+    // Right-click pointerdown (button 2)
+    view.layers.canvas.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        pointerId: 1,
+        pointerType: 'mouse',
+        clientX: 120,
+        clientY: 80,
+        button: 2,
+        buttons: 2,
+      }),
+    );
+
+    // Native contextmenu DOM event
+    const cmEvent = new MouseEvent('contextmenu', {
+      clientX: 120,
+      clientY: 80,
+      button: 2,
+      bubbles: true,
+      cancelable: true,
+    });
+    view.layers.canvas.dispatchEvent(cmEvent);
+
+    expect(cmEvent.defaultPrevented).toBe(true);
+    expect(contextEvents.length).toBe(1);
+    expect(boardEvents.length).toBe(1);
+    expect(contextEvents[0].point).toEqual({ x: 120, y: 80 });
+    expect(contextEvents[0].items.length).toBeGreaterThan(0);
+  });
+
+  it('triggers contextmenu on touch long press', () => {
+    vi.useFakeTimers();
+    try {
+      const contextEvents: any[] = [];
+      const { board, view } = setup({
+        onContextMenu: (e) => contextEvents.push(e),
+      });
+
+      // Touch down
+      view.layers.canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          pointerId: 10,
+          pointerType: 'touch',
+          clientX: 50,
+          clientY: 50,
+          button: 0,
+          buttons: 1,
+        }),
+      );
+
+      expect(contextEvents.length).toBe(0);
+
+      // Advance by 500ms
+      vi.advanceTimersByTime(500);
+
+      expect(contextEvents.length).toBe(1);
+      expect(contextEvents[0].point).toEqual({ x: 50, y: 50 });
+
+      // Touch up afterwards does not trigger click / deselect
+      view.layers.canvas.dispatchEvent(
+        new PointerEvent('pointerup', {
+          pointerId: 10,
+          pointerType: 'touch',
+          clientX: 50,
+          clientY: 50,
+          button: 0,
+          buttons: 0,
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels touch long press if pointer moves beyond threshold', () => {
+    vi.useFakeTimers();
+    try {
+      const contextEvents: any[] = [];
+      const { view } = setup({
+        onContextMenu: (e) => contextEvents.push(e),
+      });
+
+      // Touch down
+      view.layers.canvas.dispatchEvent(
+        new PointerEvent('pointerdown', {
+          pointerId: 11,
+          pointerType: 'touch',
+          clientX: 50,
+          clientY: 50,
+          button: 0,
+          buttons: 1,
+        }),
+      );
+
+      // Move 20px (exceeds DRAG_THRESHOLD_TOUCH = 8)
+      view.layers.canvas.dispatchEvent(
+        new PointerEvent('pointermove', {
+          pointerId: 11,
+          pointerType: 'touch',
+          clientX: 70,
+          clientY: 50,
+          button: 0,
+          buttons: 1,
+        }),
+      );
+
+      // Advance 500ms
+      vi.advanceTimersByTime(500);
+
+      expect(contextEvents.length).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

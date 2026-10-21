@@ -9,6 +9,7 @@ import type {
   CameraEvent,
   CameraFollowEvent,
   ChangeEvent,
+  ContextMenuEvent,
   DragPreviewEvent,
   HistoryEvent,
   PageEvent,
@@ -47,8 +48,10 @@ export type Tests = [
       | 'dispose'
       | 'drag-preview'
       | 'sync'
+      | 'contextmenu'
     >
   >,
+  Expect<Equal<BoardEventMap['contextmenu'], ContextMenuEvent>>,
   Expect<Equal<BoardEventMap['change'], ChangeEvent>>,
   Expect<Equal<BoardEventMap['selection'], SelectionEvent>>,
   Expect<Equal<BoardEventMap['camera'], CameraEvent>>,

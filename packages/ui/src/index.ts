@@ -7,6 +7,7 @@
 import type { Board } from '@kujam/core';
 import type { KujamUiElement, UiWindow } from './base.js';
 import { createCommandPaletteClass } from './command-palette.js';
+import { createContextMenuClass, type ContextMenuElement } from './context-menu.js';
 import { createMinimapClass } from './minimap.js';
 import { createPresenceBarClass } from './presence-bar.js';
 import { createSelectionToolbarClass } from './selection-toolbar.js';
@@ -19,6 +20,10 @@ export {
   type CommandPaletteItem,
   type CommandPaletteSource,
 } from './command-palette.js';
+export {
+  createContextMenuClass,
+  type ContextMenuElement,
+} from './context-menu.js';
 export { createMinimapClass, MINIMAP_SIZE } from './minimap.js';
 export { createPresenceBarClass, type PresenceBarElement } from './presence-bar.js';
 export {
@@ -43,6 +48,7 @@ export const UI_TAGS = Object.freeze({
   history: 'kujam-history-control',
   selection: 'kujam-selection-toolbar',
   commandPalette: 'kujam-command-palette',
+  contextMenu: 'kujam-context-menu',
   minimap: 'kujam-minimap',
   presence: 'kujam-presence-bar',
 } as const);
@@ -68,6 +74,7 @@ export function defineUiElements(win?: Window): void {
     [UI_TAGS.history]: createHistoryControlClass,
     [UI_TAGS.selection]: createSelectionToolbarClass,
     [UI_TAGS.commandPalette]: createCommandPaletteClass,
+    [UI_TAGS.contextMenu]: createContextMenuClass,
     [UI_TAGS.minimap]: createMinimapClass,
     [UI_TAGS.presence]: createPresenceBarClass,
   };
@@ -108,6 +115,8 @@ export interface MountedUi {
   readonly minimap: KujamUiElement;
   /** The command palette overlay element (BOARD-1405). */
   readonly commandPalette: KujamUiElement;
+  /** The context menu element (BOARD-1408). */
+  readonly contextMenu: KujamUiElement;
   /** The presence bar element, at the top right (BOARD-1407). */
   readonly presence: KujamUiElement;
   /** Removes the UI elements. Safe to call more than once. */
@@ -164,6 +173,13 @@ export function mountDefaultUi(options: MountUiOptions): MountedUi {
     pointerEvents: 'none',
     zIndex: '1000',
   });
+  const contextMenu = place(UI_TAGS.contextMenu, {
+    position: 'absolute',
+    bottom: 'auto',
+    left: '0px',
+    top: '0px',
+    zIndex: '50',
+  });
   const presence = place(UI_TAGS.presence, {
     top: '20px',
     right: '20px',
@@ -177,9 +193,10 @@ export function mountDefaultUi(options: MountUiOptions): MountedUi {
     selection,
     minimap,
     commandPalette,
+    contextMenu,
     presence,
     unmount() {
-      for (const el of [toolbar, zoom, history, selection, minimap, commandPalette, presence]) {
+      for (const el of [toolbar, zoom, history, selection, minimap, commandPalette, contextMenu, presence]) {
         el.board = null;
         el.remove();
       }

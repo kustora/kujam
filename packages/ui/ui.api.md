@@ -5,6 +5,7 @@
 ```ts
 
 import { Board } from '@kujam/core';
+import { ContextMenuEvent } from '@kujam/core';
 import { nextZoomStep } from '@kujam/core';
 import { ZOOM_STEPS } from '@kujam/core';
 
@@ -33,8 +34,18 @@ export interface CommandPaletteSource {
     getItems(board: Board, query: string): readonly CommandPaletteItem[] | Promise<readonly CommandPaletteItem[]>;
 }
 
+// @public
+export interface ContextMenuElement extends KujamUiElement {
+    close(): void;
+    readonly isOpen: boolean;
+    open(event: ContextMenuEvent): void;
+}
+
 // @internal
 export function createCommandPaletteClass(win: UiWindow): new () => KujamUiElement;
+
+// @internal
+export function createContextMenuClass(win: UiWindow): new () => ContextMenuElement;
 
 // @internal
 export function createMinimapClass(win: UiWindow): new () => KujamUiElement;
@@ -62,6 +73,7 @@ export function mountDefaultUi(options: MountUiOptions): MountedUi;
 // @public
 export interface MountedUi {
     readonly commandPalette: KujamUiElement;
+    readonly contextMenu: KujamUiElement;
     readonly history: KujamUiElement;
     readonly minimap: KujamUiElement;
     readonly presence: KujamUiElement;
@@ -144,6 +156,7 @@ export const UI_TAGS: Readonly<{
     readonly history: "kujam-history-control";
     readonly selection: "kujam-selection-toolbar";
     readonly commandPalette: "kujam-command-palette";
+    readonly contextMenu: "kujam-context-menu";
     readonly minimap: "kujam-minimap";
     readonly presence: "kujam-presence-bar";
 }>;

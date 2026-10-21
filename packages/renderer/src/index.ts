@@ -23,6 +23,7 @@ export {
   type DrawThumbnailOptions,
 } from './layers/thumbnail-cache.js';
 export { MIN_GRID_SCREEN_SPACING } from './layers/background.js';
+export { LONG_PRESS_MS } from './input/input.js';
 export {
   OverlayRenderer,
   BRUSH_FILL_COLOR,

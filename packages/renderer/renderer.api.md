@@ -6,6 +6,7 @@
 
 import { Board } from '@kujam/core';
 import { BoxBounds } from '@kujam/core';
+import { ContextMenuEvent } from '@kujam/core';
 import { ElementDefinition } from '@kujam/core';
 import { ElementRecord } from '@kujam/core';
 import { Point } from '@kujam/core';
@@ -168,6 +169,9 @@ export class LodManager {
 }
 
 // @public
+export const LONG_PRESS_MS = 500;
+
+// @public
 export const MIN_GRID_SCREEN_SPACING = 12;
 
 // @public
@@ -279,6 +283,8 @@ export interface RendererOptions {
     readonly background?: BoardBackground;
     readonly debug?: boolean;
     readonly onClipboardError?: (error: unknown) => void;
+    // @beta
+    readonly onContextMenu?: (event: ContextMenuEvent) => void;
     readonly onDropRejected?: (files: readonly File[], reason: string) => void;
     readonly onPasteUrl?: (url: string, point: Point, board: Board) => boolean | Promise<boolean>;
     readonly pixelRatio?: number;

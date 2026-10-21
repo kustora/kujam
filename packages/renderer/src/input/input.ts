@@ -2,13 +2,29 @@
  * Input event pipeline for Pointer Events, multi-touch gestures, wheel, and keyboard (BOARD-806, ADR-004).
  */
 
-import type { Board, BoardInputEvent, InputModifiers, Point, PointerKind, ToolPointerEvent } from '@kujam/core';
+import {
+  createContextMenuEvent,
+  type Board,
+  type BoardInputEvent,
+  type ContextMenuEvent,
+  type InputModifiers,
+  type Point,
+  type PointerKind,
+  type ToolPointerEvent,
+} from '@kujam/core';
 import type { RendererLayers } from '../mount.js';
 
 /** Screen distance a press must travel before it becomes a drag (ADR-004). */
 export const DRAG_THRESHOLD_MOUSE = 3;
 export const DRAG_THRESHOLD_PEN = 4;
 export const DRAG_THRESHOLD_TOUCH = 8;
+
+/**
+ * Duration of a touch/pen press without significant movement before triggering a context menu (BOARD-912, ADR-004).
+ *
+ * @public
+ */
+export const LONG_PRESS_MS = 500;
 
 /** Minimum pressure for the first pen event to prevent lost stroke starts (ADR-004). */
 export const MIN_PEN_PRESSURE = 0.05;
@@ -29,6 +45,8 @@ interface PointerState {
   isDragging: boolean;
   /** Whether this touch started on empty space with the select tool (ADR-004 touch pan). */
   isTouchEmptyPan: boolean;
+  /** Whether a long press triggered a context menu for this pointer press (BOARD-912). */
+  longPressTriggered?: boolean;
 }
 
 interface TwoFingerState {
@@ -99,6 +117,10 @@ export interface AttachInputOptions {
   onHover?: (id: string | null) => void;
   onEvent?: (event: BoardInputEvent) => void;
   /**
+   * Called when a context menu is requested via right-click or long-press (BOARD-912).
+   */
+  onContextMenu?: (event: ContextMenuEvent) => void;
+  /**
    * Called before a `keydown` is sent to the board; `false` skips the board and keeps the
    * browser's default action (BOARD-1902, for example Tab leaving the board).
    */
@@ -140,6 +162,15 @@ export function attachInput(
   // Chromium and Firefox report `detail` 0 on pointer events, so presses are counted here.
   let lastPress: { time: number; screen: Point; kind: PointerKind; count: number } | null = null;
   let clickCount = 1;
+  let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+  let lastContextMenuTime = 0;
+
+  function clearLongPress(): void {
+    if (longPressTimer !== null) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  }
 
   /** Counts a press as the next click of a series when it is quick and close to the last one. */
   function countPress(e: PointerEvent, screen: Point, kind: PointerKind): void {
@@ -212,6 +243,20 @@ export function attachInput(
     const screen = toScreen(e.clientX, e.clientY);
     const point = board.camera.screenToBoard(screen);
 
+    if (e.button === 2) {
+      // Right-click: hit-test to update selection, prevent starting tool actions (BOARD-912)
+      const hit = board.hitTest(point, { tolerance: 4 });
+      if (hit && !hit.locked) {
+        if (!board.selection.includes(hit.id)) {
+          board.select(hit.id);
+        }
+      } else if (!hit) {
+        board.clearSelection();
+      }
+      e.preventDefault();
+      return;
+    }
+
     // 3rd and subsequent pointers are ignored
     if (activePointers.size >= 2) {
       e.preventDefault();
@@ -228,6 +273,43 @@ export function attachInput(
       // First pointer: becomes primary
       primaryPointerId = e.pointerId;
       countPress(e, screen, kind);
+
+      // Long press timer for touch or pen (BOARD-912, ADR-004)
+      if (kind === 'touch' || kind === 'pen') {
+        clearLongPress();
+        longPressTimer = setTimeout(() => {
+          longPressTimer = null;
+          const current = activePointers.get(e.pointerId);
+          if (!current || current.isDragging) return;
+          current.longPressTriggered = true;
+
+          const hit = board.hitTest(current.lastPoint, { tolerance: dragThreshold(kind) });
+          if (hit && !hit.locked) {
+            if (!board.selection.includes(hit.id)) {
+              board.select(hit.id);
+            }
+          } else if (!hit) {
+            board.clearSelection();
+          }
+
+          const rect = typeof root.getBoundingClientRect === 'function' ? root.getBoundingClientRect() : null;
+          const client: Point = {
+            x: (rect?.left ?? 0) + current.lastScreen.x,
+            y: (rect?.top ?? 0) + current.lastScreen.y,
+          };
+
+          const ctxEvent = createContextMenuEvent({
+            board,
+            screen: current.lastScreen,
+            point: current.lastPoint,
+            client,
+            targetId: hit?.id ?? null,
+          });
+          lastContextMenuTime = Date.now();
+          board.emit('contextmenu', ctxEvent);
+          options?.onContextMenu?.(ctxEvent);
+        }, LONG_PRESS_MS);
+      }
 
       // Special touch rule with select tool: one-finger drag on empty space pans camera (ADR-004)
       const isTouchEmpty =
@@ -314,6 +396,7 @@ export function attachInput(
       const travel = distance(state.startScreen, screen);
       if (travel >= threshold) {
         state.isDragging = true;
+        clearLongPress();
       }
     }
 
@@ -420,6 +503,7 @@ export function attachInput(
   }
 
   function onPointerUp(e: PointerEvent): void {
+    clearLongPress();
     if (!activePointers.has(e.pointerId)) return;
 
     try {
@@ -453,6 +537,10 @@ export function attachInput(
     }
 
     if (!state) return;
+    if (state.longPressTriggered) {
+      e.preventDefault();
+      return;
+    }
 
     const screen = toScreen(e.clientX, e.clientY);
     const point = board.camera.screenToBoard(screen);
@@ -470,6 +558,7 @@ export function attachInput(
   }
 
   function onPointerCancel(e: PointerEvent): void {
+    clearLongPress();
     if (!activePointers.has(e.pointerId)) return;
 
     try {
@@ -639,6 +728,35 @@ export function attachInput(
     }
   }
 
+  function onContextMenu(e: MouseEvent): void {
+    e.preventDefault();
+    if (Date.now() - lastContextMenuTime < 300) return;
+    lastContextMenuTime = Date.now();
+
+    const screen = toScreen(e.clientX, e.clientY);
+    const point = board.camera.screenToBoard(screen);
+    const client: Point = { x: e.clientX, y: e.clientY };
+
+    const hit = board.hitTest(point, { tolerance: 4 });
+    if (hit && !hit.locked) {
+      if (!board.selection.includes(hit.id)) {
+        board.select(hit.id);
+      }
+    } else if (!hit) {
+      board.clearSelection();
+    }
+
+    const ctxEvent = createContextMenuEvent({
+      board,
+      screen,
+      point,
+      client,
+      targetId: hit?.id ?? null,
+    });
+    board.emit('contextmenu', ctxEvent);
+    options?.onContextMenu?.(ctxEvent);
+  }
+
   // Attach event listeners
   canvas.addEventListener('pointerdown', onPointerDown);
   canvas.addEventListener('pointermove', onPointerMove);
@@ -646,6 +764,7 @@ export function attachInput(
   canvas.addEventListener('pointercancel', onPointerCancel);
   canvas.addEventListener('pointerleave', onPointerLeave);
   canvas.addEventListener('lostpointercapture', onPointerCancel as EventListener);
+  canvas.addEventListener('contextmenu', onContextMenu);
 
   root.addEventListener('wheel', onWheel, { passive: false });
   root.addEventListener('gesturestart', onGestureStart);
@@ -654,14 +773,17 @@ export function attachInput(
 
   root.addEventListener('keydown', onKeyDown);
   root.addEventListener('keyup', onKeyUp);
+  root.addEventListener('contextmenu', onContextMenu);
 
   return () => {
+    clearLongPress();
     canvas.removeEventListener('pointerdown', onPointerDown);
     canvas.removeEventListener('pointermove', onPointerMove);
     canvas.removeEventListener('pointerup', onPointerUp);
     canvas.removeEventListener('pointercancel', onPointerCancel);
     canvas.removeEventListener('pointerleave', onPointerLeave);
     canvas.removeEventListener('lostpointercapture', onPointerCancel as EventListener);
+    canvas.removeEventListener('contextmenu', onContextMenu);
 
     root.removeEventListener('wheel', onWheel);
     root.removeEventListener('gesturestart', onGestureStart);
@@ -670,6 +792,7 @@ export function attachInput(
 
     root.removeEventListener('keydown', onKeyDown);
     root.removeEventListener('keyup', onKeyUp);
+    root.removeEventListener('contextmenu', onContextMenu);
 
     activePointers.clear();
     primaryPointerId = null;

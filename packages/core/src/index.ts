@@ -235,6 +235,13 @@ export {
   type CommandErrorCode,
 } from './tools/commands.js';
 export {
+  buildContextMenuItems,
+  createContextMenuEvent,
+  type BuildContextMenuOptions,
+  type ContextMenuEvent,
+  type ContextMenuItem,
+} from './tools/context-menu.js';
+export {
   DEFAULT_TOOL_ID,
   defineTool,
   ERASER_TOOL_ID,

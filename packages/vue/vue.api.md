@@ -107,7 +107,7 @@ export const Board: vue.DefineComponent<vue.ExtractPropTypes<{
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public
-export type CustomVueComponent<P = any, D = any> = Component<CustomVueElementProps<P, D>>;
+export type CustomVueComponent<P = Record<string, unknown>, D = unknown> = Component<CustomVueElementProps<P, D>>;
 
 // @public
 export interface CustomVueElementProps<P = Record<string, unknown>, D = unknown> {

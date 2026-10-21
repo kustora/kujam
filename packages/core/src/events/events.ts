@@ -11,6 +11,7 @@ import type { ToolStyleEvent } from '../tools/tool-styles.js';
 import type { CameraState } from '../types.js';
 import type { Point } from '../geometry/geometry.js';
 import type { SyncChangeEvent } from '../sync/sync.js';
+import type { ContextMenuEvent } from '../tools/context-menu.js';
 
 /**
  * Typed event listener.
@@ -262,6 +263,12 @@ export interface BoardEventMap {
    * @beta
    */
   sync: SyncChangeEvent;
+  /**
+   * Whiteboard context menu requested via right-click or long-press (BOARD-912).
+   *
+   * @beta
+   */
+  contextmenu: ContextMenuEvent;
 }
 
 /**

@@ -11,7 +11,7 @@
  * views, so several boards (or iframes) on one page never affect each other.
  */
 
-import type { Board, Point, PresenceApi, ThemeDefinition, ThemeMode, ViewportSize } from '@kujam/core';
+import type { Board, ContextMenuEvent, Point, PresenceApi, ThemeDefinition, ThemeMode, ViewportSize } from '@kujam/core';
 import { HtmlLayer, type EditorBounds } from './layers/html-layer.js';
 import { attachInput } from './input/input.js';
 import { attachClipboard } from './input/clipboard.js';
@@ -91,6 +91,12 @@ export interface RendererOptions {
    * selections, and live strokes (BOARD-808). When omitted, falls back to `board.presence`.
    */
   readonly presence?: PresenceApi;
+  /**
+   * Called when a context menu is requested via right-click or long-press (BOARD-912).
+   *
+   * @beta
+   */
+  readonly onContextMenu?: (event: ContextMenuEvent) => void;
   /**
    * Whether the view announces important changes to screen readers through a live region
    * (BOARD-1903): elements the user created or deleted, collaborators joining or leaving, and the
@@ -412,6 +418,7 @@ export function mountRenderer(
   syncCursor();
 
   const detachInput = attachInput(board, layers, {
+    onContextMenu: options.onContextMenu,
     onHover(id) {
       if (overlayRenderer.setHovered(id)) {
         scheduleRender();
