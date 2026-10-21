@@ -18,6 +18,10 @@ export {
 } from './mount.js';
 export { LodManager, LOD_HYSTERESIS_BUFFER } from './layers/lod.js';
 export {
+  CanvasRenderer,
+  type CanvasLike,
+} from './layers/render-canvas.js';
+export {
   ThumbnailCache,
   type DrawTextOptions,
   type DrawThumbnailOptions,

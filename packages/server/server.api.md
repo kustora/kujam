@@ -5,13 +5,29 @@
 ```ts
 
 import { AnyElementDefinition } from '@kujam/core';
+import { AnyPluginDefinition } from '@kujam/core';
 import { BoardDocument } from '@kujam/core';
 import { BoardLimits } from '@kujam/core';
+import { CanvasLike } from '@kujam/renderer';
 import { DocumentPropsValidator } from '@kujam/core';
 import { ElementRegistry } from '@kujam/core';
 import { PluginDefinition } from '@kujam/core';
 import { validateDocument } from '@kujam/core';
 import { ValidationResult } from '@kujam/core';
+
+// @public
+export type CanvasFactory = (width: number, height: number) => CanvasFactoryResult | Promise<CanvasFactoryResult>;
+
+// @public
+export interface CanvasFactoryResult {
+    // (undocumented)
+    readonly canvas: CanvasLike & {
+        toBuffer?(mimeType?: string): Buffer;
+        encode?(format?: string): Promise<Uint8Array> | Uint8Array;
+    };
+    // (undocumented)
+    readonly ctx: any;
+}
 
 // @public
 export interface CardPlacementReference {
@@ -31,6 +47,89 @@ export interface ExtractReferencesOptions {
     readonly plugins?: readonly PluginDefinition[];
     readonly registry?: ElementRegistry;
     readonly types?: readonly string[];
+}
+
+// @public
+export interface MigrateBatchEntry {
+    // (undocumented)
+    readonly error?: string;
+    // (undocumented)
+    readonly fromVersion?: number;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly rejected?: number;
+    // (undocumented)
+    readonly status: 'migrated' | 'unchanged' | 'failed';
+    // (undocumented)
+    readonly toVersion?: number;
+}
+
+// @public
+export interface MigrateBatchItem {
+    readonly data: BoardDocument | Uint8Array;
+    readonly id: string;
+}
+
+// @public
+export interface MigrateBatchOptions extends MigrateServerOptions {
+    readonly dryRun?: boolean;
+    readonly onMigrated?: (id: string, result: MigrateServerResult) => void | Promise<void>;
+}
+
+// @public
+export interface MigrateBatchReport {
+    // (undocumented)
+    readonly dryRun: boolean;
+    // (undocumented)
+    readonly entries: readonly MigrateBatchEntry[];
+    // (undocumented)
+    readonly failed: number;
+    // (undocumented)
+    readonly migrated: number;
+    // (undocumented)
+    readonly total: number;
+    // (undocumented)
+    readonly unchanged: number;
+}
+
+// @public
+export function migrateServerBatch(items: Iterable<MigrateBatchItem>, options?: MigrateBatchOptions): Promise<MigrateBatchReport>;
+
+// @public
+export function migrateServerDocument(docOrUpdate: BoardDocument | Uint8Array, options?: MigrateServerOptions): MigrateServerResult;
+
+// @public
+export interface MigrateServerOptions {
+    readonly limits?: Partial<BoardLimits>;
+    readonly plugins?: readonly AnyPluginDefinition[];
+}
+
+// @public
+export interface MigrateServerResult {
+    readonly changed: boolean;
+    readonly document: BoardDocument;
+    readonly fromVersion: number;
+    readonly rejected: readonly {
+        readonly id: string;
+        readonly errors: readonly string[];
+    }[];
+    readonly toVersion: number;
+    readonly update?: Uint8Array;
+}
+
+// @public
+export function renderThumbnail(docOrUpdate: BoardDocument | Uint8Array, options?: RenderThumbnailOptions): Promise<Uint8Array | Buffer>;
+
+// @public
+export interface RenderThumbnailOptions {
+    readonly background?: string | false;
+    readonly canvasFactory?: CanvasFactory;
+    readonly height?: number;
+    readonly padding?: number;
+    readonly pageId?: string;
+    readonly plugins?: readonly AnyPluginDefinition[];
+    readonly width?: number;
 }
 
 export { validateDocument }

@@ -26,8 +26,8 @@ const ALL_PACKAGES = readdirSync(join(ROOT, 'packages'), { withFileTypes: true }
   )
   .map((entry) => entry.name);
 
-/** Packages allowed to import @kujam/renderer (core <- renderer <- ui/react/vue/export). */
-const RENDERER_CONSUMERS = ['ui', 'react', 'vue', 'export'];
+/** Packages allowed to import @kujam/renderer (core <- renderer <- ui/react/vue/export/server). */
+const RENDERER_CONSUMERS = ['ui', 'react', 'vue', 'export', 'server'];
 
 const eslint = new ESLint({ cwd: ROOT });
 

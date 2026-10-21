@@ -15,6 +15,24 @@ export {
   type ExtractReferencesOptions,
 } from './references.js';
 
+export {
+  renderThumbnail,
+  type CanvasFactory,
+  type CanvasFactoryResult,
+  type RenderThumbnailOptions,
+} from './thumbnail.js';
+
+export {
+  migrateServerDocument,
+  migrateServerBatch,
+  type MigrateBatchEntry,
+  type MigrateBatchItem,
+  type MigrateBatchOptions,
+  type MigrateBatchReport,
+  type MigrateServerOptions,
+  type MigrateServerResult,
+} from './migrate.js';
+
 /**
  * Re-export of canonical document validation from `@kujam/core`.
  *

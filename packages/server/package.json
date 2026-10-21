@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@kujam/core": "workspace:*",
+    "@kujam/renderer": "workspace:*",
     "@kujam/sync-yjs": "workspace:*"
   }
 }

@@ -8,5 +8,5 @@
   },
   "include": ["src/**/*.ts"],
   "exclude": ["dist", "node_modules", "src/**/*.test.ts"],
-  "references": [{ "path": "../core" }, { "path": "../sync-yjs" }]
+  "references": [{ "path": "../core" }, { "path": "../sync-yjs" }, { "path": "../renderer" }]
 }

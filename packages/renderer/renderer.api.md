@@ -6,6 +6,7 @@
 
 import { Board } from '@kujam/core';
 import { BoxBounds } from '@kujam/core';
+import { ChangeEvent } from '@kujam/core';
 import { ContextMenuEvent } from '@kujam/core';
 import { ElementDefinition } from '@kujam/core';
 import { ElementRecord } from '@kujam/core';
@@ -46,6 +47,31 @@ export const BRUSH_FILL_COLOR = "rgba(47, 111, 219, 0.08)";
 
 // @public
 export const BRUSH_STROKE_COLOR = "rgba(47, 111, 219, 0.8)";
+
+// @public
+export interface CanvasLike {
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly width: number;
+}
+
+// @public
+export class CanvasRenderer {
+    constructor(board: Board, lodManager?: LodManager, thumbnailCache?: ThumbnailCache);
+    background: BoardBackground;
+    get isDirty(): boolean;
+    // (undocumented)
+    readonly lodManager: LodManager;
+    markAllDirty(): void;
+    markChange(event: ChangeEvent): void;
+    markElements(ids: readonly string[]): void;
+    render(canvas: CanvasLike, ctx: CanvasRenderingContext2D, pixelRatio: number, debug?: boolean): RenderStats;
+    setEditingText(id: string, editing: boolean): void;
+    get stats(): Readonly<RenderStats>;
+    // (undocumented)
+    readonly thumbnailCache: ThumbnailCache;
+}
 
 // @public
 export function clampPixelRatio(width: number, height: number, desiredRatio: number, maxPixels?: number): number;

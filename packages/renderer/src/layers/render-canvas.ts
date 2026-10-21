@@ -367,6 +367,21 @@ function drawSingleElement(
  *
  * @internal
  */
+/**
+ * Minimal canvas dimensions supported by canvas rendering (BOARD-1804).
+ *
+ * @public
+ */
+export interface CanvasLike {
+  readonly width: number;
+  readonly height: number;
+}
+
+/**
+ * Main 2D Canvas renderer responsible for element rendering and spatial queries (BOARD-801, BOARD-1804).
+ *
+ * @public
+ */
 export class CanvasRenderer {
   private dirtyAll = true;
   private dirtyRects: BoxBounds[] = [];
@@ -492,7 +507,7 @@ export class CanvasRenderer {
    * Performs rendering on the canvas 2D context.
    */
   render(
-    canvas: HTMLCanvasElement,
+    canvas: CanvasLike,
     ctx: CanvasRenderingContext2D,
     pixelRatio: number,
     debug = false,
