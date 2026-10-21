@@ -13,6 +13,10 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "playground": "pnpm --filter @kujam/playground dev",
+    "web": "pnpm --filter @tayang/web dev",
+    "api": "pnpm --filter @tayang/api dev",
+    "worker": "pnpm --filter @tayang/api dev:worker",
+    "services": "docker compose up -d postgres redis",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:core": "vitest run --project core",
@@ -53,7 +57,10 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "esbuild"
+      "@nestjs/core",
+      "@prisma/engines",
+      "esbuild",
+      "prisma"
     ]
   }
 }

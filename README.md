@@ -7,6 +7,8 @@ Keluarga package whiteboard agnostik framework untuk **Jam Tayang** dan ekosiste
 ```text
 .
 ├── apps/
+│   ├── web/                     # @tayang/web — Web app Tayang (Next.js 16 + Tailwind v4 + next-intl, client-first)
+│   ├── api/                     # @tayang/api — API + worker (NestJS 12, Prisma 7/PostgreSQL, BullMQ/Redis)
 │   └── playground/              # @kujam/playground — Aplikasi dev & debug (Vite + HMR langsung dari source)
 ├── packages/
 │   ├── core/                    # @kujam/core — Inti tanpa DOM & 0 dependensi runtime
@@ -45,6 +47,14 @@ pnpm install
 
 # Build seluruh package (ESM + .d.ts via tsup & Turborepo)
 pnpm build
+
+# Jalankan Postgres + Redis lokal (opsional, docker compose)
+pnpm services
+
+# Jalankan web app Tayang (http://localhost:3000), API (http://localhost:4000), dan worker antrean
+pnpm web
+pnpm api
+pnpm worker
 
 # Jalankan playground pengembangan (http://localhost:5173)
 # Skenario: /s/empty, /s/rich-text, /s/schema-lab. Tambah ?bare=1 atau ?debug=0.
