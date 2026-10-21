@@ -365,6 +365,7 @@ export function mountRenderer(
     selectedCount: 0,
     hasBrush: false,
     hasActiveStroke: false,
+    hasDropIndicator: false,
     guidesCount: 0,
     hoveredId: null,
     remoteSelectedCount: 0,
@@ -433,6 +434,10 @@ export function mountRenderer(
   const detachDragDrop = attachDragDrop(board, root, {
     acceptDrop: options.acceptDrop,
     onDropRejected: options.onDropRejected,
+    onDragPreview: (point) => {
+      overlayRenderer.setDropIndicator(point);
+      scheduleRender();
+    },
   });
   let size: Readonly<ViewportSize> = Object.freeze({ width: 0, height: 0 });
   let mounted = true;
@@ -585,6 +590,10 @@ export function mountRenderer(
       a11yTree.onTheme();
       scheduleRender();
     }),
+    board.on('drag-preview', (event) => {
+      overlayRenderer.setDropIndicator(event.point);
+      scheduleRender();
+    }),
     board.on('dispose', unmount),
   ];
 
@@ -644,6 +653,7 @@ export function mountRenderer(
     unsubscribers.length = 0;
     for (const off of presenceUnsubs) off();
     presenceUnsubs.length = 0;
+    overlayRenderer.setDropIndicator(null);
     overlayRenderer.clearRemotePresence();
     detachInput();
     detachClipboard();

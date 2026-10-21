@@ -9,6 +9,7 @@ import type { ChangeEvent } from '../document/store.js';
 import type { ThemeDefinition } from '../theme/theme.js';
 import type { ToolStyleEvent } from '../tools/tool-styles.js';
 import type { CameraState } from '../types.js';
+import type { Point } from '../geometry/geometry.js';
 import type { SyncChangeEvent } from '../sync/sync.js';
 
 /**
@@ -102,6 +103,10 @@ export interface ActionEvent {
  * - `page-not-found`: `board.create` or `board.update` was given a `pageId` that is not an existing
  *   page; `cause` is `{ pageId }` (BOARD-208).
  * - `render-error`: an element's canvas or HTML render callback threw an unhandled error (BOARD-810).
+ * - `resolve-error`: an element data resolver failed (BOARD-604).
+ * - `action-error`: an element action failed (BOARD-1205).
+ * - `undo-hook-error`: a callback registered via `tx.onUndo` or `tx.onRedo` threw an error or rejected (BOARD-303).
+ * - `drop-error`: a drop handler threw an unhandled error (BOARD-608).
  *
  * @beta
  */
@@ -115,7 +120,9 @@ export type BoardErrorCode =
   | 'page-not-found'
   | 'render-error'
   | 'resolve-error'
-  | 'action-error';
+  | 'action-error'
+  | 'undo-hook-error'
+  | 'drop-error';
 
 /**
  * Payload of the `error` event.
@@ -131,6 +138,18 @@ export interface BoardErrorEvent {
   readonly cause: unknown;
   /** For `listener-error`: name of the event whose listener threw. */
   readonly eventType?: keyof BoardEventMap;
+}
+
+/**
+ * Payload of the `drag-preview` event: emitted during canvas dragover or cleared on dragleave/drop (BOARD-608).
+ *
+ * @beta
+ */
+export interface DragPreviewEvent {
+  /** Target point on the board, or `null` when drag preview is cleared. */
+  readonly point: Point | null;
+  /** MIME or custom application data type being dragged, if known. */
+  readonly type?: string;
 }
 
 /**
@@ -229,6 +248,13 @@ export interface BoardEventMap {
    * @beta
    */
   dispose: undefined;
+  /**
+   * Visual drag-and-drop target preview on the board (BOARD-608). Emitted during dragover
+   * or cleared during dragleave/drop.
+   *
+   * @beta
+   */
+  'drag-preview': DragPreviewEvent;
   /**
    * A sync adapter was attached with `attachSync` or detached; `board.sync` changed. UI that
    * shows the connection status listens to it to (re)bind to the adapter.

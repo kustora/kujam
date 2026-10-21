@@ -27,7 +27,7 @@
  */
 
 import { deepEqual } from '../utils/clone.js';
-import { reportUnhandled } from '../events/events.js';
+import { reportUnhandled, type BoardErrorCode } from '../events/events.js';
 import type {
   ChangeEvent,
   RecordsDiff,
@@ -164,6 +164,8 @@ export interface LocalHistoryOptions {
   onStateChange: (event: HistoryEvent) => void;
   /** Clock for the merge window. Defaults to `Date.now`. */
   now?: () => number;
+  /** Callback for errors during history operations (e.g. onUndo/onRedo hooks). */
+  onError?: (code: BoardErrorCode, message: string, cause?: unknown) => void;
 }
 
 /** A single history step: the transaction diff and its sequence number when recorded. */
@@ -400,6 +402,14 @@ export function createLocalHistory(store: RecordStore, options: LocalHistoryOpti
         const hooks = origin === 'undo' ? entry.diff.onUndoHooks : entry.diff.onRedoHooks;
         if (hooks && hooks.length > 0) {
           const ctx = { label: entry.diff.label };
+          const reportHookError = (err: unknown): void => {
+            const msg = `[kujam/history] Error in tx.on${origin === 'undo' ? 'Undo' : 'Redo'} hook: ${err instanceof Error ? err.message : String(err)}`;
+            if (options.onError) {
+              options.onError('undo-hook-error', msg, err);
+            } else {
+              reportUnhandled(msg, err);
+            }
+          };
           for (const hook of hooks) {
             try {
               const res = hook(ctx);
@@ -409,17 +419,11 @@ export function createLocalHistory(store: RecordStore, options: LocalHistoryOpti
                 typeof (res as { then?: unknown }).then === 'function'
               ) {
                 (res as Promise<void>).catch((err) => {
-                  reportUnhandled(
-                    `[kujam/history] Error in tx.on${origin === 'undo' ? 'Undo' : 'Redo'} hook`,
-                    err,
-                  );
+                  reportHookError(err);
                 });
               }
             } catch (err) {
-              reportUnhandled(
-                `[kujam/history] Error in tx.on${origin === 'undo' ? 'Undo' : 'Redo'} hook`,
-                err,
-              );
+              reportHookError(err);
             }
           }
         }

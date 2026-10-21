@@ -300,6 +300,7 @@ export type {
   BoardEventMap,
   CameraEvent,
   CameraFollowEvent,
+  DragPreviewEvent,
   Listener,
   PageEvent,
   SelectionEvent,
@@ -488,7 +489,10 @@ export {
  * @public
  */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface BoardElementTypes {}
+export interface BoardElementTypes {
+  // Extensible via declaration merging by consumers or plugin packages
+  // [type: string]: Record<string, unknown>;
+}
 
 /**
  * Helper type that resolves props from a registered element type name, or falls back to a generic (BOARD-607).
@@ -711,6 +715,20 @@ export interface PreparedDocument {
 }
 
 /**
+/**
+ * Handler invoked when an application or MIME data object is dropped on the whiteboard (BOARD-608).
+ *
+ * @param payload - Deserialized or raw drop data payload.
+ * @param point - Drop location in board coordinates.
+ * @returns Optional created element records (or promise resolving to them) to select after drop.
+ * @public
+ */
+export type DropHandler<T = unknown> = (
+  payload: T,
+  point: Point,
+) => void | readonly ElementRecord[] | Promise<void | readonly ElementRecord[]>;
+
+/**
  * Public interface of a `Board` instance.
  *
  * @public
@@ -754,16 +772,24 @@ export interface Board {
    */
   prepareDocument(doc: BoardDocument): PreparedDocument;
   /**
-   * Creates a new element with default values and stores it in the document (BOARD-205).
+   * Creates a new element with default values and stores it in the document (BOARD-205, BOARD-607).
    *
    * @returns The new element record, or `undefined` when rejected (for example props fail the
    *   type schema or the maximum element count is reached).
    * @beta
    */
-  create<T = Record<string, unknown>>(
-    element: PartialElement<ResolveElementProps<T>>,
+  create<T extends string = string>(
+    element: PartialElement<
+      T extends keyof BoardElementTypes ? BoardElementTypes[T] : Record<string, unknown>
+    > & { type: T },
     options?: MutateOptions,
-  ): Readonly<ElementRecord<ResolveElementProps<T>>> | undefined;
+  ):
+    | Readonly<
+        ElementRecord<
+          T extends keyof BoardElementTypes ? BoardElementTypes[T] : Record<string, unknown>
+        >
+      >
+    | undefined;
   /**
    * Updates an existing element with a partial patch (BOARD-205). Props are merged per key.
    *
@@ -820,10 +846,16 @@ export interface Board {
    * @beta
    */
   isReplacing(id: string): boolean;
-  /** Element record with the given ID, or `undefined` when missing or not an element. */
-  getElement<T = Record<string, unknown>>(
+  /** Element record with the given ID, or `undefined` when missing or not an element (BOARD-607). */
+  getElement<T extends string = string>(
     id: string,
-  ): Readonly<ElementRecord<ResolveElementProps<T>>> | undefined;
+  ):
+    | Readonly<
+        ElementRecord<
+          T extends keyof BoardElementTypes ? BoardElementTypes[T] : Record<string, unknown>
+        >
+      >
+    | undefined;
   /**
    * Media asset record with the given ID, or `undefined` when missing or not an asset (BOARD-1103).
    *
@@ -884,6 +916,61 @@ export interface Board {
    * @beta
    */
   reportError(code: BoardErrorCode, message: string, cause?: unknown): void;
+  /**
+   * Emits a runtime error through the board's `error` event (BOARD-207, BOARD-303, BOARD-810).
+   * Alias for {@link Board.reportError}.
+   *
+   * @param code - Error code (see {@link BoardErrorCode}).
+   * @param message - Diagnostic message in Indonesian.
+   * @param cause - Error instance or contextual metadata.
+   * @beta
+   */
+  emitError(code: BoardErrorCode, message: string, cause?: unknown): void;
+  /**
+   * Registers a handler for drops of the specified MIME or application data type (BOARD-608).
+   *
+   * @param type - MIME or custom data type identifier (e.g. `'application/x-tayang-task'`).
+   * @param handler - Function invoked when data of this type is dropped on the canvas.
+   * @returns Unsubscribe function to unregister the handler.
+   * @public
+   */
+  acceptDrop<T = unknown>(type: string, handler: DropHandler<T>): () => void;
+  /**
+   * Programmatically executes a drop at the specified point (BOARD-608).
+   *
+   * Invokes the registered drop handler for `type` with `payload` and `point`.
+   * Returns any created element records.
+   *
+   * @param point - Target point in board coordinates.
+   * @param type - MIME or custom data type identifier.
+   * @param payload - Drop payload data.
+   * @returns Promise resolving to created element records, or empty array.
+   * @public
+   */
+  dropAt(point: Point, type: string, payload: unknown): Promise<readonly ElementRecord[]>;
+  /**
+   * Checks whether a drop handler is registered for the specified data type (BOARD-608).
+   *
+   * @param type - MIME or custom data type identifier.
+   * @returns `true` if a drop handler is registered for `type`.
+   * @public
+   */
+  hasDropHandler(type: string): boolean;
+  /**
+   * Returns all MIME or application data types currently registered for drop handling (BOARD-608).
+   *
+   * @returns Array of registered type strings.
+   * @public
+   */
+  getDropTypes(): readonly string[];
+  /**
+   * Emits a board event (BOARD-608).
+   *
+   * @param type - Event name.
+   * @param event - Event payload.
+   * @beta
+   */
+  emit<K extends keyof BoardEventMap>(type: K, event: BoardEventMap[K]): void;
   /** Creates a new record ID using the `createId` option (nanoid by default). */
   createId(): string;
   /**
@@ -1581,6 +1668,19 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
 
   const elements = createElementRegistry();
   const brushes = createBrushRegistry();
+  const dropHandlers = new Map<string, Set<DropHandler<any>>>();
+
+  function getHandlersForType(t: string): DropHandler<any>[] {
+    const direct = dropHandlers.get(t);
+    if (direct && direct.size > 0) return Array.from(direct);
+    const lower = t.toLowerCase();
+    for (const [key, set] of dropHandlers.entries()) {
+      if (key.toLowerCase() === lower && set.size > 0) {
+        return Array.from(set);
+      }
+    }
+    return [];
+  }
   const initial = options.document
     ? toOwnedDocument(options.document, previewElementRegistry(options.plugins), limits, true)
     : { document: createDocumentFor(options.plugins), rejected: [] };
@@ -1885,6 +1985,9 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       if (!historyDelegate) {
         events.emit('history', state);
       }
+    },
+    onError: (code, message, cause) => {
+      emitError(code, message, cause);
     },
   });
   const camera = createCamera({
@@ -2398,6 +2501,10 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       assertUsable();
       emitError(code, message, cause);
     },
+    emitError(code: BoardErrorCode, message: string, cause?: unknown): void {
+      assertUsable();
+      emitError(code, message, cause);
+    },
     createId(): string {
       const id = generateId();
       if (typeof id !== 'string' || id.length === 0) {
@@ -2556,6 +2663,95 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
       assertUsable();
       selection.clear();
     },
+    acceptDrop<T = unknown>(type: string, handler: DropHandler<T>): () => void {
+      assertUsable();
+      if (typeof type !== 'string' || type.trim().length === 0) {
+        throw new TypeError('Argumen type pada board.acceptDrop wajib berupa string tidak kosong.');
+      }
+      if (typeof handler !== 'function') {
+        throw new TypeError('Argumen handler pada board.acceptDrop wajib berupa function.');
+      }
+      let handlers = dropHandlers.get(type);
+      if (!handlers) {
+        handlers = new Set();
+        dropHandlers.set(type, handlers);
+      }
+      handlers.add(handler as DropHandler<any>);
+
+      let unsubscribed = false;
+      return () => {
+        if (unsubscribed) return;
+        unsubscribed = true;
+        const current = dropHandlers.get(type);
+        if (current) {
+          current.delete(handler as DropHandler<any>);
+          if (current.size === 0) {
+            dropHandlers.delete(type);
+          }
+        }
+      };
+    },
+    async dropAt(point: Point, type: string, payload: unknown): Promise<readonly ElementRecord[]> {
+      assertUsable();
+      if (
+        !isPlainObject(point) ||
+        !Number.isFinite((point as Point).x) ||
+        !Number.isFinite((point as Point).y)
+      ) {
+        throw new TypeError('Argumen point pada board.dropAt wajib berupa Point valid.');
+      }
+      if (typeof type !== 'string' || type.trim().length === 0) {
+        throw new TypeError('Argumen type pada board.dropAt wajib berupa string tidak kosong.');
+      }
+      if (configuredReadOnly || tooNew !== null) {
+        return Object.freeze([]);
+      }
+
+      const handlers = getHandlersForType(type);
+      if (handlers.length === 0) {
+        return Object.freeze([]);
+      }
+
+      const createdElements: ElementRecord[] = [];
+      for (const handler of handlers) {
+        try {
+          const result = await handler(payload, point);
+          if (Array.isArray(result)) {
+            for (const item of result) {
+              if (item && isPlainObject(item) && item.kind === 'element') {
+                createdElements.push(item as unknown as ElementRecord);
+              }
+            }
+          }
+        } catch (error) {
+          emitError(
+            'drop-error',
+            `Handler drop untuk tipe "${type}" melempar error: ${error instanceof Error ? error.message : String(error)}`,
+            error,
+          );
+          throw error;
+        }
+      }
+
+      return Object.freeze(createdElements);
+    },
+    hasDropHandler(type: string): boolean {
+      if (disposed || typeof type !== 'string') return false;
+      if (dropHandlers.has(type) && dropHandlers.get(type)!.size > 0) return true;
+      const lower = type.toLowerCase();
+      for (const [key, set] of dropHandlers.entries()) {
+        if (key.toLowerCase() === lower && set.size > 0) return true;
+      }
+      return false;
+    },
+    getDropTypes(): readonly string[] {
+      if (disposed) return Object.freeze([]);
+      return Object.freeze(Array.from(dropHandlers.keys()));
+    },
+    emit<K extends keyof BoardEventMap>(type: K, event: BoardEventMap[K]): void {
+      if (disposed) return;
+      events.emit(type, event);
+    },
     dispose(): void {
       if (disposed) return;
       try {
@@ -2563,6 +2759,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
         plugins.dispose();
       } finally {
         disposed = true;
+        dropHandlers.clear();
         camera.dispose();
         spatial.clear();
         events.clear();

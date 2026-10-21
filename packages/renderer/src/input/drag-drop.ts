@@ -77,6 +77,15 @@ export interface DragDropOptions {
    * @param reason - Diagnostic reason string (e.g. `'unsupported-file-type'`).
    */
   readonly onDropRejected?: (files: readonly File[], reason: string) => void;
+
+  /**
+   * Called when a drag preview target point changes or is cleared (BOARD-608).
+   *
+   * @param point - Board coordinate of the drag target, or `null` when drag ends/leaves.
+   * @param type - Matched MIME or custom application type identifier, or `undefined`.
+   * @beta
+   */
+  readonly onDragPreview?: (point: Point | null, type?: string) => void;
 }
 
 /**
@@ -296,7 +305,45 @@ export function attachDragDrop(
     );
   }
 
+  function findMatchingDropType(e: DragEvent): string | undefined {
+    if (!e.dataTransfer?.types || typeof board.hasDropHandler !== 'function') return undefined;
+    for (const t of e.dataTransfer.types) {
+      if (t === 'Files') continue;
+      if (board.hasDropHandler(t)) {
+        return t;
+      }
+    }
+    return undefined;
+  }
+
+  function updateDragPreview(e: DragEvent, type: string): void {
+    const rect = root.getBoundingClientRect();
+    const screen = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const boardPoint = board.camera.screenToBoard(screen);
+    if (typeof board.emit === 'function') {
+      board.emit('drag-preview', { point: boardPoint, type });
+    }
+    options.onDragPreview?.(boardPoint, type);
+  }
+
+  function clearDropIndicator(): void {
+    if (typeof board.emit === 'function') {
+      board.emit('drag-preview', { point: null });
+    }
+    options.onDragPreview?.(null);
+  }
+
   function onDragOver(e: DragEvent): void {
+    const matchingType = findMatchingDropType(e);
+    if (matchingType) {
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy';
+      }
+      updateDragPreview(e, matchingType);
+      return;
+    }
+
     if (hasFiles(e)) {
       e.preventDefault();
       if (e.dataTransfer) {
@@ -306,6 +353,16 @@ export function attachDragDrop(
   }
 
   function onDragEnter(e: DragEvent): void {
+    const matchingType = findMatchingDropType(e);
+    if (matchingType) {
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy';
+      }
+      updateDragPreview(e, matchingType);
+      return;
+    }
+
     if (hasFiles(e)) {
       e.preventDefault();
       if (e.dataTransfer) {
@@ -314,9 +371,53 @@ export function attachDragDrop(
     }
   }
 
-  function onDragLeave(_e: DragEvent): void {}
+  function onDragLeave(e: DragEvent): void {
+    if (!e.relatedTarget || !root.contains(e.relatedTarget as Node)) {
+      clearDropIndicator();
+    }
+  }
 
   function onDrop(e: DragEvent): void {
+    clearDropIndicator();
+
+    const matchingType = findMatchingDropType(e);
+    if (matchingType) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (board.readOnly) return;
+
+      const rect = root.getBoundingClientRect();
+      const screen = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      const dropPoint = board.camera.screenToBoard(screen);
+
+      const rawData =
+        typeof e.dataTransfer?.getData === 'function'
+          ? e.dataTransfer.getData(matchingType)
+          : undefined;
+      let payload: unknown = rawData;
+      if (typeof rawData === 'string') {
+        try {
+          payload = JSON.parse(rawData);
+        } catch {
+          payload = rawData;
+        }
+      }
+
+      void board
+        .dropAt(dropPoint, matchingType, payload)
+        .then((created) => {
+          if (board.disposed) return;
+          if (created && created.length > 0) {
+            board.select(created.map((el) => el.id));
+          }
+        })
+        .catch(() => {
+          // Handled via board 'error' event
+        });
+      return;
+    }
+
     e.preventDefault();
     e.stopPropagation();
 
@@ -365,6 +466,7 @@ export function attachDragDrop(
   root.addEventListener('drop', onDrop);
 
   return () => {
+    clearDropIndicator();
     root.removeEventListener('dragover', onDragOver);
     root.removeEventListener('dragenter', onDragEnter);
     root.removeEventListener('dragleave', onDragLeave);

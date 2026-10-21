@@ -14,6 +14,7 @@ import {
   type Board,
   type BoxBounds,
   type ElementRecord,
+  type Point,
   type PresenceApi,
   type PresenceLiveStroke,
   type SnapGuide,
@@ -122,6 +123,8 @@ export interface OverlayRenderStats {
   hasActiveStroke: boolean;
   guidesCount: number;
   hoveredId: string | null;
+  /** Whether a visual drop target indicator is currently rendered (BOARD-608). */
+  hasDropIndicator?: boolean;
   /** Number of remote collaborator elements currently selected (BOARD-808). */
   remoteSelectedCount?: number;
   /** Number of active remote cursors rendered (BOARD-808). */
@@ -258,6 +261,7 @@ export class OverlayRenderer {
   private remoteSelections: readonly RemoteSelection[] = [];
   private remoteLiveStrokes: readonly PresenceLiveStroke[] = [];
   private presence: PresenceApi | null = null;
+  private dropIndicator: Point | null = null;
   private lastRenderedWasEmpty = false;
 
   /** Hides the quick-connect handles, for example while an inline text editor is open. */
@@ -373,6 +377,36 @@ export class OverlayRenderer {
     this.remoteSelections = [];
     this.remoteLiveStrokes = [];
     this.presence = null;
+  }
+
+  /**
+   * Sets or clears the visual drop target indicator point in board coordinates (BOARD-608).
+   *
+   * @param point - Drop coordinate on the board, or `null` to clear.
+   * @returns `true` if the indicator position changed.
+   * @public
+   */
+  setDropIndicator(point: Point | null): boolean {
+    if (this.dropIndicator === point) return false;
+    if (
+      this.dropIndicator &&
+      point &&
+      this.dropIndicator.x === point.x &&
+      this.dropIndicator.y === point.y
+    ) {
+      return false;
+    }
+    this.dropIndicator = point ? { x: point.x, y: point.y } : null;
+    return true;
+  }
+
+  /**
+   * Returns the current drop target indicator point, or `null` if none.
+   *
+   * @public
+   */
+  getDropIndicator(): Point | null {
+    return this.dropIndicator ? { ...this.dropIndicator } : null;
   }
 
   private syncPresenceCursors(now: number): void {
@@ -594,7 +628,8 @@ export class OverlayRenderer {
       remoteLiveStrokes.length > 0 ||
       remoteSelectedCount > 0 ||
       hasConnectorSnap ||
-      hasConnectorPreview;
+      hasConnectorPreview ||
+      Boolean(this.dropIndicator);
 
     if (!hasContent) {
       return {
@@ -602,6 +637,7 @@ export class OverlayRenderer {
         selectedCount: 0,
         hasBrush: false,
         hasActiveStroke: false,
+        hasDropIndicator: false,
         guidesCount: 0,
         hoveredId: null,
         remoteSelectedCount: 0,
@@ -1050,11 +1086,37 @@ export class OverlayRenderer {
       ctx.restore();
     }
 
+    // --- I. Drop Target Indicator (BOARD-608) ---
+    if (this.dropIndicator) {
+      ctx.save();
+      ctx.scale(pixelRatio, pixelRatio);
+      const sp = camera.boardToScreen(this.dropIndicator);
+
+      // Outer subtle halo / target circle with dashed border
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, 16, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(47, 111, 219, 0.12)';
+      ctx.fill();
+      ctx.strokeStyle = selectionStroke;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+
+      // Inner center dot
+      ctx.beginPath();
+      ctx.arc(sp.x, sp.y, 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = selectionStroke;
+      ctx.fill();
+
+      ctx.restore();
+    }
+
     return {
       rendered: true,
       selectedCount: selectedElements.length,
       hasBrush: selectionBrush !== null,
       hasActiveStroke,
+      hasDropIndicator: Boolean(this.dropIndicator),
       guidesCount: guides.length,
       hoveredId: this.hoveredId,
       remoteSelectedCount,

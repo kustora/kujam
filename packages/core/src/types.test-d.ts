@@ -105,6 +105,8 @@ import type { migrateSchema } from './index.js';
 declare module './index.js' {
   interface BoardElementTypes {
     'custom-sticky': { note: string; priority: number };
+    'tayang-post': { postId: string };
+    sticky: { color: string; text?: string };
   }
 }
 
@@ -177,14 +179,22 @@ export type Tests = [
   Expect<Equal<CreateBoardOptions['user'], BoardUser | null | undefined>>,
   Expect<Equal<CreateBoardOptions['limits'], Partial<BoardLimits> | undefined>>,
   Expect<Equal<CreateBoardOptions['permissions'], PermissionHook | undefined>>,
-  // BOARD-205: mutation type tests (create, update, delete)
+  // BOARD-205 & BOARD-607: mutation type tests (create, update, delete)
   Expect<
     Equal<
       Parameters<Board['create']>,
-      [element: PartialElement<Record<string, unknown>>, options?: MutateOptions]
+      [
+        element: PartialElement<Record<string, unknown>> & { type: string },
+        options?: MutateOptions,
+      ]
     >
   >,
-  Expect<Equal<ReturnType<Board['create']>, Readonly<ElementRecord<unknown>> | undefined>>,
+  Expect<
+    Equal<
+      ReturnType<Board['create']>,
+      Readonly<ElementRecord<Record<string, unknown>>> | undefined
+    >
+  >,
   Expect<
     Equal<
       Parameters<Board['update']>,
@@ -397,8 +407,52 @@ export type Tests = [
       ElementContext | undefined
     >
   >,
+  // BOARD-607: declaration merging for getElement and create
+  Expect<
+    Equal<
+      typeof _tayangPostEl,
+      Readonly<ElementRecord<{ postId: string }>> | undefined
+    >
+  >,
+  Expect<Equal<typeof _tayangPostId, string>>,
+  Expect<
+    Equal<
+      ReturnType<typeof _dummyBoard.create<'tayang-post'>>,
+      Readonly<ElementRecord<{ postId: string }>> | undefined
+    >
+  >,
 ];
 
 declare const _dummyBoard: Board;
 declare const _customEl: ReturnType<typeof _dummyBoard.getElement<'custom-sticky'>>;
 declare const _customQuery: ReturnType<typeof _dummyBoard.query<'custom-sticky'>>;
+declare const _tayangPostEl: ReturnType<typeof _dummyBoard.getElement<'tayang-post'>>;
+declare const _tayangPostId: NonNullable<ReturnType<typeof _dummyBoard.getElement<'tayang-post'>>>['props']['postId'];
+
+// BOARD-607: verify getElement<'tayang-post'>(id)?.props.postId is typed as string
+if (_tayangPostEl) {
+  const _testId: string = _tayangPostEl.props.postId;
+  void _testId;
+}
+
+// BOARD-607: verify board.create({ type: 'sticky', props: ... }) enforces props type when mapped
+_dummyBoard.create({
+  type: 'tayang-post',
+  props: { postId: '123' },
+});
+_dummyBoard.create({
+  type: 'sticky',
+  props: { color: 'yellow' },
+});
+_dummyBoard.create({
+  type: 'unregistered',
+  props: { anything: 123 },
+});
+declare const _partialElem: PartialElement;
+_dummyBoard.create(_partialElem);
+
+// @ts-expect-error wrong props for tayang-post (postId must be string)
+_dummyBoard.create({ type: 'tayang-post', props: { postId: 123 } });
+
+// @ts-expect-error wrong props for sticky (color must be string)
+_dummyBoard.create({ type: 'sticky', props: { color: 42 } });

@@ -14,15 +14,23 @@ interface DragEventOptions {
   clientY?: number;
   types?: string[];
   files?: File[];
+  data?: Record<string, string>;
 }
 
 function createDragEvent(type: string, options: DragEventOptions = {}) {
   const event = new window.Event(type, { bubbles: true, cancelable: true }) as DragEvent;
+  const dataStore = options.data ? { ...options.data } : {};
   const dataTransfer = {
-    types: options.types ?? (options.files && options.files.length > 0 ? ['Files'] : []),
+    types:
+      options.types ??
+      (options.files && options.files.length > 0 ? ['Files'] : Object.keys(dataStore)),
     files: options.files ?? [],
     dropEffect: 'none',
     effectAllowed: 'all',
+    getData: (format: string) => dataStore[format] ?? '',
+    setData: (format: string, data: string) => {
+      dataStore[format] = data;
+    },
   };
   Object.defineProperty(event, 'dataTransfer', { value: dataTransfer, configurable: true });
   Object.defineProperty(event, 'clientX', { value: options.clientX ?? 0, configurable: true });
@@ -356,5 +364,177 @@ describe('BOARD-908: upload lifecycle', () => {
       expect((updated?.props as { uploadStatus: string }).uploadStatus).toBe('error');
       expect((updated?.props as { uploadError: string }).uploadError).toBe('Koneksi terputus ke server');
     });
+  });
+});
+
+describe('BOARD-608: acceptDrop and drop target integration in renderer', () => {
+  it('sets dropEffect = "copy", prevents default, and shows drop preview on dragover for registered types', () => {
+    const { board, root } = setup();
+    board.acceptDrop('application/x-tayang-task', () => {});
+
+    const previews: unknown[] = [];
+    board.on('drag-preview', (e) => previews.push(e));
+
+    // client (250, 150) -> screen (150, 100) -> board (150, 100)
+    const { event, dataTransfer } = createDragEvent('dragover', {
+      clientX: 250,
+      clientY: 150,
+      types: ['application/x-tayang-task'],
+    });
+
+    root.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(dataTransfer.dropEffect).toBe('copy');
+    expect(previews).toHaveLength(1);
+    expect(previews[0]).toEqual({
+      point: { x: 150, y: 100 },
+      type: 'application/x-tayang-task',
+    });
+  });
+
+  it('sets dropEffect = "copy" and shows drop preview on dragenter for registered types', () => {
+    const { board, root } = setup();
+    board.acceptDrop('tayang/card', () => {});
+
+    const previews: unknown[] = [];
+    board.on('drag-preview', (e) => previews.push(e));
+
+    const { event, dataTransfer } = createDragEvent('dragenter', {
+      clientX: 200,
+      clientY: 100,
+      types: ['tayang/card'],
+    });
+
+    root.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(dataTransfer.dropEffect).toBe('copy');
+    expect(previews).toHaveLength(1);
+    expect(previews[0]).toEqual({
+      point: { x: 100, y: 50 },
+      type: 'tayang/card',
+    });
+  });
+
+  it('clears drop preview on dragleave', () => {
+    const { board, root } = setup();
+    board.acceptDrop('application/x-tayang-task', () => {});
+
+    const previews: unknown[] = [];
+    board.on('drag-preview', (e) => previews.push(e));
+
+    const { event: enterEvent } = createDragEvent('dragover', {
+      clientX: 250,
+      clientY: 150,
+      types: ['application/x-tayang-task'],
+    });
+    root.dispatchEvent(enterEvent);
+
+    const { event: leaveEvent } = createDragEvent('dragleave');
+    root.dispatchEvent(leaveEvent);
+
+    expect(previews).toHaveLength(2);
+    expect(previews[1]).toEqual({ point: null });
+  });
+
+  it('parses JSON payload, invokes handler, and selects created elements on drop', async () => {
+    const { board, root } = setup();
+    const createdElement: ElementRecord = {
+      id: 'task-elem-1',
+      kind: 'element',
+      type: 'sticky',
+      pageId: 'page:main',
+      parentId: null,
+      index: 'a0',
+      x: 150,
+      y: 100,
+      w: 160,
+      h: 160,
+      rotation: 0,
+      locked: false,
+      opacity: 1,
+      props: { text: 'Task #101' },
+      meta: {},
+    };
+
+    let receivedPayload: unknown = null;
+    let receivedPoint: unknown = null;
+
+    board.acceptDrop('application/x-tayang-task', (payload, point) => {
+      receivedPayload = payload;
+      receivedPoint = point;
+      // Also insert into board store so select() can find it
+      board.transact((tx) => tx.put(createdElement));
+      return [createdElement];
+    });
+
+    const previews: unknown[] = [];
+    board.on('drag-preview', (e) => previews.push(e));
+
+    const taskData = { taskId: '101', title: 'Implement feature' };
+    const { event } = createDragEvent('drop', {
+      clientX: 250,
+      clientY: 150,
+      types: ['application/x-tayang-task'],
+      data: {
+        'application/x-tayang-task': JSON.stringify(taskData),
+      },
+    });
+
+    root.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    // Drop preview is cleared
+    expect(previews).toContainEqual({ point: null });
+
+    await vi.waitFor(() => {
+      expect(receivedPayload).toEqual(taskData);
+      expect(receivedPoint).toEqual({ x: 150, y: 100 });
+      expect(board.selection).toEqual(['task-elem-1']);
+    });
+  });
+
+  it('handles raw string payload on drop when payload is not JSON', async () => {
+    const { board, root } = setup();
+    let receivedPayload: unknown = null;
+
+    board.acceptDrop('text/custom', (payload) => {
+      receivedPayload = payload;
+    });
+
+    const { event } = createDragEvent('drop', {
+      clientX: 200,
+      clientY: 100,
+      types: ['text/custom'],
+      data: {
+        'text/custom': 'plain-text-payload',
+      },
+    });
+
+    root.dispatchEvent(event);
+
+    await vi.waitFor(() => {
+      expect(receivedPayload).toBe('plain-text-payload');
+    });
+  });
+
+  it('does not execute drop when board is read-only', async () => {
+    const { board, root } = setup({ readOnly: true });
+    const handler = vi.fn();
+    board.acceptDrop('application/x-tayang-task', handler);
+
+    const { event } = createDragEvent('drop', {
+      clientX: 250,
+      clientY: 150,
+      types: ['application/x-tayang-task'],
+      data: {
+        'application/x-tayang-task': JSON.stringify({ id: 1 }),
+      },
+    });
+
+    root.dispatchEvent(event);
+
+    expect(handler).not.toHaveBeenCalled();
   });
 });

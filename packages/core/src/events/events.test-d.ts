@@ -9,6 +9,7 @@ import type {
   CameraEvent,
   CameraFollowEvent,
   ChangeEvent,
+  DragPreviewEvent,
   HistoryEvent,
   PageEvent,
   SelectionEvent,
@@ -44,6 +45,7 @@ export type Tests = [
       | 'history'
       | 'theme'
       | 'dispose'
+      | 'drag-preview'
       | 'sync'
     >
   >,
@@ -58,9 +60,11 @@ export type Tests = [
   Expect<Equal<BoardEventMap['action'], ActionEvent>>,
   Expect<Equal<BoardEventMap['error'], BoardErrorEvent>>,
   Expect<Equal<BoardEventMap['dispose'], undefined>>,
+  Expect<Equal<BoardEventMap['drag-preview'], DragPreviewEvent>>,
   Expect<Equal<BoardEventMap['history'], HistoryEvent>>,
   Expect<Equal<BoardEventMap['theme'], Readonly<ThemeDefinition>>>,
   Expect<Equal<ListenerArg<'camera'>, CameraEvent>>,
+  Expect<Equal<ListenerArg<'drag-preview'>, DragPreviewEvent>>,
   Expect<
     Equal<
       BoardErrorCode,
@@ -74,6 +78,8 @@ export type Tests = [
       | 'render-error'
       | 'resolve-error'
       | 'action-error'
+      | 'undo-hook-error'
+      | 'drop-error'
     >
   >,
   Expect<Equal<ReturnType<Board['undo']>, boolean>>,

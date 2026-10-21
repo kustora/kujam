@@ -838,5 +838,42 @@ describe('BOARD-805: Overlay Renderer', () => {
       expect(view.overlayStats.remoteCursorsCount).toBe(0);
       expect(view.overlayStats.remoteSelectedCount).toBe(0);
     });
+
+    it('renders subtle drop target preview when drop indicator is active (BOARD-608)', () => {
+      const board = createBoard();
+      boards.push(board);
+      board.camera.setViewport({ width: 800, height: 600 });
+      const overlayRenderer = new OverlayRenderer(board);
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 600;
+
+      expect(overlayRenderer.getDropIndicator()).toBeNull();
+
+      // Setting indicator
+      expect(overlayRenderer.setDropIndicator({ x: 250, y: 150 })).toBe(true);
+      expect(overlayRenderer.setDropIndicator({ x: 250, y: 150 })).toBe(false);
+      expect(overlayRenderer.getDropIndicator()).toEqual({ x: 250, y: 150 });
+
+      const ctx = createMockContext();
+      const stats = overlayRenderer.render(canvas, ctx as unknown as CanvasRenderingContext2D, 1);
+
+      expect(stats.rendered).toBe(true);
+      expect(stats.hasDropIndicator).toBe(true);
+      // Renders outer dashed halo and inner dot
+      expect(ctx.arc).toHaveBeenCalled();
+      expect(ctx.stroke).toHaveBeenCalled();
+      expect(ctx.fill).toHaveBeenCalled();
+      expect(ctx.setLineDash).toHaveBeenCalledWith([3, 3]);
+
+      // Clearing indicator
+      expect(overlayRenderer.setDropIndicator(null)).toBe(true);
+      expect(overlayRenderer.getDropIndicator()).toBeNull();
+
+      const ctx2 = createMockContext();
+      const statsCleared = overlayRenderer.render(canvas, ctx2 as unknown as CanvasRenderingContext2D, 1);
+      expect(statsCleared.hasDropIndicator).toBe(false);
+    });
   });
 });

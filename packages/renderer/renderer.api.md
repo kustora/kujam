@@ -181,6 +181,8 @@ export class OverlayRenderer {
     cursorLerpFactor: number;
     // (undocumented)
     getCursors(): readonly RemoteCursor[];
+    // @public
+    getDropIndicator(): Point | null;
     // (undocumented)
     getHovered(): string | null;
     // (undocumented)
@@ -197,6 +199,8 @@ export class OverlayRenderer {
     render(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, pixelRatio: number, now?: number): OverlayRenderStats;
     // (undocumented)
     setCursors(cursors: readonly RemoteCursor[]): void;
+    // @public
+    setDropIndicator(point: Point | null): boolean;
     // (undocumented)
     setHovered(id: string | null): boolean;
     // (undocumented)
@@ -215,6 +219,7 @@ export interface OverlayRenderStats {
     hasActiveStroke: boolean;
     // (undocumented)
     hasBrush: boolean;
+    hasDropIndicator?: boolean;
     hasPendingCursorAnimation?: boolean;
     // (undocumented)
     hoveredId: string | null;

@@ -118,6 +118,7 @@ export interface Board {
     readonly [BOARD_SYNC_HISTORY_DELEGATE]?: BoardSyncHistoryDelegateHook;
     // @internal
     readonly [BOARD_SYNC_PRESENCE_DELEGATE]?: BoardSyncPresenceDelegateHook;
+    acceptDrop<T = unknown>(type: string, handler: DropHandler<T>): () => void;
     // @beta
     addToSelection(ids: SelectionInput): void;
     // @beta
@@ -132,7 +133,9 @@ export interface Board {
     clearSelection(): void;
     readonly commands: BoardCommands;
     // @beta
-    create<T = Record<string, unknown>>(element: PartialElement<ResolveElementProps<T>>, options?: MutateOptions): Readonly<ElementRecord<ResolveElementProps<T>>> | undefined;
+    create<T extends string = string>(element: PartialElement<T extends keyof BoardElementTypes ? BoardElementTypes[T] : Record<string, unknown>> & {
+        type: T;
+    }, options?: MutateOptions): Readonly<ElementRecord<T extends keyof BoardElementTypes ? BoardElementTypes[T] : Record<string, unknown>>> | undefined;
     createId(): string;
     // @beta
     readonly cursor: string;
@@ -142,9 +145,14 @@ export interface Board {
     dispatch(event: BoardInputEvent): boolean;
     dispose(): void;
     readonly disposed: boolean;
+    dropAt(point: Point, type: string, payload: unknown): Promise<readonly ElementRecord[]>;
     // @beta
     readonly elementContext: ElementContext;
     readonly elements: ElementRegistry;
+    // @beta
+    emit<K extends keyof BoardEventMap>(type: K, event: BoardEventMap[K]): void;
+    // @beta
+    emitError(code: BoardErrorCode, message: string, cause?: unknown): void;
     readonly frames: BoardFrames;
     // @beta
     getActions(ids?: SelectionInput): readonly ElementAction[];
@@ -152,11 +160,13 @@ export interface Board {
     getAsset(id: string): Readonly<AssetRecord> | undefined;
     getCamera(): Readonly<CameraState>;
     getDocument(): Readonly<BoardDocument>;
-    getElement<T = Record<string, unknown>>(id: string): Readonly<ElementRecord<ResolveElementProps<T>>> | undefined;
+    getDropTypes(): readonly string[];
+    getElement<T extends string = string>(id: string): Readonly<ElementRecord<T extends keyof BoardElementTypes ? BoardElementTypes[T] : Record<string, unknown>>> | undefined;
     // @beta
     getElementData<D = unknown>(id: string, options?: {
         readonly load?: boolean;
     }): ElementDataState<D>;
+    hasDropHandler(type: string): boolean;
     readonly history: BoardHistory;
     // @beta
     hitTest(point: Point, options?: HitTestOptions): Readonly<ElementRecord> | undefined;
@@ -294,7 +304,7 @@ export interface BoardElementTypes {
 }
 
 // @beta
-export type BoardErrorCode = 'listener-error' | 'invalid-props' | 'invalid-record' | 'forbidden' | 'limit-exceeded' | 'document-too-new' | 'page-not-found' | 'render-error' | 'resolve-error' | 'action-error';
+export type BoardErrorCode = 'listener-error' | 'invalid-props' | 'invalid-record' | 'forbidden' | 'limit-exceeded' | 'document-too-new' | 'page-not-found' | 'render-error' | 'resolve-error' | 'action-error' | 'undo-hook-error' | 'drop-error';
 
 // @public
 export interface BoardErrorEvent {
@@ -307,6 +317,8 @@ export interface BoardErrorEvent {
 // @public
 export interface BoardEventMap {
     'camera-follow': CameraFollowEvent;
+    // @beta
+    'drag-preview': DragPreviewEvent;
     // @beta
     'tool-style': ToolStyleEvent;
     // @beta
@@ -897,6 +909,15 @@ export type DocumentTooNewReason = {
     readonly version: number;
     readonly supported: number;
 };
+
+// @beta
+export interface DragPreviewEvent {
+    readonly point: Point | null;
+    readonly type?: string;
+}
+
+// @public
+export type DropHandler<T = unknown> = (payload: T, point: Point) => void | readonly ElementRecord[] | Promise<void | readonly ElementRecord[]>;
 
 // @beta
 export interface DuplicateArgs {
