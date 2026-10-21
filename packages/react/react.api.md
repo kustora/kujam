@@ -9,8 +9,29 @@ import { BoardBackground } from '@kujam/renderer';
 import { BoardEventMap } from '@kujam/core';
 import { BoardView } from '@kujam/renderer';
 import { CameraState } from '@kujam/core';
+import { ComponentType } from 'react';
 import { CSSProperties } from 'react';
+import { ElementA11y } from '@kujam/core';
+import { ElementAction } from '@kujam/core';
+import { ElementActionContext } from '@kujam/core';
+import { ElementContext } from '@kujam/core';
+import { ElementDefinition } from '@kujam/core';
+import { ElementExporters } from '@kujam/core';
+import { ElementLod } from '@kujam/core';
+import { ElementMigrations } from '@kujam/core';
+import { ElementPlaceholder } from '@kujam/core';
+import { ElementRecord } from '@kujam/core';
+import { ElementRenderers } from '@kujam/core';
+import { ElementResize } from '@kujam/core';
+import { ElementResolveContext } from '@kujam/core';
+import { ElementSize } from '@kujam/core';
+import { Geometry } from '@kujam/core';
+import { InferShape } from '@kujam/core';
+import { ObjectSchema } from '@kujam/core';
 import { ReactElement } from 'react';
+import { ResolveErrorStatus } from '@kujam/core';
+import { ResolveResult } from '@kujam/core';
+import { SchemaShape } from '@kujam/core';
 import { ThemeDefinition } from '@kujam/core';
 import { ThemeMode } from '@kujam/core';
 
@@ -24,6 +45,7 @@ export interface BoardProps {
     // (undocumented)
     readonly className?: string;
     readonly debug?: boolean;
+    readonly elements?: Readonly<Record<string, CustomElementComponent>>;
     readonly onClipboardError?: (error: unknown) => void;
     readonly onMount?: (view: BoardView) => void | (() => void);
     readonly pixelRatio?: number;
@@ -31,6 +53,49 @@ export interface BoardProps {
     readonly style?: CSSProperties;
     readonly theme?: ThemeMode | ThemeDefinition;
 }
+
+// @public
+export type CustomElementComponent<P = any, D = any> = ComponentType<CustomElementComponentProps<P, D>>;
+
+// @public
+export interface CustomElementComponentProps<P = Record<string, unknown>, D = unknown> {
+    // (undocumented)
+    readonly board: Board_2;
+    // (undocumented)
+    readonly data: D | undefined;
+    // (undocumented)
+    readonly element: ElementRecord<P>;
+    // (undocumented)
+    readonly status: ElementDataStatus;
+}
+
+// @public
+export function defineReactElement<const T extends string, S extends SchemaShape = Record<string, never>, D = unknown>(options: DefineReactElementOptions<T, S, D>): ElementDefinition<T, S, D>;
+
+// @public
+export interface DefineReactElementOptions<T extends string = string, S extends SchemaShape = Record<string, never>, D = unknown> {
+    readonly a11y?: (el: ElementRecord<InferShape<S>>, data: D | undefined, ctx: ElementContext) => ElementA11y;
+    readonly actions?: (el: ElementRecord<InferShape<S>>, data: D | undefined, ctx: ElementActionContext<InferShape<S>>) => readonly ElementAction[];
+    readonly component: CustomElementComponent<InferShape<S>, D>;
+    readonly connectable?: boolean;
+    readonly defaults?: Partial<InferShape<S>>;
+    readonly export?: ElementExporters<InferShape<S>, D>;
+    readonly geometry?: (el: ElementRecord<InferShape<S>>) => Geometry;
+    readonly lod?: ElementLod;
+    readonly migrate?: ElementMigrations;
+    readonly minSize?: ElementSize;
+    readonly onDoubleClick?: (el: ElementRecord<InferShape<S>>, ctx: ElementContext) => void;
+    readonly placeholder?: (reason: ResolveErrorStatus | 'loading') => ElementPlaceholder;
+    readonly props?: ObjectSchema<S>;
+    readonly render?: ElementRenderers<InferShape<S>, D>;
+    readonly resize?: ElementResize<InferShape<S>>;
+    readonly resolve?: (el: ElementRecord<InferShape<S>>, ctx: ElementResolveContext) => ResolveResult<D>;
+    readonly type: T;
+    readonly version?: number;
+}
+
+// @public
+export type ElementDataStatus = 'loading' | 'ready' | 'forbidden' | 'not-found' | 'error';
 
 // @public
 export type EqualityFn<T> = (a: T, b: T) => boolean;

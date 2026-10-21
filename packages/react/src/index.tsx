@@ -4,7 +4,17 @@
  * @packageDocumentation
  */
 
-export { Board, type BoardProps } from './board.js';
+export {
+  Board,
+  type BoardProps,
+  type CustomElementComponent,
+  type CustomElementComponentProps,
+  type ElementDataStatus,
+} from './board.js';
+export {
+  defineReactElement,
+  type DefineReactElementOptions,
+} from './elements.js';
 export {
   useBoardEvent,
   useCamera,
