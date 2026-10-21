@@ -83,6 +83,7 @@ export type Tests = [
       | 'action-error'
       | 'undo-hook-error'
       | 'drop-error'
+      | 'plugin-error'
     >
   >,
   Expect<Equal<ReturnType<Board['undo']>, boolean>>,

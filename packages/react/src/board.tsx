@@ -140,7 +140,7 @@ export function Board({
     [board],
   );
 
-  const portals = useSyncExternalStore(bridge.subscribe, bridge.getSnapshot);
+  const portals = useSyncExternalStore(bridge.subscribe, bridge.getSnapshot, bridge.getSnapshot);
 
   useEffect(() => {
     bridge.updateComponents();

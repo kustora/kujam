@@ -181,6 +181,8 @@ export interface Board {
     loadDocument(doc: BoardDocument): void;
     // (undocumented)
     readonly locale: BoardLocale;
+    // @beta
+    notifyDocumentSaved(doc: Readonly<BoardDocument>): void;
     on<K extends keyof BoardEventMap>(type: K, listener: Listener<BoardEventMap[K]>): Unsubscribe;
     // @beta
     readonly pages: BoardPages;
@@ -304,7 +306,7 @@ export interface BoardElementTypes {
 }
 
 // @beta
-export type BoardErrorCode = 'listener-error' | 'invalid-props' | 'invalid-record' | 'forbidden' | 'limit-exceeded' | 'document-too-new' | 'page-not-found' | 'render-error' | 'resolve-error' | 'action-error' | 'undo-hook-error' | 'drop-error';
+export type BoardErrorCode = 'listener-error' | 'invalid-props' | 'invalid-record' | 'forbidden' | 'limit-exceeded' | 'document-too-new' | 'page-not-found' | 'render-error' | 'resolve-error' | 'action-error' | 'undo-hook-error' | 'drop-error' | 'plugin-error';
 
 // @public
 export interface BoardErrorEvent {
@@ -771,6 +773,9 @@ export function createMemorySyncAdapter(options?: MemorySyncAdapterOptions): Syn
 
 // @public
 export function createMemorySyncBus(): MemorySyncBus;
+
+// @public
+export function createPresetResizeHandler<P = Record<string, unknown>>(presets: SizePresets): ElementResizeHandler<P>;
 
 // @public
 export function createSpatialIndex(getGeometry?: (el: ElementRecord) => Geometry | undefined): SpatialIndex;
@@ -2253,6 +2258,9 @@ export type SelectionInput = string | readonly string[];
 
 // @public
 export function serializeClipboard(board: Board, ids?: readonly string[]): ClipboardPayload | null;
+
+// @public
+export type SizePresets = Readonly<Record<string, ElementSize>>;
 
 // @beta
 export interface SnapGuide {

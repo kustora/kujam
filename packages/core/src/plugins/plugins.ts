@@ -25,6 +25,10 @@ import { checkKeybindingMap } from '../tools/keybindings.js';
 import { checkMessagesMap, type BoardMessages } from '../i18n/i18n.js';
 import { defineTool, type AnyToolDefinition, type BoardTools, type ToolError } from '../tools/tools.js';
 import type { BoardDocument, ElementRecord } from '../types.js';
+import type { BoardErrorCode } from '../events/events.js';
+
+const isThenable = (v: unknown): v is PromiseLike<unknown> =>
+  typeof v === 'object' && v !== null && typeof (v as { then?: unknown }).then === 'function';
 
 // ---------- Plugin extension points ----------
 
@@ -134,6 +138,15 @@ export type PermissionHook = (
 
 /**
  * Hook called after a document is successfully saved by a storage adapter (BOARD-1210).
+ *
+ * **Note — Authoritative indices & references:**
+ * Real, authoritative indices (such as database search indices, external card references,
+ * or relational foreign keys) **MUST** be built on the server (for example during storage API
+ * verification or server-side document extraction, see BOARD-1802). This client-side hook
+ * is intended purely for client needs (such as updating local client caches, in-memory UI
+ * saved indicators, or background client analytics).
+ *
+ * Errors thrown or rejected by this hook do NOT fail or roll back the storage save operation.
  *
  * @beta
  */
@@ -246,6 +259,9 @@ export interface PluginDefinition<
   readonly permissions?: PermissionHook;
   /**
    * Hook run after a storage adapter saves the document (BOARD-1210).
+   *
+   * Note: Authoritative indices and references must be built on the server (BOARD-1802);
+   * this hook is for client needs. Errors thrown by this hook do not cancel save.
    *
    * @beta
    */
@@ -754,6 +770,7 @@ export interface PluginRuntimeOptions {
   brushes: BrushRegistry;
   i18n?: { addPluginMessages(messages: BoardMessages): void };
   plugins: Iterable<AnyPluginDefinition> | undefined;
+  emitError?: (code: BoardErrorCode, message: string, cause: unknown) => void;
 }
 
 /** @internal */
@@ -762,17 +779,19 @@ export interface PluginRuntime {
   install(): void;
   dispose(): void;
   getPermissions(): readonly PermissionHook[];
+  notifyDocumentSaved(doc: Readonly<BoardDocument>): void;
 }
 
 /** @internal */
 export function createPluginRuntime(options: PluginRuntimeOptions): PluginRuntime {
-  const { getBoard, elements, tools, commands, brushes, i18n } = options;
+  const { getBoard, elements, tools, commands, brushes, i18n, emitError } = options;
   const ordered =
     options.plugins === undefined ? Object.freeze([]) : resolvePluginOrder(options.plugins);
   const byId = new Map<string, AnyPluginDefinition>();
   const teardowns: PluginTeardown[] = [];
   const unregisters: (() => void)[] = [];
   const permissionHooks: PermissionHook[] = [];
+  const documentSavedHooks: DocumentSavedHook[] = [];
 
   function rollback(): void {
     for (let i = teardowns.length - 1; i >= 0; i--) {
@@ -788,6 +807,7 @@ export function createPluginRuntime(options: PluginRuntimeOptions): PluginRuntim
     }
     unregisters.length = 0;
     permissionHooks.length = 0;
+    documentSavedHooks.length = 0;
     byId.clear();
   }
 
@@ -818,6 +838,9 @@ export function createPluginRuntime(options: PluginRuntimeOptions): PluginRuntim
           }
           if (typeof plugin.permissions === 'function') {
             permissionHooks.push(plugin.permissions);
+          }
+          if (typeof plugin.onDocumentSaved === 'function') {
+            documentSavedHooks.push(plugin.onDocumentSaved);
           }
           if (plugin.messages !== undefined) {
             i18n?.addPluginMessages(plugin.messages);
@@ -854,11 +877,34 @@ export function createPluginRuntime(options: PluginRuntimeOptions): PluginRuntim
       }
       unregisters.length = 0;
       permissionHooks.length = 0;
+      documentSavedHooks.length = 0;
       byId.clear();
       if (hasError) throw firstError;
     },
     getPermissions() {
       return Object.freeze([...permissionHooks]);
+    },
+    notifyDocumentSaved(doc: Readonly<BoardDocument>): void {
+      for (const hook of documentSavedHooks) {
+        try {
+          const res = hook(doc);
+          if (isThenable(res)) {
+            Promise.resolve(res).catch((error) => {
+              emitError?.(
+                'plugin-error',
+                `Hook onDocumentSaved melempar error: ${error instanceof Error ? error.message : String(error)}`,
+                error,
+              );
+            });
+          }
+        } catch (error) {
+          emitError?.(
+            'plugin-error',
+            `Hook onDocumentSaved melempar error: ${error instanceof Error ? error.message : String(error)}`,
+            error,
+          );
+        }
+      }
     },
   };
 }

@@ -527,3 +527,108 @@ describe('BOARD-1601: dispose event', () => {
     expect(seen).toEqual([true]);
   });
 });
+
+describe('BOARD-1210: onDocumentSaved plugin hook', () => {
+  it('calls onDocumentSaved with the saved document snapshot upon save success', async () => {
+    vi.useRealTimers();
+    const savedSnapshots: BoardDocument[] = [];
+    const saveTrackerPlugin = definePlugin({
+      id: 'save-tracker',
+      dependsOn: ['notes'],
+      onDocumentSaved: (doc) => {
+        savedSnapshots.push(doc as BoardDocument);
+      },
+    });
+
+    const board = createBoard({ plugins: [notes, saveTrackerPlugin] });
+    const adapter = fakeAdapter();
+    const storage = attachStorage(board, adapter, { boardId: 'b1', debounceMs: 10 });
+    await storage.ready;
+
+    board.create({ id: 'note-1', type: 'note', props: { text: 'Halo' } });
+    const saved = await storage.flush();
+    expect(saved).toBe(true);
+    expect(savedSnapshots).toHaveLength(1);
+    expect(savedSnapshots[0].records['note-1']).toBeDefined();
+    expect((savedSnapshots[0].records['note-1'] as any).props.text).toBe('Halo');
+  });
+
+  it('isolates synchronous errors thrown by onDocumentSaved without canceling save', async () => {
+    vi.useRealTimers();
+    const errors: any[] = [];
+    const faultyPlugin = definePlugin({
+      id: 'faulty-plugin',
+      dependsOn: ['notes'],
+      onDocumentSaved: () => {
+        throw new Error('Simulated synchronous hook crash');
+      },
+    });
+
+    const board = createBoard({ plugins: [notes, faultyPlugin] });
+    board.on('error', (e) => errors.push(e));
+
+    const adapter = fakeAdapter();
+    const storage = attachStorage(board, adapter, { boardId: 'b1', debounceMs: 10 });
+    await storage.ready;
+
+    board.create({ id: 'note-err', type: 'note', props: { text: 'Test' } });
+    const saved = await storage.flush();
+
+    expect(saved).toBe(true);
+    expect(adapter.saves).toHaveLength(1);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].code).toBe('plugin-error');
+    expect(errors[0].message).toContain('Hook onDocumentSaved melempar error');
+  });
+
+  it('isolates asynchronous rejections returned by onDocumentSaved without canceling save', async () => {
+    vi.useRealTimers();
+    const errors: any[] = [];
+    const asyncFaultyPlugin = definePlugin({
+      id: 'async-faulty-plugin',
+      dependsOn: ['notes'],
+      onDocumentSaved: async () => {
+        await Promise.resolve();
+        throw new Error('Simulated async hook rejection');
+      },
+    });
+
+    const board = createBoard({ plugins: [notes, asyncFaultyPlugin] });
+    board.on('error', (e) => errors.push(e));
+
+    const adapter = fakeAdapter();
+    const storage = attachStorage(board, adapter, { boardId: 'b1', debounceMs: 10 });
+    await storage.ready;
+
+    board.create({ id: 'note-async-err', type: 'note', props: { text: 'Async' } });
+    const saved = await storage.flush();
+
+    expect(saved).toBe(true);
+    expect(adapter.saves).toHaveLength(1);
+
+    // Wait a tick for microtask promise rejection handling
+    await new Promise((r) => setTimeout(r, 10));
+    expect(errors).toHaveLength(1);
+    expect(errors[0].code).toBe('plugin-error');
+    expect(errors[0].message).toContain('Hook onDocumentSaved melempar error');
+  });
+
+  it('supports direct invocation via board.notifyDocumentSaved', () => {
+    vi.useRealTimers();
+    const savedSnapshots: BoardDocument[] = [];
+    const saveTrackerPlugin = definePlugin({
+      id: 'direct-save-tracker',
+      dependsOn: ['notes'],
+      onDocumentSaved: (doc) => {
+        savedSnapshots.push(doc as BoardDocument);
+      },
+    });
+
+    const board = createBoard({ plugins: [notes, saveTrackerPlugin] });
+    const doc = board.getDocument();
+    board.notifyDocumentSaved(doc);
+
+    expect(savedSnapshots).toHaveLength(1);
+    expect(savedSnapshots[0]).toBe(doc);
+  });
+});

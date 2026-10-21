@@ -108,6 +108,7 @@ export interface ActionEvent {
  * - `action-error`: an element action failed (BOARD-1205).
  * - `undo-hook-error`: a callback registered via `tx.onUndo` or `tx.onRedo` threw an error or rejected (BOARD-303).
  * - `drop-error`: a drop handler threw an unhandled error (BOARD-608).
+ * - `plugin-error`: a plugin hook (such as `onDocumentSaved`) threw an error or rejected (BOARD-1210).
  *
  * @beta
  */
@@ -123,7 +124,8 @@ export type BoardErrorCode =
   | 'resolve-error'
   | 'action-error'
   | 'undo-hook-error'
-  | 'drop-error';
+  | 'drop-error'
+  | 'plugin-error';
 
 /**
  * Payload of the `error` event.

@@ -333,6 +333,13 @@ export function attachStorage(
         await Promise.resolve().then(() => adapter.save(boardId, { document }));
         attempt = 1;
         events.emit('save:success', Object.freeze({ boardId, document }));
+        try {
+          (
+            board as { notifyDocumentSaved?(doc: Readonly<BoardDocument>): void }
+          ).notifyDocumentSaved?.(document);
+        } catch {
+          // Hook errors are handled inside notifyDocumentSaved and must never disrupt save completion.
+        }
       } catch (error) {
         running = null;
         dirty = true;

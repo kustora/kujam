@@ -978,6 +978,23 @@ export interface Board {
    * @beta
    */
   emit<K extends keyof BoardEventMap>(type: K, event: BoardEventMap[K]): void;
+  /**
+   * Notifies installed plugins that the document has been saved (BOARD-1210).
+   *
+   * Automatically invoked by storage adapters (see `attachStorage`) upon a successful save,
+   * passing the saved document snapshot. Also callable manually by custom storage integrations.
+   *
+   * Errors thrown or rejected by plugin hooks are non-blocking (do not disrupt or cancel saving)
+   * and are reported as `error` events with code `'plugin-error'`.
+   *
+   * Note: Authoritative indices and external references MUST be built and validated on the
+   * server (BOARD-1802). This client hook is provided for local UI convenience (such as updating
+   * local caches or UI saved indicators).
+   *
+   * @param doc - Saved document snapshot.
+   * @beta
+   */
+  notifyDocumentSaved(doc: Readonly<BoardDocument>): void;
   /** Creates a new record ID using the `createId` option (nanoid by default). */
   createId(): string;
   /**
@@ -2185,6 +2202,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     brushes: brushes.api,
     i18n,
     plugins: options.plugins,
+    emitError: (code, message, cause) => emitError(code, message, cause),
   });
 
   /**
@@ -2758,6 +2776,10 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     emit<K extends keyof BoardEventMap>(type: K, event: BoardEventMap[K]): void {
       if (disposed) return;
       events.emit(type, event);
+    },
+    notifyDocumentSaved(doc: Readonly<BoardDocument>): void {
+      if (disposed) return;
+      plugins.notifyDocumentSaved(doc);
     },
     dispose(): void {
       if (disposed) return;

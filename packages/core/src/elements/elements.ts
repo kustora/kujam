@@ -248,6 +248,66 @@ export type ElementResizeHandler<P> = {
 export type ElementResize<P> = ElementResizeMode | ElementResizeHandler<P>;
 
 /**
+ * Map of named size presets to width and height dimensions in board units (BOARD-1213).
+ *
+ * @public
+ */
+export type SizePresets = Readonly<Record<string, ElementSize>>;
+
+/**
+ * Creates an {@link ElementResizeHandler} that maps continuous handle drag dimensions
+ * to the nearest predefined size preset (such as `'s'`, `'m'`, `'l'`) (BOARD-1213).
+ *
+ * Snapping is determined by Euclidean distance in (w, h) space. If `presets` is empty,
+ * `proposed` size is returned unchanged.
+ *
+ * @example
+ * ```ts
+ * const cardResize = createPresetResizeHandler({
+ *   s: { w: 160, h: 100 },
+ *   m: { w: 240, h: 150 },
+ *   l: { w: 320, h: 200 },
+ * });
+ *
+ * defineElement({
+ *   type: 'card',
+ *   version: 1,
+ *   props: object({}),
+ *   resize: cardResize,
+ * });
+ * ```
+ *
+ * @public
+ */
+export function createPresetResizeHandler<P = Record<string, unknown>>(
+  presets: SizePresets,
+): ElementResizeHandler<P> {
+  const entries = Object.entries(presets);
+  if (entries.length === 0) {
+    return (_el, proposed) => proposed;
+  }
+
+  return (_el, proposed) => {
+    const first = entries[0];
+    if (!first) return proposed;
+    let best = first[1];
+    let minDistanceSq = Number.POSITIVE_INFINITY;
+
+    for (const [, size] of entries) {
+      const dw = proposed.w - size.w;
+      const dh = proposed.h - size.h;
+      const distSq = dw * dw + dh * dh;
+      if (distSq < minDistanceSq) {
+        minDistanceSq = distSq;
+        best = size;
+      }
+    }
+
+    return best;
+  };
+}
+
+/**
  * HTML view returned by `render.html`.
  *
  * @beta
