@@ -125,6 +125,12 @@ export function useCamera<T>(board: Board_2, selector: (camera: Readonly<CameraS
 export function useHistory(board: Board_2): HistoryState;
 
 // @public
+export function useResolved<D = unknown>(board: Board_2, resolver: string, id: string): {
+    data: D | undefined;
+    status: ElementDataStatus;
+};
+
+// @public
 export function useSelection(board: Board_2): readonly string[];
 
 // @public

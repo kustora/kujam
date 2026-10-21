@@ -18,11 +18,13 @@
   ],
   "scripts": {
     "build": "tsup",
+    "test": "vitest run --root ../.. packages/server/src",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@kujam/core": "workspace:*"
+    "@kujam/core": "workspace:*",
+    "@kujam/sync-yjs": "workspace:*"
   }
 }

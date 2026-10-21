@@ -4,10 +4,48 @@
 
 ```ts
 
+import { AnyElementDefinition } from '@kujam/core';
+import { BoardDocument } from '@kujam/core';
+import { BoardLimits } from '@kujam/core';
+import { DocumentPropsValidator } from '@kujam/core';
+import { ElementRegistry } from '@kujam/core';
+import { PluginDefinition } from '@kujam/core';
 import { validateDocument } from '@kujam/core';
 import { ValidationResult } from '@kujam/core';
 
+// @public
+export interface CardPlacementReference {
+    readonly elementId: string;
+    readonly frameId?: string;
+    readonly id: string;
+    readonly pageId: string;
+    readonly resolver: string;
+}
+
+// @public
+export function extractReferences(docOrUpdate: BoardDocument | Uint8Array, options?: ExtractReferencesOptions): readonly CardPlacementReference[];
+
+// @public
+export interface ExtractReferencesOptions {
+    readonly elements?: readonly AnyElementDefinition[];
+    readonly plugins?: readonly PluginDefinition[];
+    readonly registry?: ElementRegistry;
+    readonly types?: readonly string[];
+}
+
 export { validateDocument }
+
+// @public
+export function validateServerDocument(docOrUpdate: BoardDocument | Uint8Array | unknown, options?: ValidateServerDocumentOptions): ValidationResult;
+
+// @public
+export interface ValidateServerDocumentOptions {
+    readonly elements?: readonly AnyElementDefinition[];
+    readonly limits?: Partial<BoardLimits>;
+    readonly plugins?: readonly PluginDefinition[];
+    readonly registry?: DocumentPropsValidator;
+    readonly strict?: boolean;
+}
 
 export { ValidationResult }
 

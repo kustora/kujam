@@ -11,7 +11,15 @@ import {
   type Board as CoreBoard,
 } from '@kujam/core';
 import type { BoardView } from '@kujam/renderer';
-import { Board, useBoardEvent, useCamera, useHistory, useSelection, useTool } from './index.js';
+import {
+  Board,
+  useBoardEvent,
+  useCamera,
+  useHistory,
+  useResolved,
+  useSelection,
+  useTool,
+} from './index.js';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -290,5 +298,137 @@ describe('BOARD-1302: hooks', () => {
     act(() => board.dispose());
     expect(selection.latest()).toEqual([]);
     expect(history.latest()).toMatchObject({ canUndo: false, canRedo: false });
+  });
+
+  describe('BOARD-1306: useResolved', () => {
+    it('returns synchronous resolver data and status ready immediately', () => {
+      const board = createBoard({
+        resolvers: {
+          item: (id) => ({ title: `Item ${id}` }),
+        },
+      });
+      boards.push(board);
+
+      const { latest } = probe(() => useResolved(board, 'item', 'i1'));
+      expect(latest()).toEqual({
+        data: { title: 'Item i1' },
+        status: 'ready',
+      });
+    });
+
+    it('handles async resolver with loading then ready', async () => {
+      let resolvePromise: (val: { content: string }) => void;
+      const promise = new Promise<{ content: string }>((resolve) => {
+        resolvePromise = resolve;
+      });
+
+      const board = createBoard({
+        resolvers: {
+          asyncItem: () => promise,
+        },
+      });
+      boards.push(board);
+
+      const { latest } = probe(() => useResolved(board, 'asyncItem', 'a1'));
+      expect(latest()).toEqual({
+        data: undefined,
+        status: 'loading',
+      });
+
+      await act(async () => {
+        resolvePromise({ content: 'Async Loaded' });
+        await promise;
+      });
+
+      expect(latest()).toEqual({
+        data: { content: 'Async Loaded' },
+        status: 'ready',
+      });
+    });
+
+    it('re-evaluates when board.invalidate(resolver, id) is called', () => {
+      let currentTitle = 'Original';
+      const board = createBoard({
+        resolvers: {
+          item: (id) => ({ title: `${currentTitle} ${id}` }),
+        },
+      });
+      boards.push(board);
+
+      const { latest } = probe(() => useResolved(board, 'item', 'p1'));
+      expect(latest()).toEqual({
+        data: { title: 'Original p1' },
+        status: 'ready',
+      });
+
+      act(() => {
+        currentTitle = 'Updated';
+        board.invalidate('item', 'p1');
+      });
+
+      expect(latest()).toEqual({
+        data: { title: 'Updated p1' },
+        status: 'ready',
+      });
+    });
+
+    it('re-evaluates when board.invalidate(resolver) is called without id', () => {
+      let currentTitle = 'Initial';
+      const board = createBoard({
+        resolvers: {
+          item: (id) => ({ title: `${currentTitle} ${id}` }),
+        },
+      });
+      boards.push(board);
+
+      const { latest } = probe(() => useResolved(board, 'item', 'p2'));
+      expect(latest()).toEqual({
+        data: { title: 'Initial p2' },
+        status: 'ready',
+      });
+
+      act(() => {
+        currentTitle = 'Broad Invalidate';
+        board.invalidate('item');
+      });
+
+      expect(latest()).toEqual({
+        data: { title: 'Broad Invalidate p2' },
+        status: 'ready',
+      });
+    });
+
+    it('handles ResolveError status for forbidden and not-found', () => {
+      const board = createBoard({
+        resolvers: {
+          secret: () => ({ status: 'forbidden' }),
+          missing: () => ({ status: 'not-found', message: 'Item gone' }),
+        },
+      });
+      boards.push(board);
+
+      const secret = probe(() => useResolved(board, 'secret', 's1'));
+      const missing = probe(() => useResolved(board, 'missing', 'm1'));
+
+      expect(secret.latest()).toEqual({
+        data: undefined,
+        status: 'forbidden',
+      });
+      expect(missing.latest()).toEqual({
+        data: undefined,
+        status: 'not-found',
+      });
+    });
+
+    it('returns error status when resolver is not registered', () => {
+      const board = createBoard();
+      boards.push(board);
+
+      const { latest } = probe(() => useResolved(board, 'unknown-resolver', 'u1'));
+      expect(latest()).toEqual({
+        data: undefined,
+        status: 'error',
+      });
+    });
   });
 });

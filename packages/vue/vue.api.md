@@ -9,9 +9,30 @@ import { BoardBackground } from '@kujam/renderer';
 import { BoardEventMap } from '@kujam/core';
 import { BoardView } from '@kujam/renderer';
 import { CameraState } from '@kujam/core';
+import { Component } from 'vue';
+import { ElementA11y } from '@kujam/core';
+import { ElementAction } from '@kujam/core';
+import { ElementActionContext } from '@kujam/core';
+import { ElementContext } from '@kujam/core';
+import { ElementDefinition } from '@kujam/core';
+import { ElementExporters } from '@kujam/core';
+import { ElementLod } from '@kujam/core';
+import { ElementMigrations } from '@kujam/core';
+import { ElementPlaceholder } from '@kujam/core';
+import { ElementRecord } from '@kujam/core';
+import { ElementRenderers } from '@kujam/core';
+import { ElementResize } from '@kujam/core';
+import { ElementResolveContext } from '@kujam/core';
+import { ElementSize } from '@kujam/core';
+import { Geometry } from '@kujam/core';
+import { InferShape } from '@kujam/core';
 import { MaybeRefOrGetter } from 'vue';
+import { ObjectSchema } from '@kujam/core';
 import { PropType } from 'vue';
 import { Ref } from 'vue';
+import { ResolveErrorStatus } from '@kujam/core';
+import { ResolveResult } from '@kujam/core';
+import { SchemaShape } from '@kujam/core';
 import { ThemeDefinition } from '@kujam/core';
 import { ThemeMode } from '@kujam/core';
 import * as vue from 'vue';
@@ -36,6 +57,10 @@ export const Board: vue.DefineComponent<vue.ExtractPropTypes<{
     };
     pixelRatio: {
         type: NumberConstructor;
+        default: undefined;
+    };
+    elements: {
+        type: PropType<Readonly<Record<string, Component>>>;
         default: undefined;
     };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
@@ -65,16 +90,64 @@ export const Board: vue.DefineComponent<vue.ExtractPropTypes<{
         type: NumberConstructor;
         default: undefined;
     };
+    elements: {
+        type: PropType<Readonly<Record<string, Component>>>;
+        default: undefined;
+    };
 }>> & Readonly<{
     onMount?: ((view: BoardView) => any) | undefined;
     onUnmount?: ((view: BoardView) => any) | undefined;
     "onClipboard-error"?: ((error: unknown) => any) | undefined;
 }>, {
-    theme: ThemeMode | ThemeDefinition;
+    theme: ThemeDefinition | ThemeMode;
     background: BoardBackground;
     debug: boolean;
     pixelRatio: number;
+    elements: Readonly<Record<string, Component>>;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
+
+// @public
+export type CustomVueComponent<P = any, D = any> = Component<CustomVueElementProps<P, D>>;
+
+// @public
+export interface CustomVueElementProps<P = Record<string, unknown>, D = unknown> {
+    // (undocumented)
+    readonly board: Board_2;
+    // (undocumented)
+    readonly data: D | undefined;
+    // (undocumented)
+    readonly element: ElementRecord<P>;
+    // (undocumented)
+    readonly status: ElementDataStatus;
+}
+
+// @public
+export function defineVueElement<const T extends string, S extends SchemaShape = Record<string, never>, D = unknown>(options: DefineVueElementOptions<T, S, D>): ElementDefinition<T, S, D>;
+
+// @public
+export interface DefineVueElementOptions<T extends string = string, S extends SchemaShape = Record<string, never>, D = unknown> {
+    readonly a11y?: (el: ElementRecord<InferShape<S>>, data: D | undefined, ctx: ElementContext) => ElementA11y;
+    readonly actions?: (el: ElementRecord<InferShape<S>>, data: D | undefined, ctx: ElementActionContext<InferShape<S>>) => readonly ElementAction[];
+    readonly component: CustomVueComponent<InferShape<S>, D> | Component;
+    readonly connectable?: boolean;
+    readonly defaults?: Partial<InferShape<S>>;
+    readonly export?: ElementExporters<InferShape<S>, D>;
+    readonly geometry?: (el: ElementRecord<InferShape<S>>) => Geometry;
+    readonly lod?: ElementLod;
+    readonly migrate?: ElementMigrations;
+    readonly minSize?: ElementSize;
+    readonly onDoubleClick?: (el: ElementRecord<InferShape<S>>, ctx: ElementContext) => void;
+    readonly placeholder?: (reason: ResolveErrorStatus | 'loading') => ElementPlaceholder;
+    readonly props?: ObjectSchema<S>;
+    readonly render?: ElementRenderers<InferShape<S>, D>;
+    readonly resize?: ElementResize<InferShape<S>>;
+    readonly resolve?: (el: ElementRecord<InferShape<S>>, ctx: ElementResolveContext) => ResolveResult<D>;
+    readonly type: T;
+    readonly version?: number;
+}
+
+// @public
+export type ElementDataStatus = 'loading' | 'ready' | 'forbidden' | 'not-found' | 'error';
 
 // @public
 export type EqualityFn<T> = (a: T, b: T) => boolean;
@@ -102,6 +175,12 @@ export function useCamera<T>(board: MaybeRefOrGetter<Board_2>, selector: (camera
 
 // @public
 export function useHistory(board: MaybeRefOrGetter<Board_2>): HistoryState;
+
+// @public
+export function useResolved<D = unknown>(board: Board_2, resolver: MaybeRefOrGetter<string>, id: MaybeRefOrGetter<string>): {
+    readonly data: Ref<D | undefined>;
+    readonly status: Ref<ElementDataStatus>;
+};
 
 // @public
 export function useSelection(board: MaybeRefOrGetter<Board_2>): Readonly<Ref<readonly string[]>>;

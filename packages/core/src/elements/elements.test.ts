@@ -253,6 +253,21 @@ describe('defineElement', () => {
       ]);
     }
   });
+
+  it('memeriksa references pada definisi elemen (BOARD-1802)', () => {
+    expect(definitionErrors(() => card({ references: 'not-a-fn' }))).toEqual([
+      'references wajib berupa fungsi.',
+    ]);
+
+    const def = card({
+      references: (el: ElementRecord<{ refId: string }>) => [
+        { resolver: 'card', id: el.props.refId },
+      ],
+    });
+    expect(def.references?.(element({ refId: 'c-123', size: 'm' }))).toEqual([
+      { resolver: 'card', id: 'c-123' },
+    ]);
+  });
 });
 
 describe('createElementRegistry', () => {

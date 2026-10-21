@@ -1,5 +1,5 @@
 /**
- * Vue composables over board state (BOARD-1303).
+ * Vue composables over board state (BOARD-1303, BOARD-1306).
  *
  * Each composable returns a read-only `shallowRef` that follows the board through its events, and
  * stops listening in `onScopeDispose` (component unmount, or `effectScope().stop()`). The board can
@@ -18,7 +18,10 @@ import {
   type MaybeRefOrGetter,
   type Ref,
 } from 'vue';
-import type { Board, BoardEventMap, CameraState } from '@kujam/core';
+import { isResolveError, type Board, type BoardEventMap, type CameraState } from '@kujam/core';
+import type { ElementDataStatus } from './teleport-bridge.js';
+
+export { type ElementDataStatus };
 
 /**
  * Equality function for selector results.
@@ -208,4 +211,157 @@ export function useBoardEvent<K extends keyof BoardEventMap>(
     { immediate: true },
   );
   stopWithScope(stop);
+}
+
+type InvalidateListener = (resolver: string, id?: string) => void;
+const invalidateListenersByBoard = new WeakMap<Board, Set<InvalidateListener>>();
+
+function subscribeToInvalidate(
+  board: Board,
+  listener: InvalidateListener,
+): () => void {
+  if (board.disposed) return () => {};
+  let listeners = invalidateListenersByBoard.get(board);
+  if (!listeners) {
+    listeners = new Set();
+    invalidateListenersByBoard.set(board, listeners);
+
+    const originalInvalidate = board.invalidate.bind(board);
+    board.invalidate = (resolver: string, id?: string) => {
+      originalInvalidate(resolver, id);
+      const set = invalidateListenersByBoard.get(board);
+      if (set) {
+        for (const fn of Array.from(set)) {
+          fn(resolver, id);
+        }
+      }
+    };
+  }
+  listeners.add(listener);
+  return () => {
+    listeners?.delete(listener);
+  };
+}
+
+const isThenable = (v: unknown): v is PromiseLike<unknown> =>
+  (typeof v === 'object' || typeof v === 'function') &&
+  v !== null &&
+  typeof (v as { then?: unknown }).then === 'function';
+
+/**
+ * Subscribes to external data resolver state (BOARD-1306).
+ *
+ * Evaluates the resolver for the given ID, re-evaluating when data changes or when
+ * `board.invalidate(resolver, id)` is called.
+ *
+ * @param board - The board instance.
+ * @param resolver - The resolver name registered in `board.resolvers`.
+ * @param id - The ID to resolve.
+ * @returns An object containing reactive refs for `data` and `status`.
+ * @public
+ */
+export function useResolved<D = unknown>(
+  board: Board,
+  resolver: MaybeRefOrGetter<string>,
+  id: MaybeRefOrGetter<string>,
+): {
+  readonly data: Ref<D | undefined>;
+  readonly status: Ref<ElementDataStatus>;
+} {
+  const data = shallowRef<D | undefined>(undefined);
+  const status = shallowRef<ElementDataStatus>('loading');
+  let generation = 0;
+
+  const stop = watch(
+    () => [toValue(resolver), toValue(id)] as const,
+    ([currentResolver, currentId], _prev, onCleanup) => {
+      const evaluate = (): void => {
+        const currentGen = ++generation;
+        const fn = board.resolvers?.[currentResolver];
+
+        if (typeof fn !== 'function') {
+          const el = board.getElement?.(currentId);
+          if (el) {
+            const elData = board.getElementData?.(currentId, { load: false });
+            if (
+              elData &&
+              elData.status === 'ready' &&
+              'data' in elData &&
+              elData.data !== undefined
+            ) {
+              data.value = (elData as { readonly data: unknown }).data as D;
+              status.value = 'ready';
+              return;
+            }
+          }
+          data.value = undefined;
+          status.value = 'error';
+          return;
+        }
+
+        try {
+          const result = fn(currentId);
+          if (isThenable(result)) {
+            status.value = 'loading';
+            data.value = undefined;
+            Promise.resolve(result).then(
+              (val) => {
+                if (generation !== currentGen) return;
+                if (isResolveError(val)) {
+                  status.value = val.status as ElementDataStatus;
+                  data.value = undefined;
+                } else {
+                  data.value = val as D;
+                  status.value = 'ready';
+                }
+              },
+              (err) => {
+                if (generation !== currentGen) return;
+                status.value = isResolveError(err) ? (err.status as ElementDataStatus) : 'error';
+                data.value = undefined;
+              },
+            );
+          } else {
+            if (isResolveError(result)) {
+              status.value = result.status as ElementDataStatus;
+              data.value = undefined;
+            } else {
+              data.value = result as D;
+              status.value = 'ready';
+            }
+          }
+        } catch (err) {
+          status.value = isResolveError(err) ? (err.status as ElementDataStatus) : 'error';
+          data.value = undefined;
+        }
+      };
+
+      evaluate();
+
+      if (!board.disposed) {
+        const unsubData = board.on('data', (event) => {
+          if (event.ids.includes(currentId)) {
+            evaluate();
+          }
+        });
+        const unsubInvalidate = subscribeToInvalidate(board, (res, targetId) => {
+          if (res === currentResolver && (targetId === undefined || targetId === currentId)) {
+            evaluate();
+          }
+        });
+        onCleanup(() => {
+          unsubData();
+          unsubInvalidate();
+        });
+      }
+    },
+    { immediate: true },
+  );
+
+  stopWithScope(stop);
+
+  return {
+    data,
+    status,
+  };
 }

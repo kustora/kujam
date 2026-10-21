@@ -270,5 +270,24 @@ export function testElementContract(
     if (text !== undefined && typeof text !== 'string') fail('export.text', 'must return a string');
   }
 
+  // references (BOARD-1802)
+  if (definition.references) {
+    const refs = attempt('references', () => definition.references!(el as never));
+    if (refs !== undefined) {
+      if (!Array.isArray(refs)) {
+        fail('references', 'must return an array');
+      } else {
+        for (const ref of refs) {
+          if (typeof ref?.resolver !== 'string' || ref.resolver === '') {
+            fail('references', 'every reference needs a string resolver');
+          }
+          if (typeof ref?.id !== 'string' || ref.id === '') {
+            fail('references', 'every reference needs a string id');
+          }
+        }
+      }
+    }
+  }
+
   return issues;
 }

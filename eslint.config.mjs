@@ -50,7 +50,7 @@ const KUJAM_ALLOWED_IMPORTS = {
   'storage-memory': ['core'],
   'storage-indexeddb': ['core'],
   'storage-http': ['core'],
-  server: ['core'],
+  server: ['core', 'sync-yjs'],
   ui: ['core', 'renderer'],
   react: ['core', 'renderer'],
   vue: ['core', 'renderer'],

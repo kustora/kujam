@@ -399,6 +399,18 @@ export type ElementPropsMigration = (props: Record<string, unknown>) => Record<s
 export type ElementMigrations = Readonly<Record<number, ElementPropsMigration>>;
 
 /**
+ * External reference declared by an element (BOARD-1802).
+ *
+ * @public
+ */
+export interface ElementReference {
+  /** Resolver name handling this reference. */
+  readonly resolver: string;
+  /** Referenced entity ID. */
+  readonly id: string;
+}
+
+/**
  * Element type definition. Created with {@link defineElement}.
  *
  * `T` is the type name, `S` the props schema shape, and `D` the data type from `resolve`
@@ -477,6 +489,13 @@ export interface ElementDefinition<
    * @beta
    */
   placeholder?(reason: ResolveErrorStatus | 'loading'): ElementPlaceholder;
+  /**
+   * External entity references declared by this element (BOARD-1802),
+   * used by the server to build card placement indices.
+   *
+   * @public
+   */
+  references?(el: ElementRecord<InferShape<S>>): readonly ElementReference[];
 }
 
 /**
@@ -638,7 +657,7 @@ function collectElementDefinitionErrors(definition: unknown): string[] {
   checkFunctions(
     def,
     '',
-    ['geometry', 'onDoubleClick', 'a11y', 'resolve', 'actions', 'placeholder'],
+    ['geometry', 'onDoubleClick', 'a11y', 'resolve', 'actions', 'placeholder', 'references'],
     errors,
   );
 

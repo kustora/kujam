@@ -315,6 +315,9 @@ importers:
       '@kujam/core':
         specifier: workspace:*
         version: link:../core
+      '@kujam/sync-yjs':
+        specifier: workspace:*
+        version: link:../sync-yjs
 
   packages/shapes:
     dependencies:

@@ -4,9 +4,22 @@
  * @packageDocumentation
  */
 
+export {
+  validateServerDocument,
+  type ValidateServerDocumentOptions,
+} from './validate.js';
+
+export {
+  extractReferences,
+  type CardPlacementReference,
+  type ExtractReferencesOptions,
+} from './references.js';
+
 /**
- * Document validation uses the same implementation as the client (`@kujam/core`),
- * so the rules on the server and in the browser never differ.
+ * Re-export of canonical document validation from `@kujam/core`.
+ *
+ * For server-specific features such as binary Yjs updates and strict mode,
+ * use {@link validateServerDocument}.
  *
  * @public
  */

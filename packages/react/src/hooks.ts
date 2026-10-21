@@ -6,8 +6,9 @@
  * selected value changes according to `isEqual` (default `Object.is`).
  */
 
-import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
-import type { Board, BoardEventMap, CameraState } from '@kujam/core';
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { isResolveError, type Board, type BoardEventMap, type CameraState } from '@kujam/core';
+import type { ElementDataStatus } from './portal-bridge.js';
 
 /**
  * Equality function for selector results.
@@ -207,4 +208,223 @@ export function useBoardEvent<K extends keyof BoardEventMap>(
     if (board.disposed) return;
     return board.on(type, (event) => listenerRef.current(event));
   }, [board, type]);
+}
+
+type InvalidateListener = (resolver: string, id?: string) => void;
+const invalidateListenersByBoard = new WeakMap<Board, Set<InvalidateListener>>();
+
+function subscribeToInvalidate(
+  board: Board,
+  listener: InvalidateListener,
+): () => void {
+  if (board.disposed) return () => {};
+  let listeners = invalidateListenersByBoard.get(board);
+  if (!listeners) {
+    listeners = new Set();
+    invalidateListenersByBoard.set(board, listeners);
+
+    const originalInvalidate = board.invalidate.bind(board);
+    board.invalidate = (resolver: string, id?: string) => {
+      originalInvalidate(resolver, id);
+      const set = invalidateListenersByBoard.get(board);
+      if (set) {
+        for (const fn of Array.from(set)) {
+          fn(resolver, id);
+        }
+      }
+    };
+  }
+  listeners.add(listener);
+  return () => {
+    listeners?.delete(listener);
+  };
+}
+
+const isThenable = (v: unknown): v is PromiseLike<unknown> =>
+  (typeof v === 'object' || typeof v === 'function') &&
+  v !== null &&
+  typeof (v as { then?: unknown }).then === 'function';
+
+interface ResolverSnapshot<D> {
+  readonly data: D | undefined;
+  readonly status: ElementDataStatus;
+}
+
+class ResolverStore<D = unknown> {
+  private snapshot: ResolverSnapshot<D>;
+  private generation = 0;
+  private readonly listeners = new Set<() => void>();
+  private readonly unsubData: () => void;
+  private readonly unsubInvalidate: () => void;
+
+  constructor(
+    readonly board: Board,
+    readonly resolver: string,
+    readonly id: string,
+  ) {
+    this.snapshot = Object.freeze({ data: undefined, status: 'loading' });
+    this.unsubData = board.disposed
+      ? () => {}
+      : board.on('data', (event) => {
+          if (event.ids.includes(id)) {
+            this.evaluate();
+          }
+        });
+    this.unsubInvalidate = subscribeToInvalidate(board, (res, targetId) => {
+      if (res === resolver && (targetId === undefined || targetId === id)) {
+        this.evaluate();
+      }
+    });
+    this.evaluate();
+  }
+
+  getSnapshot = (): ResolverSnapshot<D> => {
+    return this.snapshot;
+  };
+
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  };
+
+  private notify(): void {
+    for (const listener of Array.from(this.listeners)) {
+      listener();
+    }
+  }
+
+  evaluate(): void {
+    const currentGen = ++this.generation;
+    const fn = this.board.resolvers?.[this.resolver];
+
+    if (typeof fn !== 'function') {
+      const el = this.board.getElement?.(this.id);
+      if (el) {
+        const elData = this.board.getElementData?.(this.id, { load: false });
+        if (
+          elData &&
+          elData.status === 'ready' &&
+          'data' in elData &&
+          elData.data !== undefined
+        ) {
+          this.snapshot = Object.freeze({
+            data: (elData as { readonly data: unknown }).data as D,
+            status: 'ready',
+          });
+          this.notify();
+          return;
+        }
+      }
+      this.snapshot = Object.freeze({
+        data: undefined,
+        status: 'error',
+      });
+      this.notify();
+      return;
+    }
+
+    try {
+      const result = fn(this.id);
+      if (isThenable(result)) {
+        if (this.snapshot.status !== 'loading') {
+          this.snapshot = Object.freeze({ data: undefined, status: 'loading' });
+          this.notify();
+        }
+        Promise.resolve(result).then(
+          (val) => {
+            if (this.generation !== currentGen) return;
+            if (isResolveError(val)) {
+              this.snapshot = Object.freeze({
+                data: undefined,
+                status: val.status as ElementDataStatus,
+              });
+            } else {
+              this.snapshot = Object.freeze({
+                data: val as D,
+                status: 'ready',
+              });
+            }
+            this.notify();
+          },
+          (err) => {
+            if (this.generation !== currentGen) return;
+            const status: ElementDataStatus = isResolveError(err)
+              ? (err.status as ElementDataStatus)
+              : 'error';
+            this.snapshot = Object.freeze({
+              data: undefined,
+              status,
+            });
+            this.notify();
+          },
+        );
+      } else {
+        if (isResolveError(result)) {
+          this.snapshot = Object.freeze({
+            data: undefined,
+            status: result.status as ElementDataStatus,
+          });
+        } else {
+          this.snapshot = Object.freeze({
+            data: result as D,
+            status: 'ready',
+          });
+        }
+        this.notify();
+      }
+    } catch (err) {
+      const status: ElementDataStatus = isResolveError(err)
+        ? (err.status as ElementDataStatus)
+        : 'error';
+      this.snapshot = Object.freeze({
+        data: undefined,
+        status,
+      });
+      this.notify();
+    }
+  }
+
+  destroy(): void {
+    this.unsubData();
+    this.unsubInvalidate();
+  }
+}
+
+const resolverStoresByBoard = new WeakMap<Board, Map<string, ResolverStore<unknown>>>();
+
+/**
+ * Subscribes to external data resolver state (BOARD-1306).
+ *
+ * Evaluates the resolver for the given ID, re-evaluating when data changes or when
+ * `board.invalidate(resolver, id)` is called.
+ *
+ * @param board - The board instance.
+ * @param resolver - The resolver name registered in `board.resolvers`.
+ * @param id - The ID to resolve.
+ * @returns An object containing the resolved `data` and current `status`.
+ * @public
+ */
+export function useResolved<D = unknown>(
+  board: Board,
+  resolver: string,
+  id: string,
+): { data: D | undefined; status: ElementDataStatus } {
+  const store = useMemo(() => {
+    let boardStores = resolverStoresByBoard.get(board);
+    if (!boardStores) {
+      boardStores = new Map();
+      resolverStoresByBoard.set(board, boardStores);
+    }
+    const key = `${resolver}\0${id}`;
+    let s = boardStores.get(key);
+    if (!s) {
+      s = new ResolverStore<D>(board, resolver, id);
+      boardStores.set(key, s);
+    }
+    return s as ResolverStore<D>;
+  }, [board, resolver, id]);
+
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
 }

@@ -19,6 +19,7 @@ export {
   useBoardEvent,
   useCamera,
   useHistory,
+  useResolved,
   useSelection,
   useTool,
   type EqualityFn,

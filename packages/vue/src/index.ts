@@ -4,11 +4,19 @@
  * @packageDocumentation
  */
 
-export { Board } from './board.js';
+export {
+  Board,
+  defineVueElement,
+  type CustomVueComponent,
+  type CustomVueElementProps,
+  type DefineVueElementOptions,
+  type ElementDataStatus,
+} from './board.js';
 export {
   useBoardEvent,
   useCamera,
   useHistory,
+  useResolved,
   useSelection,
   useTool,
   type EqualityFn,

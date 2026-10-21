@@ -10,7 +10,15 @@ import {
   type Board as CoreBoard,
 } from '@kujam/core';
 import type { BoardView } from '@kujam/renderer';
-import { Board, useBoardEvent, useCamera, useHistory, useSelection, useTool } from './index.js';
+import {
+  Board,
+  useBoardEvent,
+  useCamera,
+  useHistory,
+  useResolved,
+  useSelection,
+  useTool,
+} from './index.js';
 
 const box = defineElement({ type: 'box', version: 1, props: object({}), defaults: {} });
 const plugin = definePlugin({
@@ -283,5 +291,149 @@ describe('BOARD-1303: composables', () => {
     apps = apps.filter((a) => a !== app);
     board.setTool('select');
     expect(tool!.value).toBe('hand');
+  });
+
+  describe('BOARD-1306: useResolved', () => {
+    it('returns synchronous resolver data and status ready immediately', () => {
+      const board = createBoard({
+        resolvers: {
+          item: (id) => ({ title: `Item ${id}` }),
+        },
+      });
+      boards.push(board);
+
+      const { result, stop } = inScope(() => useResolved(board, 'item', 'i1'));
+      expect(result.data.value).toEqual({ title: 'Item i1' });
+      expect(result.status.value).toBe('ready');
+      stop();
+    });
+
+    it('handles async resolver with loading then ready', async () => {
+      let resolvePromise: ((val: { content: string }) => void) | undefined;
+      const promise = new Promise<{ content: string }>((resolve) => {
+        resolvePromise = resolve;
+      });
+
+      const board = createBoard({
+        resolvers: {
+          asyncItem: () => promise,
+        },
+      });
+      boards.push(board);
+
+      const { result, stop } = inScope(() => useResolved(board, 'asyncItem', 'a1'));
+      expect(result.data.value).toBeUndefined();
+      expect(result.status.value).toBe('loading');
+
+      resolvePromise!({ content: 'Async Loaded' });
+      await promise;
+      await nextTick();
+
+      expect(result.data.value).toEqual({ content: 'Async Loaded' });
+      expect(result.status.value).toBe('ready');
+      stop();
+    });
+
+    it('re-evaluates when board.invalidate(resolver, id) is called', async () => {
+      let currentTitle = 'Original';
+      const board = createBoard({
+        resolvers: {
+          item: (id) => ({ title: `${currentTitle} ${id}` }),
+        },
+      });
+      boards.push(board);
+
+      const { result, stop } = inScope(() => useResolved(board, 'item', 'p1'));
+      expect(result.data.value).toEqual({ title: 'Original p1' });
+      expect(result.status.value).toBe('ready');
+
+      currentTitle = 'Updated';
+      board.invalidate('item', 'p1');
+      await nextTick();
+
+      expect(result.data.value).toEqual({ title: 'Updated p1' });
+      expect(result.status.value).toBe('ready');
+      stop();
+    });
+
+    it('re-evaluates when board.invalidate(resolver) is called without id', async () => {
+      let currentTitle = 'Initial';
+      const board = createBoard({
+        resolvers: {
+          item: (id) => ({ title: `${currentTitle} ${id}` }),
+        },
+      });
+      boards.push(board);
+
+      const { result, stop } = inScope(() => useResolved(board, 'item', 'p2'));
+      expect(result.data.value).toEqual({ title: 'Initial p2' });
+      expect(result.status.value).toBe('ready');
+
+      currentTitle = 'Broad Invalidate';
+      board.invalidate('item');
+      await nextTick();
+
+      expect(result.data.value).toEqual({ title: 'Broad Invalidate p2' });
+      expect(result.status.value).toBe('ready');
+      stop();
+    });
+
+    it('follows ref changes for resolver and id', async () => {
+      const board = createBoard({
+        resolvers: {
+          item: (id) => ({ title: `Item ${id}` }),
+          user: (id) => ({ name: `User ${id}` }),
+        },
+      });
+      boards.push(board);
+
+      const resRef = shallowRef('item');
+      const idRef = shallowRef('1');
+
+      const { result, stop } = inScope(() => useResolved(board, resRef, idRef));
+      expect(result.data.value).toEqual({ title: 'Item 1' });
+
+      idRef.value = '2';
+      await nextTick();
+      expect(result.data.value).toEqual({ title: 'Item 2' });
+
+      resRef.value = 'user';
+      await nextTick();
+      expect(result.data.value).toEqual({ name: 'User 2' });
+
+      stop();
+    });
+
+    it('handles ResolveError status for forbidden and not-found', () => {
+      const board = createBoard({
+        resolvers: {
+          secret: () => ({ status: 'forbidden' }),
+          missing: () => ({ status: 'not-found', message: 'Item gone' }),
+        },
+      });
+      boards.push(board);
+
+      const secret = inScope(() => useResolved(board, 'secret', 's1'));
+      const missing = inScope(() => useResolved(board, 'missing', 'm1'));
+
+      expect(secret.result.data.value).toBeUndefined();
+      expect(secret.result.status.value).toBe('forbidden');
+
+      expect(missing.result.data.value).toBeUndefined();
+      expect(missing.result.status.value).toBe('not-found');
+
+      secret.stop();
+      missing.stop();
+    });
+
+    it('returns error status when resolver is not registered', () => {
+      const board = createBoard();
+      boards.push(board);
+
+      const { result, stop } = inScope(() => useResolved(board, 'unknown-resolver', 'u1'));
+      expect(result.data.value).toBeUndefined();
+      expect(result.status.value).toBe('error');
+      stop();
+    });
   });
 });

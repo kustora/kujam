@@ -1101,6 +1101,7 @@ export interface ElementDefinition<T extends string = string, S extends SchemaSh
     // @beta
     placeholder?(reason: ResolveErrorStatus | 'loading'): ElementPlaceholder;
     readonly props: ObjectSchema<S>;
+    references?(el: ElementRecord<InferShape<S>>): readonly ElementReference[];
     readonly render?: ElementRenderers<InferShape<S>, D>;
     readonly resize?: ElementResize<InferShape<S>>;
     // @beta
@@ -1243,6 +1244,12 @@ export interface ElementRecord<P = Record<string, unknown>> {
     x: number;
     // (undocumented)
     y: number;
+}
+
+// @public
+export interface ElementReference {
+    readonly id: string;
+    readonly resolver: string;
 }
 
 // @public
