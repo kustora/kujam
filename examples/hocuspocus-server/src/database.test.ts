@@ -80,3 +80,41 @@ describe('DocumentDatabase (SQLite)', () => {
     db2.close();
   });
 });
+
+describe('BOARD-1515: DocumentDatabase compaction', () => {
+  it('compacts a stored update log without changing the document', async () => {
+    const Y = await import('yjs');
+    const db = new DocumentDatabase({ path: ':memory:' });
+    try {
+      const doc = new Y.Doc();
+      const log: Uint8Array[] = [];
+      doc.on('update', (update: Uint8Array) => log.push(update));
+      const text = doc.getText('t');
+      // Edits that delete most of what they insert, like rewriting a note over and over.
+      for (let i = 0; i < 500; i++) {
+        text.insert(0, `draft ${i} `.repeat(6));
+        text.delete(0, 50);
+      }
+      // A store that appended every update, merged without garbage collection.
+      db.storeDocument('doc-log', Y.mergeUpdates(log));
+      db.storeDocument('doc-broken', new Uint8Array([1, 2, 3, 250]));
+
+      const errors: string[] = [];
+      const results = db.compactAll({
+        skip: (name) => name === 'doc-skipped',
+        onError: (name) => errors.push(name),
+      });
+      expect(errors).toEqual(['doc-broken']);
+      const result = results.find((r) => r.name === 'doc-log')!;
+      expect(result.after).toBeLessThan(result.before);
+
+      const restored = new Y.Doc();
+      Y.applyUpdate(restored, db.loadDocument('doc-log')!);
+      expect(restored.getText('t').toString()).toBe(text.toString());
+      expect(Y.encodeStateVector(restored)).toEqual(Y.encodeStateVector(doc));
+      expect(db.compactDocument('missing')).toBeNull();
+    } finally {
+      db.close();
+    }
+  });
+});

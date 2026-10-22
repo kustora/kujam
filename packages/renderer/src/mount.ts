@@ -11,7 +11,8 @@
  * views, so several boards (or iframes) on one page never affect each other.
  */
 
-import type { Board, ContextMenuEvent, Point, PresenceApi, ThemeDefinition, ThemeMode, ViewportSize } from '@kujam/core';
+import type { Anchor, Board, ContextMenuEvent, Point, PresenceApi, ThemeDefinition, ThemeMode, ViewportSize } from '@kujam/core';
+import { AnchorLayer, type AnchorPin } from './layers/anchor-layer.js';
 import { HtmlLayer, type EditorBounds } from './layers/html-layer.js';
 import { attachInput } from './input/input.js';
 import { attachClipboard } from './input/clipboard.js';
@@ -70,6 +71,7 @@ export interface RendererOptions {
   readonly shortTextThreshold?: number;
   /**
    * Hook called when a URL is pasted (BOARD-907). When returning `true`, the URL is treated as handled.
+   * Otherwise the plugins' `onPasteUrl` hooks run next (BOARD-1209), then the URL is pasted as text.
    */
   readonly onPasteUrl?: (url: string, point: Point, board: Board) => boolean | Promise<boolean>;
   /**
@@ -135,6 +137,13 @@ export interface RendererLayers {
   readonly a11y: HTMLDivElement;
   /** Overlay canvas for selection, handles, the selection box, and snap guides. */
   readonly overlay: HTMLCanvasElement;
+  /**
+   * Slot layer above the overlay for application pins placed at anchors (BOARD-1211), filled
+   * through {@link BoardView.mountAnchor}. Passes pointer events through except on the pins.
+   *
+   * @public
+   */
+  readonly anchors: HTMLDivElement;
 }
 
 /**
@@ -171,6 +180,17 @@ export interface BoardView {
    *   that moment, focus returns to the selected element's accessibility item, or to the view.
    */
   mountEditor(editor: HTMLElement, bounds: EditorBounds, elementId?: string): () => void;
+  /**
+   * Places an application element, such as a comment pin, at an anchor in the anchors layer
+   * (BOARD-1211). The element keeps its screen size, follows the camera and element anchors, and
+   * is hidden while the anchor's element is missing or on another page. Its wrapper is a zero-size
+   * box at the anchor point, so the application aligns the pin with its own CSS (for example
+   * `transform: translate(-50%, -100%)` for a marker whose tip touches the point).
+   *
+   * @throws `TypeError` when `element` is not a DOM element or `anchor` is invalid.
+   * @public
+   */
+  mountAnchor(element: HTMLElement, anchor: Anchor): AnchorPin;
   /**
    * Schedules a render on the next animation frame. Several calls before that frame produce one
    * render. No effect after unmount.
@@ -350,7 +370,8 @@ export function mountRenderer(
   // The canvases carry no semantics; the a11y layer describes their content (BOARD-1901).
   canvas.setAttribute('aria-hidden', 'true');
   overlay.setAttribute('aria-hidden', 'true');
-  root.append(canvas, html, a11y, overlay);
+  const anchorsLayer = createLayer(doc, 'div', 'anchors', false);
+  root.append(canvas, html, a11y, overlay, anchorsLayer);
   container.appendChild(root);
 
   const lodManager = new LodManager();
@@ -362,7 +383,9 @@ export function mountRenderer(
     htmlCamera: htmlLayer.cameraHost,
     a11y,
     overlay,
+    anchors: anchorsLayer,
   });
+  const anchorLayer = new AnchorLayer(board, anchorsLayer);
   const a11yTree = new A11yTree(board, root, a11y, { interactive: htmlLayer.elementsHost });
   const announcer = new Announcer(board, a11y, { auto: options.announcements !== false });
   const overlayRenderer = new OverlayRenderer(board);
@@ -540,6 +563,7 @@ export function mountRenderer(
     setBackingSize(canvas, size.width, size.height);
     setBackingSize(overlay, size.width, size.height);
     board.camera.setViewport(size);
+    anchorLayer.updateAll();
     canvasRenderer.markAllDirty();
     scheduleRender();
   }
@@ -560,11 +584,13 @@ export function mountRenderer(
 
   const unsubscribers = [
     board.on('camera', () => {
+      anchorLayer.updateAll();
       canvasRenderer.markAllDirty();
       a11yTree.onCamera();
       scheduleRender();
     }),
     board.on('page', () => {
+      anchorLayer.updateAll();
       canvasRenderer.markAllDirty();
       lodManager.clear();
       thumbnailCache.clear();
@@ -575,12 +601,14 @@ export function mountRenderer(
     board.on('change', (event) => {
       canvasRenderer.markChange(event);
       htmlLayer.onChange(event);
+      anchorLayer.onChange(event);
       a11yTree.onChange(event);
       scheduleRender();
     }),
     // External data loaded, failed, or was invalidated: redraw only those elements (BOARD-1203).
     board.on('data', (event) => {
       canvasRenderer.markElements(event.ids);
+      a11yTree.onData(event.ids);
       scheduleRender();
     }),
     board.on('selection', (event) => {
@@ -668,6 +696,7 @@ export function mountRenderer(
     a11yTree.dispose();
     announcer.dispose();
     htmlLayer.dispose();
+    anchorLayer.dispose();
     lodManager.clear();
     thumbnailCache.clear();
     root.remove();
@@ -750,6 +779,10 @@ export function mountRenderer(
         remove();
         if (hadFocus && mounted) a11yTree.restoreFocus();
       };
+    },
+    mountAnchor(element, anchor) {
+      if (!mounted) throw new Error('View sudah di-unmount.');
+      return anchorLayer.mount(element, anchor);
     },
     requestRender,
     announce(message: string) {

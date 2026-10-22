@@ -16,12 +16,14 @@ export {
   type RendererOptions,
   type RenderStats,
 } from './mount.js';
+export type { AnchorPin } from './layers/anchor-layer.js';
 export { LodManager, LOD_HYSTERESIS_BUFFER } from './layers/lod.js';
 export {
   CanvasRenderer,
   type CanvasLike,
 } from './layers/render-canvas.js';
 export {
+  createDrawingContext,
   ThumbnailCache,
   type DrawTextOptions,
   type DrawThumbnailOptions,

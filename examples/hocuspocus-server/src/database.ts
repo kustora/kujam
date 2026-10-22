@@ -10,6 +10,7 @@
 import DatabaseConstructor, { type Database as SQLiteDatabase } from 'better-sqlite3';
 import { dirname } from 'node:path';
 import { mkdirSync } from 'node:fs';
+import { compactUpdate } from '@kujam/sync-yjs';
 
 /**
  * Options for configuring the SQLite persistence database.
@@ -35,6 +36,17 @@ export interface StoredDocumentMeta {
   name: string;
   updatedAt: number;
   size: number;
+}
+
+/**
+ * Result of compacting one stored document (BOARD-1515).
+ */
+export interface CompactionResult {
+  name: string;
+  /** Stored size in bytes before compaction. */
+  before: number;
+  /** Stored size in bytes after compaction. */
+  after: number;
 }
 
 /**
@@ -150,6 +162,57 @@ export class DocumentDatabase {
       `SELECT name, updated_at AS updatedAt, length(data) AS size FROM "${this.tableName}" ORDER BY updated_at DESC`,
     );
     return stmt.all() as StoredDocumentMeta[];
+  }
+
+  /**
+   * Re-encodes a stored document state so it stays compact (BOARD-1515): the state is loaded into
+   * a garbage-collected `Y.Doc` and encoded again with `compactUpdate` from `@kujam/sync-yjs`.
+   * The document keeps its CRDT identity, so connected clients and offline caches are not
+   * affected. The row is only rewritten when the result is smaller.
+   *
+   * @param documentName - Document identifier to compact.
+   * @param maxUpdateBytes - Largest stored state accepted for compaction.
+   * @returns Sizes before and after, or `null` when the document does not exist.
+   */
+  compactDocument(documentName: string, maxUpdateBytes?: number): CompactionResult | null {
+    const state = this.loadDocument(documentName);
+    if (!state) return null;
+    const compacted = compactUpdate(state, maxUpdateBytes === undefined ? {} : { maxUpdateBytes });
+    if (compacted.byteLength < state.byteLength) {
+      this.storeDocument(documentName, compacted);
+    }
+    return {
+      name: documentName,
+      before: state.byteLength,
+      after: Math.min(state.byteLength, compacted.byteLength),
+    };
+  }
+
+  /**
+   * Compacts every stored document (BOARD-1515), for example from a periodic job. Documents that
+   * fail to compact (corrupt or too large) are skipped and reported through `onError`.
+   *
+   * @param options.skip - Returns `true` for documents to leave alone, for example documents that
+   *   are loaded in the server right now (they are re-encoded on every store anyway).
+   */
+  compactAll(
+    options: {
+      skip?: (documentName: string) => boolean;
+      onError?: (documentName: string, error: unknown) => void;
+      maxUpdateBytes?: number;
+    } = {},
+  ): CompactionResult[] {
+    const results: CompactionResult[] = [];
+    for (const { name } of this.listDocuments()) {
+      if (options.skip?.(name)) continue;
+      try {
+        const result = this.compactDocument(name, options.maxUpdateBytes);
+        if (result) results.push(result);
+      } catch (error) {
+        options.onError?.(name, error);
+      }
+    }
+    return results;
   }
 
   /**

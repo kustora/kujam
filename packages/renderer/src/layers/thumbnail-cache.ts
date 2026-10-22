@@ -209,9 +209,10 @@ export class ThumbnailCache {
 }
 
 /**
- * Creates an `ElementCanvasContext` wrapper with helpers for custom elements (BOARD-1204).
+ * Creates an `ElementCanvasContext` wrapper with helpers for custom elements (BOARD-1204). Also
+ * used by `@kujam/export` to draw elements onto export canvases (BOARD-1703, BOARD-1708).
  *
- * @internal
+ * @beta
  */
 export function createDrawingContext(
   ctx: CanvasRenderingContext2D,

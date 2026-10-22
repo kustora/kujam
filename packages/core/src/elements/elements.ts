@@ -7,7 +7,7 @@
  */
 
 import type { BrushDefinition } from './brushes.js';
-import type { Geometry } from '../geometry/geometry.js';
+import type { Geometry, Point } from '../geometry/geometry.js';
 import type { InferShape, ObjectSchema, SchemaResult, SchemaShape } from '../document/schema.js';
 import { object, validate } from '../document/schema.js';
 import type { ThemeDefinition } from '../theme/theme.js';
@@ -432,6 +432,73 @@ export interface ElementActionContext<P = Record<string, unknown>> extends Eleme
 }
 
 /**
+ * Context passed to a drop target's `onDrop` (BOARD-1208): the element context plus what the
+ * target needs to absorb the dropped element. Every change made while `onDrop` runs, together
+ * with the move that carried the element there, forms one transaction and one undo step.
+ *
+ * @beta
+ */
+export interface ElementDropContext<P = Record<string, unknown>> extends ElementContext {
+  /**
+   * Merges `patch` into the target's props, like `board.update(target.id, { props: patch })`,
+   * for example to append the dropped element's ID to a list.
+   *
+   * @returns `false` when the update was rejected (for example the props fail the type schema).
+   */
+  updateProps(patch: Partial<P>): boolean;
+  /**
+   * Deletes the dropped element (and its descendants), for targets that absorb what is dropped.
+   * When not called, the dropped element is kept where it was released.
+   *
+   * @returns `false` when the deletion was rejected (for example by a permission hook).
+   */
+  removeDropped(): boolean;
+}
+
+/**
+ * Makes an element type accept other elements dropped onto it with the select tool (BOARD-1208),
+ * for example a collection element that gathers item cards. While accepted elements are dragged
+ * over the target it is highlighted; on release `onDrop` runs once per accepted element.
+ *
+ * @example
+ * ```ts
+ * defineElement({
+ *   type: 'collection',
+ *   version: 1,
+ *   props: schema({ itemIds: array(string()) }),
+ *   dropTarget: {
+ *     accepts: (dropped) => dropped.type === 'item-card',
+ *     onDrop(target, dropped, _point, ctx) {
+ *       ctx.updateProps({ itemIds: [...target.props.itemIds, String(dropped.props.itemId)] });
+ *       ctx.removeDropped();
+ *     },
+ *   },
+ * });
+ * ```
+ *
+ * @beta
+ */
+export interface ElementDropTarget<P = Record<string, unknown>> {
+  /**
+   * Whether `dropped` may be dropped onto `target`. Called often while dragging, so it must be
+   * cheap and free of side effects. A throwing `accepts` counts as `false`.
+   */
+  accepts(dropped: Readonly<ElementRecord>, target: Readonly<ElementRecord<P>>): boolean;
+  /**
+   * Called on release for each accepted element. `target` is the latest version of the target
+   * (it already includes changes made for elements dropped before this one); `point` is the
+   * release position in board coordinates. A throwing `onDrop` rolls back the changes of the
+   * whole drop (the move itself is kept) and is reported as a `plugin-error` event.
+   */
+  onDrop(
+    target: Readonly<ElementRecord<P>>,
+    dropped: Readonly<ElementRecord>,
+    point: Point,
+    ctx: ElementDropContext<P>,
+  ): void;
+}
+
+/**
  * Placeholder content when data is unavailable (BOARD-1202).
  *
  * @beta
@@ -549,6 +616,12 @@ export interface ElementDefinition<
    * @beta
    */
   placeholder?(reason: ResolveErrorStatus | 'loading'): ElementPlaceholder;
+  /**
+   * Lets other elements be dropped onto this one (BOARD-1208); see {@link ElementDropTarget}.
+   *
+   * @beta
+   */
+  readonly dropTarget?: ElementDropTarget<InferShape<S>>;
   /**
    * External entity references declared by this element (BOARD-1802),
    * used by the server to build card placement indices.
@@ -745,6 +818,17 @@ function collectElementDefinitionErrors(definition: unknown): string[] {
     else errors.push('export wajib berupa objek { text?, svg? }.');
   }
   if (def.migrate !== undefined) checkMigrations(def.migrate, def.version, errors);
+  if (def.dropTarget !== undefined) {
+    if (isPlainObject(def.dropTarget)) {
+      for (const key of ['accepts', 'onDrop'] as const) {
+        if (typeof def.dropTarget[key] !== 'function') {
+          errors.push(`dropTarget.${key} wajib berupa fungsi.`);
+        }
+      }
+    } else {
+      errors.push('dropTarget wajib berupa objek { accepts, onDrop }.');
+    }
+  }
   if (def.lod !== undefined) {
     const zoom = isPlainObject(def.lod) ? def.lod.compactBelowZoom : undefined;
     if (typeof zoom !== 'number' || !Number.isFinite(zoom) || zoom <= 0) {

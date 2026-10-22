@@ -133,6 +133,8 @@ export interface OverlayRenderStats {
   hoveredId: string | null;
   /** Whether a visual drop target indicator is currently rendered (BOARD-608). */
   hasDropIndicator?: boolean;
+  /** ID of the element highlighted as an element drop target, if any (BOARD-1208). */
+  dropTargetId?: string | null;
   /** Number of remote collaborator elements currently selected (BOARD-808). */
   remoteSelectedCount?: number;
   /** Number of active remote cursors rendered (BOARD-808). */
@@ -147,12 +149,16 @@ export interface OverlayRenderStats {
 
 interface ToolOverlayData {
   brush?: BoxBounds | null;
+  /** Free-form lasso path in board coordinates, closed implicitly (BOARD-910). */
+  lasso?: readonly Point[] | null;
   guides?: readonly SnapGuide[];
   activeStroke?: ActiveStrokeOverlay | null;
   connectorSnap?: ConnectorSnapOverlay | null;
   connectorPreview?: ConnectorPreviewOverlay | null;
   /** Side of the quick-connect handle under the pointer. */
   quickConnectHover?: string | null;
+  /** Element highlighted as the drop target of the dragged elements (BOARD-1208). */
+  dropTargetId?: string | null;
 }
 
 function renderStrokeOutline(
@@ -233,6 +239,18 @@ function renderStrokePreview(
   const outline = getStroke(points as number[][], strokeOptions);
   renderStrokeOutline(g, outline);
   g.restore();
+}
+
+/** Finite points of a lasso path, or `null` when fewer than two remain (BOARD-910). */
+function lassoPath(points: readonly unknown[]): Point[] | null {
+  const out = points.filter(
+    (p): p is Point =>
+      typeof p === 'object' &&
+      p !== null &&
+      Number.isFinite((p as Point).x) &&
+      Number.isFinite((p as Point).y),
+  );
+  return out.length >= 2 ? out : null;
 }
 
 function isBoxBounds(b: unknown): b is BoxBounds {
@@ -487,6 +505,7 @@ export class OverlayRenderer {
     const toolData = board.toolData as ToolOverlayData | null;
     const brush = toolData?.brush ?? null;
     const selectionBrush = isBoxBounds(brush) ? brush : null;
+    const lasso = Array.isArray(toolData?.lasso) ? lassoPath(toolData.lasso) : null;
     const guides = toolData?.guides ?? [];
     const activeStroke = toolData?.activeStroke ?? null;
     const hasActiveStroke = Boolean(
@@ -500,6 +519,12 @@ export class OverlayRenderer {
       ((connectorPreview.points && connectorPreview.points.length >= 2) ||
         (connectorPreview.bezier && connectorPreview.bezier.length === 4)),
     );
+
+    // Element drop target under the dragged elements (BOARD-1208)
+    const dropTargetEl =
+      typeof toolData?.dropTargetId === 'string'
+        ? (board.getElement(toolData.dropTargetId) ?? null)
+        : null;
 
     // 3. Hovered element
     const hoveredEl =
@@ -629,8 +654,10 @@ export class OverlayRenderer {
       selectedElements.length > 0 ||
       lockedSelected.length > 0 ||
       selectionBrush !== null ||
+      lasso !== null ||
       guides.length > 0 ||
       hoveredEl !== null ||
+      dropTargetEl !== null ||
       visibleCursors.length > 0 ||
       hasActiveStroke ||
       remoteLiveStrokes.length > 0 ||
@@ -673,6 +700,29 @@ export class OverlayRenderer {
       ctx.strokeStyle = hoverStroke;
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
+      ctx.strokeRect(-sw / 2, -sh / 2, sw, sh);
+      ctx.restore();
+    }
+
+    // --- A1. Element drop target highlight (BOARD-1208): tinted fill, solid thick outline ---
+    if (dropTargetEl) {
+      const center = camera.boardToScreen({
+        x: dropTargetEl.x + dropTargetEl.w / 2,
+        y: dropTargetEl.y + dropTargetEl.h / 2,
+      });
+      ctx.save();
+      ctx.scale(pixelRatio, pixelRatio);
+      ctx.translate(center.x, center.y);
+      if (dropTargetEl.rotation) {
+        ctx.rotate((dropTargetEl.rotation * Math.PI) / 180);
+      }
+      const sw = dropTargetEl.w * zoom;
+      const sh = dropTargetEl.h * zoom;
+      ctx.fillStyle = brushFill;
+      ctx.fillRect(-sw / 2, -sh / 2, sw, sh);
+      ctx.strokeStyle = selectionStroke;
+      ctx.lineWidth = selectionLineWidth * 2;
+      ctx.setLineDash([]);
       ctx.strokeRect(-sw / 2, -sh / 2, sw, sh);
       ctx.restore();
     }
@@ -991,6 +1041,26 @@ export class OverlayRenderer {
       ctx.restore();
     }
 
+    // --- C2. Lasso (BOARD-910): filled like the selection box, dashed outline ---
+    if (lasso) {
+      ctx.save();
+      ctx.scale(pixelRatio, pixelRatio);
+      ctx.beginPath();
+      lasso.forEach((p, i) => {
+        const s = camera.boardToScreen(p);
+        if (i === 0) ctx.moveTo(s.x, s.y);
+        else ctx.lineTo(s.x, s.y);
+      });
+      ctx.closePath();
+      ctx.fillStyle = brushFill;
+      ctx.fill('evenodd');
+      ctx.strokeStyle = brushStroke;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // --- D. Snap Guides ---
     if (guides.length > 0) {
       ctx.save();
@@ -1160,9 +1230,10 @@ export class OverlayRenderer {
     return {
       rendered: true,
       selectedCount: selectedElements.length,
-      hasBrush: selectionBrush !== null,
+      hasBrush: selectionBrush !== null || lasso !== null,
       hasActiveStroke,
       hasDropIndicator: Boolean(this.dropIndicator),
+      dropTargetId: dropTargetEl?.id ?? null,
       guidesCount: guides.length,
       hoveredId: this.hoveredId,
       remoteSelectedCount,

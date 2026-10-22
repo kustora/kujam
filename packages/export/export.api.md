@@ -9,6 +9,81 @@ import { BoardDocument } from '@kujam/core';
 import { DocumentTooNewReason } from '@kujam/core';
 import { Point } from '@kujam/core';
 
+// @beta
+export type BuiltInImageFormat = 'png' | 'svg';
+
+// @beta
+export function createThumbnail(board: Board, options?: ThumbnailOptions): Promise<ThumbnailResult>;
+
+// @beta
+export type ExportCanvasFactory = (width: number, height: number) => ExportCanvasTarget | null;
+
+// @beta
+export interface ExportCanvasTarget {
+    readonly context: CanvasRenderingContext2D;
+    toBlob(type: string, quality?: number): Promise<Blob>;
+}
+
+// @beta
+export class ExportError extends Error {
+    constructor(code: ExportErrorCode, message: string);
+    // (undocumented)
+    readonly code: ExportErrorCode;
+}
+
+// @beta
+export type ExportErrorCode = 'nothing-to-export' | 'frame-not-found' | 'invalid-options' | 'unsupported-format' | 'unsupported-environment';
+
+// @beta
+export type ExportFetch = (url: string, init?: {
+    readonly mode?: 'cors';
+    readonly credentials?: 'same-origin';
+}) => Promise<{
+    readonly ok: boolean;
+    blob(): Promise<Blob>;
+}>;
+
+// @beta
+export interface ExportFontFace {
+    readonly family: string;
+    readonly src: string;
+    readonly style?: 'normal' | 'italic' | 'oblique';
+    readonly weight?: number | string;
+}
+
+// @beta
+export interface ExportFormatInfo {
+    // (undocumented)
+    readonly format: string;
+    readonly label: string;
+    readonly source: string;
+}
+
+// @beta
+export function exportImage(board: Board, options: {
+    readonly format: 'svg';
+} & ExportSVGOptions): Promise<SvgExportResult>;
+
+// @beta
+export function exportImage(board: Board, options: {
+    readonly format: 'png';
+} & ExportPNGOptions): Promise<PngExportResult>;
+
+// @beta
+export function exportImage(board: Board, options: ExportImageOptions): Promise<ExportImageResult>;
+
+// @beta
+export type ExportImageOptions = ({
+    readonly format: 'svg';
+} & ExportSVGOptions) | ({
+    readonly format: 'png';
+} & ExportPNGOptions) | ({
+    readonly format: string;
+} & ExportSVGOptions & ExportPNGOptions & Record<string, unknown>);
+
+// @beta
+export type ExportImageResult = SvgExportResult | PngExportResult | PluginExportResult;
+
 // @public
 export function exportJSON(board: Board, options?: ExportJSONOptions): BoardDocument;
 
@@ -16,6 +91,64 @@ export function exportJSON(board: Board, options?: ExportJSONOptions): BoardDocu
 export interface ExportJSONOptions {
     readonly ids?: readonly string[];
 }
+
+// @beta
+export function exportPNG(board: Board, options?: ExportPNGOptions): Promise<PngExportResult>;
+
+// @beta
+export interface ExportPNGOptions extends ExportScopeOptions {
+    readonly maxCanvasPixels?: number;
+    readonly maxCanvasSide?: number;
+    readonly scale?: number;
+}
+
+// @beta
+export interface ExportScopeOptions {
+    readonly background?: boolean | string;
+    readonly createCanvas?: ExportCanvasFactory;
+    readonly dataTimeout?: number;
+    readonly fetch?: ExportFetch;
+    readonly frameId?: string;
+    readonly ids?: readonly string[];
+    readonly padding?: number;
+    readonly pageId?: string;
+}
+
+// @beta
+export function exportSVG(board: Board, options?: ExportSVGOptions): Promise<SvgExportResult>;
+
+// @beta
+export interface ExportSVGOptions extends ExportScopeOptions {
+    readonly customElements?: 'raster' | 'vector';
+    readonly fontFaces?: readonly ExportFontFace[];
+    readonly fonts?: 'reference' | 'embed';
+    readonly images?: 'embed' | 'url';
+    readonly rasterScale?: number;
+    readonly scale?: number;
+    readonly title?: string;
+}
+
+// @beta
+export function exportText(board: Board, options?: ExportTextOptions): string;
+
+// @beta
+export interface ExportTextOptions {
+    readonly frameId?: string;
+    readonly ids?: readonly string[];
+    readonly pageId?: string;
+    readonly separator?: string;
+}
+
+// @beta
+export interface ExportWarning {
+    // (undocumented)
+    readonly code: ExportWarningCode;
+    readonly elementId?: string;
+    readonly message: string;
+}
+
+// @beta
+export type ExportWarningCode = 'image-unavailable' | 'image-cors' | 'font-not-embedded' | 'scale-reduced' | 'render-error' | 'raster-unavailable' | 'tainted' | 'html-only' | 'unknown-type' | 'data-unavailable' | 'sanitized';
 
 // @public
 export class ImportError extends Error {
@@ -45,6 +178,76 @@ export interface ImportResult {
         readonly id: string;
         readonly errors: readonly string[];
     }[];
+}
+
+// @beta
+export function listExportFormats(board: Board): readonly ExportFormatInfo[];
+
+// @beta
+export const MAX_EXPORT_CANVAS_SIDE = 16384;
+
+// @beta
+export interface PluginExportResult {
+    readonly data: unknown;
+    // (undocumented)
+    readonly format: string;
+    readonly mimeType: string;
+    // (undocumented)
+    readonly warnings: readonly ExportWarning[];
+}
+
+// @beta
+export interface PngExportResult {
+    readonly data: Blob;
+    // (undocumented)
+    readonly format: 'png';
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly mimeType: 'image/png';
+    readonly scale: number;
+    // (undocumented)
+    readonly warnings: readonly ExportWarning[];
+    readonly width: number;
+}
+
+// @beta
+export interface SvgExportResult {
+    readonly data: string;
+    // (undocumented)
+    readonly format: 'svg';
+    // (undocumented)
+    readonly height: number;
+    // (undocumented)
+    readonly mimeType: 'image/svg+xml';
+    // (undocumented)
+    readonly warnings: readonly ExportWarning[];
+    readonly width: number;
+}
+
+// @beta
+export interface ThumbnailOptions {
+    readonly background?: boolean | string;
+    readonly createCanvas?: ExportCanvasFactory;
+    readonly frameId?: string;
+    readonly height?: number;
+    readonly padding?: number;
+    readonly pageId?: string;
+    readonly quality?: number;
+    readonly type?: 'image/png' | 'image/webp' | 'image/jpeg';
+    readonly width?: number;
+}
+
+// @beta
+export interface ThumbnailResult {
+    readonly blob: Blob;
+    // (undocumented)
+    readonly height: number;
+    readonly paintMs: number;
+    // (undocumented)
+    readonly warnings: readonly ExportWarning[];
+    // (undocumented)
+    readonly width: number;
 }
 
 // (No @packageDocumentation comment for this package)

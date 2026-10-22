@@ -17,6 +17,36 @@ export function alignElements(board: Board, mode: AlignMode): boolean;
 export type AlignMode = 'left' | 'right' | 'top' | 'bottom' | 'center-h' | 'center-v';
 
 // @public
+export type Anchor = PointAnchor | ElementAnchor;
+
+// @public
+export const ANCHOR_PLACE_TOOL_ID = "anchor-place";
+
+// @public
+export interface AnchorEvent {
+    // (undocumented)
+    readonly anchor: Anchor;
+    readonly id: string;
+    readonly position: ResolvedAnchor | null;
+    readonly previous: ResolvedAnchor | null;
+    // (undocumented)
+    readonly reason: 'move' | 'remove' | 'restore';
+}
+
+// @public
+export interface AnchorFromPointOptions {
+    readonly filter?: (element: Readonly<ElementRecord>) => boolean;
+    readonly includeLocked?: boolean;
+    readonly target?: 'auto' | 'point' | 'element';
+}
+
+// @public
+export interface AnchorPlaceOptions extends AnchorFromPointOptions {
+    readonly clickTolerance?: number;
+    readonly cursor?: string;
+}
+
+// @public
 export type AnyCommandDefinition = CommandDefinition<any>;
 
 // @public
@@ -121,6 +151,7 @@ export interface Board {
     acceptDrop<T = unknown>(type: string, handler: DropHandler<T>): () => void;
     // @beta
     addToSelection(ids: SelectionInput): void;
+    readonly anchors: BoardAnchors;
     // @beta
     readonly assets: Readonly<AssetAdapter> | null;
     // @beta
@@ -254,6 +285,24 @@ export interface Board {
     readonly user: Readonly<BoardUser> | null;
 }
 
+// @public
+export interface BoardAnchors {
+    cancelPlace(): void;
+    forElement(elementId: string, point?: Point): ElementAnchor;
+    fromPoint(point: Point, options?: AnchorFromPointOptions): Anchor | null;
+    get(id: string): Anchor | undefined;
+    list(): readonly {
+        readonly id: string;
+        readonly anchor: Anchor;
+    }[];
+    place(options?: AnchorPlaceOptions): Promise<Anchor | null>;
+    readonly placing: boolean;
+    resolve(anchor: Anchor): ResolvedAnchor | null;
+    toScreen(anchor: Anchor): Point | null;
+    track(id: string, anchor: Anchor): () => void;
+    untrack(id: string): void;
+}
+
 // @beta
 export interface BoardCamera {
     readonly animating: boolean;
@@ -325,6 +374,7 @@ export interface BoardEventMap {
     'tool-style': ToolStyleEvent;
     // @beta
     action: ActionEvent;
+    anchor: AnchorEvent;
     camera: CameraEvent;
     change: ChangeEvent;
     // @beta
@@ -657,6 +707,9 @@ export interface ComputeSnapOptions {
 export function containedInBox(geometry: Geometry, box: BoxBounds, element?: ElementTransform): boolean;
 
 // @beta
+export function containedInPolygon(geometry: Geometry, area: readonly Point[], element?: ElementTransform): boolean;
+
+// @beta
 export function containsPoint(geometry: Geometry, point: Point, options?: ContainsPointOptions): boolean;
 
 // @beta
@@ -753,6 +806,9 @@ export function createContextMenuEvent(options: {
     targetId?: string | null;
     items?: readonly ContextMenuItem[];
 }): ContextMenuEvent;
+
+// @beta
+export function createElementFromUrl(board: Board, url: string, point: Point): Readonly<ElementRecord> | undefined;
 
 // @public
 export function createElementRegistry(definitions?: Iterable<AnyElementDefinition> | {
@@ -972,6 +1028,16 @@ export interface DragPreviewEvent {
 export type DropHandler<T = unknown> = (payload: T, point: Point) => void | readonly ElementRecord[] | Promise<void | readonly ElementRecord[]>;
 
 // @beta
+export function dropOnTarget(board: Board, droppedIds: readonly string[], point: Point): DropOnTargetResult | null;
+
+// @beta
+export interface DropOnTargetResult {
+    readonly acceptedIds: readonly string[];
+    readonly removedIds: readonly string[];
+    readonly targetId: string;
+}
+
+// @beta
 export interface DuplicateArgs {
     readonly offset?: Point;
 }
@@ -1006,6 +1072,14 @@ export interface ElementActionContext<P = Record<string, unknown>> extends Eleme
     readonly brushes: readonly Readonly<BrushDefinition>[];
     readonly toolStyles: ToolStyles;
     updateProps(patch: Partial<P>): boolean;
+}
+
+// @public
+export interface ElementAnchor {
+    readonly elementId: string;
+    // (undocumented)
+    readonly kind: 'element';
+    readonly offset: Point;
 }
 
 // @public
@@ -1142,6 +1216,8 @@ export interface ElementDefinition<T extends string = string, S extends SchemaSh
     // @beta
     readonly connectable?: boolean;
     readonly defaults?: Partial<InferShape<S>>;
+    // @beta
+    readonly dropTarget?: ElementDropTarget<InferShape<S>>;
     readonly export?: ElementExporters<InferShape<S>, D>;
     geometry?(el: ElementRecord<InferShape<S>>): Geometry;
     // @beta
@@ -1173,6 +1249,18 @@ export class ElementDefinitionError extends Error {
 
 // @public
 export type ElementDefinitionErrorCode = 'invalid-definition' | 'duplicate-type';
+
+// @beta
+export interface ElementDropContext<P = Record<string, unknown>> extends ElementContext {
+    removeDropped(): boolean;
+    updateProps(patch: Partial<P>): boolean;
+}
+
+// @beta
+export interface ElementDropTarget<P = Record<string, unknown>> {
+    accepts(dropped: Readonly<ElementRecord>, target: Readonly<ElementRecord<P>>): boolean;
+    onDrop(target: Readonly<ElementRecord<P>>, dropped: Readonly<ElementRecord>, point: Point, ctx: ElementDropContext<P>): void;
+}
 
 // @public
 export interface ElementExporters<P, D> {
@@ -1398,6 +1486,9 @@ export const ERASER_TOOL_ID = "eraser";
 export function extractContent(board: Board, ids: readonly string[]): BoardDocument;
 
 // @beta
+export function findDropTarget(board: Board, droppedIds: readonly string[], point: Point): Readonly<ElementRecord> | undefined;
+
+// @beta
 export interface FrameScheduler {
     cancel(handle: unknown): void;
     now(): number;
@@ -1547,10 +1638,16 @@ export class InvalidDocumentError extends Error {
 }
 
 // @public
+export function isAnchor(value: unknown): value is Anchor;
+
+// @public
 export function isBoxBounds(bounds: unknown): bounds is BoxBounds;
 
 // @internal
 export function isDevelopmentMode(): boolean;
+
+// @beta
+export function isPastableUrl(text: string): boolean;
 
 // @public
 export function isRectBounds(bounds: unknown): bounds is RectBounds;
@@ -1771,6 +1868,9 @@ export interface PartialElement<P = Record<string, unknown>> {
 }
 
 // @beta
+export type PasteUrlHook = (url: string, point: Point, board: Board) => ElementInput | null | undefined;
+
+// @beta
 export function path(points: readonly StrokePoint[], width?: number, closed?: boolean): PathGeometry;
 
 // @beta
@@ -1822,6 +1922,8 @@ export interface PluginDefinition<Id extends string = string, Elements extends r
     readonly migrations?: PluginMigrations;
     // @beta
     readonly onDocumentSaved?: DocumentSavedHook;
+    // @beta
+    readonly onPasteUrl?: PasteUrlHook;
     // @beta
     readonly permissions?: PermissionHook;
     readonly setup?: PluginSetup;
@@ -1877,6 +1979,15 @@ export interface Point {
     // (undocumented)
     readonly x: number;
     // (undocumented)
+    readonly y: number;
+}
+
+// @public
+export interface PointAnchor {
+    // (undocumented)
+    readonly kind: 'point';
+    readonly pageId?: string;
+    readonly x: number;
     readonly y: number;
 }
 
@@ -2093,6 +2204,13 @@ export type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 // @beta
 export interface ResizeOptions extends TransformOptions {
     readonly keepRatio?: boolean;
+}
+
+// @public
+export interface ResolvedAnchor {
+    readonly pageId: string | null;
+    readonly x: number;
+    readonly y: number;
 }
 
 // @beta

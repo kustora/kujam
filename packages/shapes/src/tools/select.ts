@@ -24,7 +24,9 @@ import {
   type ToolPointerEvent,
   type TransformResult,
   collectContainerDescendants,
+  dropOnTarget,
   enterGroupOnDoubleClick,
+  findDropTarget,
   reparentElementsToFrames,
   resolveTopmostGroupClick,
 } from '@kujam/core';
@@ -43,6 +45,7 @@ import {
   type LineProps,
 } from '../elements/line.js';
 import { buildDuplicate } from './duplicate.js';
+import { extendLasso, startLasso } from './lasso.js';
 import { handlePinch, handleWheel } from './navigation.js';
 import {
   finishQuickConnect,
@@ -83,6 +86,13 @@ export type SelectHandle =
 export interface SelectToolData {
   /** Selection box in board coordinates while dragging on empty space, otherwise `null`. */
   brush: BoxBounds | null;
+  /**
+   * Lasso path in board coordinates during a Ctrl/Cmd+drag on empty space, otherwise `null`
+   * (BOARD-910). Closed implicitly.
+   */
+  lasso: readonly Point[] | null;
+  /** Screen position of the last point added to `lasso`. */
+  lastScreen: Point | null;
   /** Snap guides while moving elements. */
   guides: readonly SnapGuide[];
   /** Handle being dragged while resizing, rotating, or reconnecting a connector endpoint. */
@@ -118,6 +128,11 @@ export interface SelectToolData {
   hitLocked: boolean;
   /** Whether the drag moves copies made with Alt instead of the selection (BOARD-903). */
   duplicating: boolean;
+  /**
+   * Element whose `dropTarget` accepts the moved elements under the pointer while translating,
+   * highlighted by the overlay (BOARD-1208).
+   */
+  dropTargetId?: string | null;
   /** ID of the group currently entered for editing, or `null` at the root level (BOARD-909). */
   enteredGroupId: string | null;
   /** Quick-connect dot under the pointer while idle, highlighted by the overlay. */
@@ -133,6 +148,7 @@ type State =
   | 'pointing'
   | 'translating'
   | 'brushing'
+  | 'lassoing'
   | 'resizing'
   | 'rotating'
   | 'reconnecting'
@@ -144,6 +160,8 @@ type Ctx = ToolContext<State, SelectToolData>;
 function initialData(): SelectToolData {
   return {
     brush: null,
+    lasso: null,
+    lastScreen: null,
     guides: [],
     handle: null,
     start: { x: 0, y: 0 },
@@ -499,6 +517,8 @@ function translate(ctx: Ctx, e: ToolPointerEvent): void {
     moveElements(data.originals, snapped.delta.x, snapped.delta.y),
     data.duplicating ? 'duplicate' : 'move',
   );
+  const target = findDropTarget(board, board.selection, e.point);
+  if ((data.dropTargetId ?? null) !== (target?.id ?? null)) data.dropTargetId = target?.id ?? null;
 }
 
 /**
@@ -595,7 +615,8 @@ function editSelected(ctx: Ctx, e: ToolKeyEvent): false | void {
  * - Click selects the element under the pointer; Shift+click toggles it; clicking empty space
  *   clears the selection.
  * - Dragging on empty space draws a selection box: elements fully inside are selected, or touched
- *   ones with Alt. Shift adds to the existing selection.
+ *   ones with Alt. Shift adds to the existing selection. Ctrl/Cmd+drag on empty space draws a
+ *   free-form lasso with the same rules instead (BOARD-910).
  * - Dragging a selected element moves the selection, snapping to other elements and the grid
  *   (Ctrl/Cmd turns snapping off). Alt+drag moves copies instead and leaves the originals in
  *   place (BOARD-903).
@@ -662,6 +683,11 @@ export const selectTool = defineTool({
         data.duplicating = false;
         if (!rawHit) {
           data.enteredGroupId = null;
+          // Ctrl/Cmd+drag on empty space draws a lasso instead of a box (BOARD-910).
+          if (e.modifiers.ctrl || e.modifiers.meta) {
+            startLasso(board, data, e);
+            return 'lassoing';
+          }
           return startBrushing(ctx, e);
         }
 
@@ -791,9 +817,29 @@ export const selectTool = defineTool({
     translating: {
       cursor: 'move',
       onPointerMove: translate,
-      onPointerUp(ctx) {
-        const movedRoots = ctx.board.selection;
-        reparentElementsToFrames(ctx.board, movedRoots);
+      onPointerUp(ctx, e) {
+        const { board } = ctx;
+        const movedRoots = board.selection;
+        // Dropping onto an element's `dropTarget` (BOARD-1208) joins the move's interaction, so
+        // the move and the drop are one undo step.
+        if (findDropTarget(board, movedRoots, e.point)) {
+          let removedAll = false;
+          let targetId: string | null = null;
+          ctx.change(
+            () => {
+              const result = dropOnTarget(board, movedRoots, e.point);
+              targetId = result?.targetId ?? null;
+              removedAll = result !== null && result.removedIds.length === movedRoots.length;
+            },
+            { label: 'element.drop' },
+          );
+          // The target absorbed everything that was dragged: select it instead.
+          if (removedAll && targetId !== null) board.select([targetId]);
+        }
+        reparentElementsToFrames(
+          board,
+          movedRoots.filter((id) => board.getElement(id) !== undefined),
+        );
         return 'idle';
       },
       onCancel: restoreSelection,
@@ -802,6 +848,13 @@ export const selectTool = defineTool({
     brushing: {
       cursor: 'crosshair',
       onPointerMove: brush,
+      onPointerUp: () => 'idle',
+      onCancel: restoreSelection,
+    },
+
+    lassoing: {
+      cursor: 'crosshair',
+      onPointerMove: (ctx, e) => extendLasso(ctx.board, ctx.data, e),
       onPointerUp: () => 'idle',
       onCancel: restoreSelection,
     },

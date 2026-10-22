@@ -33,6 +33,7 @@ import { groupElement } from './elements/group.js';
 import { frameElement } from './elements/frame.js';
 import { imageElement } from './elements/image.js';
 import { handTool } from './tools/hand.js';
+import { lassoTool } from './tools/lasso.js';
 import { lineTool } from './tools/line.js';
 import { selectTool } from './tools/select.js';
 import { stickyTool } from './tools/sticky.js';
@@ -95,6 +96,13 @@ export {
   type SelectToolData,
 } from './tools/select.js';
 export { handTool, type HandToolData } from './tools/hand.js';
+export {
+  elementsInLasso,
+  LASSO_MIN_POINT_DISTANCE_PX,
+  lassoTool,
+  MAX_LASSO_POINTS,
+  type LassoToolData,
+} from './tools/lasso.js';
 export { createBoxTool, type BoxToolOptions } from './tools/box-tool.js';
 export { stickyTool } from './tools/sticky.js';
 export { textTool } from './tools/text.js';
@@ -115,6 +123,21 @@ export {
   type LineProps,
 } from './elements/line.js';
 export { lineTool, type LineToolData, type LineToolState } from './tools/line.js';
+export {
+  createEmbedElement,
+  createEmbedPlugin,
+  DEFAULT_EMBED_COMPACT_ZOOM,
+  EMBED_SANDBOX_TOKENS,
+  embedPropsSchema,
+  MAX_EMBED_URL_LENGTH,
+  resolveEmbed,
+  type EmbedDomain,
+  type EmbedElementOptions,
+  type EmbedProps,
+  type EmbedReferrerPolicy,
+  type EmbedSandboxToken,
+  type ResolvedEmbed,
+} from './elements/embed.js';
 export {
   connectorTool,
   DEFAULT_CONNECTOR_LENGTH,
@@ -240,7 +263,7 @@ export const defaultElements = definePlugin({
 
 /**
  * Built-in tools plugin, ready to install via `createBoard({ plugins: [defaultElements, defaultTools] })`.
- * Contains navigation, selection, and creation tools (BOARD-502, BOARD-913, BOARD-1101, BOARD-1105, BOARD-1106) with standard shortcuts.
+ * Contains navigation, selection (including the `lasso`, BOARD-910), and creation tools (BOARD-502, BOARD-913, BOARD-1101, BOARD-1105, BOARD-1106) with standard shortcuts.
  *
  * @public
  */
@@ -248,6 +271,7 @@ export const defaultTools = definePlugin({
   id: 'default-tools',
   tools: Object.freeze([
     selectTool,
+    lassoTool,
     handTool,
     stickyTool,
     drawTool,
@@ -312,6 +336,7 @@ export type DefaultElementType = (typeof DEFAULT_ELEMENT_TYPES)[number];
  */
 export const DEFAULT_TOOL_IDS = [
   'select',
+  'lasso',
   'hand',
   'sticky',
   'draw',

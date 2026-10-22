@@ -11,6 +11,7 @@ Content-Security-Policy:
   style-src 'self';
   img-src 'self' blob: data:;
   connect-src 'self' wss://sync.contoh.id https://api.contoh.id;
+  frame-src 'none';
   object-src 'none';
   base-uri 'none';
   frame-ancestors 'none'
@@ -18,13 +19,14 @@ Content-Security-Policy:
 
 Sesuaikan direktif dengan fitur yang dipakai:
 
-| Direktif      | Kebutuhan                                                                                                                                                                                         |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `script-src`  | Cukup `'self'` (atau origin CDN tempat bundel aplikasi). Tidak perlu `unsafe-eval` maupun `unsafe-inline`.                                                                                        |
-| `style-src`   | Cukup `'self'`. Lihat [Style](#style) untuk browser lama.                                                                                                                                         |
-| `img-src`     | `blob:` untuk gambar yang di-drop atau ditempel (object URL, `BOARD-908`); `data:` hanya bila dokumen menyimpan gambar raster sebagai `data:` URL. Tambahkan origin `AssetResolver` bila berbeda. |
-| `connect-src` | Endpoint `@kujam/sync-yjs` (WebSocket `wss:`, mis. Hocuspocus) dan `@kujam/storage-http`.                                                                                                         |
-| `font-src`    | Hanya bila aplikasi memuat font Inter sendiri; UI memakai font sistem sebagai cadangan.                                                                                                           |
+| Direktif      | Kebutuhan                                                                                                                                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `script-src`  | Cukup `'self'` (atau origin CDN tempat bundel aplikasi). Tidak perlu `unsafe-eval` maupun `unsafe-inline`.                                                                                                  |
+| `style-src`   | Cukup `'self'`. Lihat [Style](#style) untuk browser lama.                                                                                                                                                   |
+| `img-src`     | `blob:` untuk gambar yang di-drop atau ditempel (object URL, `BOARD-908`); `data:` hanya bila dokumen menyimpan gambar raster sebagai `data:` URL. Tambahkan origin `AssetResolver` bila berbeda.           |
+| `connect-src` | Endpoint `@kujam/sync-yjs` (WebSocket `wss:`, mis. Hocuspocus) dan `@kujam/storage-http`.                                                                                                                   |
+| `font-src`    | Hanya bila aplikasi memuat font Inter sendiri; UI memakai font sistem sebagai cadangan.                                                                                                                     |
+| `frame-src`   | `'none'` bila tidak memasang elemen embed. Bila memasang embed (`createEmbedElement`, `BOARD-1107`), cantumkan origin yang sama dengan daftar `domains`, mis. `frame-src https://www.youtube-nocookie.com`. |
 
 ## Style
 

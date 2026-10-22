@@ -5,9 +5,11 @@ import type {
   ElementCanvasContext,
   BoxBounds,
   ElementPropsOf,
+  Point,
   SnapGuide,
 } from '@kujam/core';
 import type {
+  createEmbedElement,
   defaultElements,
   defaultTools,
   geoElement,
@@ -57,7 +59,12 @@ export type Checks = [
   >,
   // BOARD-502: built-in select and hand tools, and the overlay data of the select tool.
   Expect<Equal<NonNullable<(typeof defaultTools)['tools']>[number]['id'], string>>,
-  Expect<Equal<NonNullable<(typeof defaultTools)['tools']>['length'], 16>>,
+  Expect<Equal<NonNullable<(typeof defaultTools)['tools']>['length'], 17>>,
   Expect<Equal<SelectToolData['brush'], BoxBounds | null>>,
   Expect<Equal<SelectToolData['guides'], readonly SnapGuide[]>>,
+  // BOARD-910: lasso path of the select tool's Ctrl/Cmd+drag mode.
+  Expect<Equal<SelectToolData['lasso'], readonly Point[] | null>>,
+  // BOARD-1107: the embed element is opt-in and typed like the other elements.
+  Expect<Equal<ReturnType<typeof createEmbedElement>['type'], 'embed'>>,
+  Expect<Equal<ElementPropsOf<ReturnType<typeof createEmbedElement>>['url'], string>>,
 ];

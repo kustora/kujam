@@ -43,6 +43,7 @@ const RAW_DICTIONARY = {
   toolbar: { id: 'Alat', en: 'Tools' },
   moreOptions: { id: 'Pilihan lain', en: 'More options' },
   'tool.select': { id: 'Pilih', en: 'Select' },
+  'tool.lasso': { id: 'Laso', en: 'Lasso' },
   'tool.hand': { id: 'Tangan', en: 'Hand' },
   'tool.sticky': { id: 'Sticky', en: 'Sticky' },
   'tool.draw': { id: 'Pena', en: 'Pen' },

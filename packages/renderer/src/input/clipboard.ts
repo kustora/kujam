@@ -18,6 +18,7 @@
 
 import {
   CLIPBOARD_MIME_TYPE,
+  createElementFromUrl,
   insertContent,
   isSafeUrl,
   parseClipboard,
@@ -48,6 +49,7 @@ export interface ClipboardOptions {
   readonly shortTextThreshold?: number;
   /**
    * Hook called when a URL is pasted (BOARD-907). When returning `true`, the URL is treated as handled.
+   * Runs before the plugins' `onPasteUrl` hooks (BOARD-1209), which run when it returns `false`.
    */
   readonly onPasteUrl?: (url: string, point: Point, board: Board) => boolean | Promise<boolean>;
 }
@@ -227,20 +229,33 @@ export function attachClipboard(
     }
 
     if (isSafeUrl(trimmed, ['https:', 'http:'])) {
+      /** Plugin `onPasteUrl` hooks (BOARD-1209), then the URL as plain text. */
+      const pasteUrl = (): void => {
+        if (board.disposed || board.readOnly) return;
+        try {
+          const created = createElementFromUrl(board, trimmed, target);
+          if (created) {
+            board.select([created.id]);
+            return;
+          }
+        } catch (error) {
+          options.onError?.(error);
+          return;
+        }
+        insertElement({
+          type: 'text',
+          w: 280,
+          h: 100,
+          props: { text: trimmed },
+        });
+      };
       if (options.onPasteUrl) {
         try {
           const handled = options.onPasteUrl(trimmed, target, board);
           if (handled instanceof Promise) {
             handled
               .then((resolved) => {
-                if (!resolved && !board.disposed && !board.readOnly) {
-                  insertElement({
-                    type: 'text',
-                    w: 280,
-                    h: 100,
-                    props: { text: trimmed },
-                  });
-                }
+                if (!resolved) pasteUrl();
               })
               .catch((error) => {
                 options.onError?.(error);
@@ -255,12 +270,7 @@ export function attachClipboard(
           return;
         }
       }
-      insertElement({
-        type: 'text',
-        w: 280,
-        h: 100,
-        props: { text: trimmed },
-      });
+      pasteUrl();
       return;
     }
 

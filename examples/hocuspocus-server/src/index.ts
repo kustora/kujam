@@ -13,6 +13,10 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 1234;
 const DATABASE_PATH = process.env.DATABASE_PATH ?? './data/kujam.sqlite';
 const AUTH_ENDPOINT = process.env.AUTH_ENDPOINT;
 const DEBOUNCE_MS = process.env.DEBOUNCE_MS ? parseInt(process.env.DEBOUNCE_MS, 10) : 2000;
+// Periodic compaction of stored documents (BOARD-1515); hourly by default, `0` turns it off.
+const COMPACT_INTERVAL_MS = process.env.COMPACT_INTERVAL_MS
+  ? parseInt(process.env.COMPACT_INTERVAL_MS, 10)
+  : 3_600_000;
 
 const db = new DocumentDatabase({ path: DATABASE_PATH });
 
@@ -20,6 +24,7 @@ const collaborationServer = createCollaborationServer({
   port: PORT,
   database: db,
   debounceMs: DEBOUNCE_MS,
+  compactIntervalMs: COMPACT_INTERVAL_MS,
   auth: {
     authEndpointUrl: AUTH_ENDPOINT,
     allowAnonymous: false,

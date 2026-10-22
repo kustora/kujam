@@ -88,6 +88,13 @@ export interface CollaborationServerOptions {
   debounceMs?: number;
 
   /**
+   * Interval in milliseconds for compacting stored documents that are not loaded right now
+   * (BOARD-1515), see `DocumentDatabase.compactAll`. Loaded documents are re-encoded from their
+   * garbage-collected `Y.Doc` on every store. `0` (default) turns the periodic job off.
+   */
+  compactIntervalMs?: number;
+
+  /**
    * Suppress console startup banners and logs.
    * Defaults to false.
    */
@@ -275,6 +282,23 @@ export function createCollaborationServer(
     },
   });
 
+  // Periodic compaction of stored state (BOARD-1515).
+  const compactIntervalMs = options.compactIntervalMs ?? 0;
+  const compactTimer =
+    compactIntervalMs > 0
+      ? setInterval(() => {
+          db.compactAll({
+            skip: (name) => server.hocuspocus.documents.has(name),
+            onError: (name, error) => {
+              if (!options.quiet) {
+                console.warn(`[CollaborationServer] Compaction of "${name}" failed:`, error);
+              }
+            },
+          });
+        }, compactIntervalMs)
+      : null;
+  compactTimer?.unref?.();
+
   const instance: CollaborationServer = {
     server,
     db,
@@ -289,6 +313,7 @@ export function createCollaborationServer(
     },
 
     async destroy(): Promise<void> {
+      if (compactTimer) clearInterval(compactTimer);
       try {
         await server.hocuspocus.flushPendingStores();
       } catch {

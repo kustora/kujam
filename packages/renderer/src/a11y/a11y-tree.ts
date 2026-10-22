@@ -266,6 +266,14 @@ export class A11yTree {
     }
   }
 
+  /**
+   * External data of these elements changed (BOARD-604): their `a11y(el, data)` role and label
+   * may change too, so their items are patched on the next frame (BOARD-1212).
+   */
+  onData(ids: readonly string[]): void {
+    for (const id of ids) if (this.entries.has(id)) this.dirty.add(id);
+  }
+
   onCamera(): void {
     this.scheduleSync();
   }

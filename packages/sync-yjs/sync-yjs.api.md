@@ -30,6 +30,14 @@ export { Awareness }
 export function calculateBackoffDelay(attempt: number, options?: ReconnectOptions): number;
 
 // @public
+export function compactUpdate(updates: Uint8Array | readonly Uint8Array[], options?: CompactUpdateOptions): Uint8Array;
+
+// @public
+export interface CompactUpdateOptions {
+    readonly maxUpdateBytes?: number;
+}
+
+// @public
 export function createReconnectController(options: ReconnectControllerOptions): ReconnectController;
 
 // @public
@@ -48,6 +56,12 @@ export function createYjsPresence(options?: YjsPresenceOptions): YjsPresence;
 export function createYjsSyncAdapter(options?: YjsSyncOptions): YjsSyncAdapter;
 
 // @public
+export function decodeSnapshot(bytes: Uint8Array, options?: DecodeSnapshotOptions): BoardDocument;
+
+// @public
+export type DecodeSnapshotOptions = UpdateToDocumentOptions;
+
+// @public
 export const DEFAULT_PRESENCE_LIMITS: Readonly<PresenceLimits>;
 
 // @public
@@ -61,6 +75,9 @@ export interface DocumentToYDocOptions {
     doc?: Y.Doc;
     origin?: unknown;
 }
+
+// @public
+export function encodeSnapshot(source: Y.Doc | BoardDocument): Uint8Array;
 
 export { IndexeddbPersistence }
 
@@ -127,6 +144,24 @@ export interface ReconnectOptions {
 
 // @public
 export function recordToYMap(record: BoardRecord, yMap: Y.Map<unknown>): void;
+
+// @public
+export const RESTORE_SNAPSHOT_LABEL = "snapshot.restore";
+
+// @public
+export interface RestoreSnapshotOptions {
+    readonly label?: string;
+}
+
+// @public
+export interface RestoreSnapshotResult {
+    readonly rejected: readonly {
+        readonly id: string;
+        readonly errors: readonly string[];
+    }[];
+    readonly removed: readonly string[];
+    readonly updated: readonly string[];
+}
 
 // @public
 export function sanitizePresenceState(raw: Record<string, unknown>, fallbackId: string, limits?: PresenceLimits): PresencePeerState;
@@ -241,15 +276,18 @@ export interface YjsSyncAdapter extends SyncAdapter {
     cancelReconnect(): void;
     destroy?(): void;
     readonly doc: Y.Doc;
+    encodeSnapshot(): Uint8Array;
     handleError?(error: unknown): void;
     readonly history?: YjsHistory;
     isOnlineRequired?(action: string): boolean;
     readonly pendingUpdates?: number;
     readonly persistence?: IndexeddbPersistence | null;
     readonly presence: YjsPresence;
+    previewSnapshot(bytes: Uint8Array): BoardDocument;
     readonly readOnly: boolean;
     reconnect(): Promise<void> | void;
     readonly reconnectAttempts: number;
+    restoreSnapshot(bytes: Uint8Array, options?: RestoreSnapshotOptions): RestoreSnapshotResult;
     setReadOnly(readOnly: boolean): void;
     readonly whenLoaded: WhenLoadedPromise;
 }

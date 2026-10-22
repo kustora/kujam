@@ -145,6 +145,7 @@ function brushStyle(board: Board): ToolbarStyleGroup | null {
 /** Built-in tools in DESIGN.md toolbar order; missing tools are skipped. */
 const BUILT_INS: readonly BuiltIn[] = [
   { id: 'select', label: 'tool.select', icon: 'select' },
+  { id: 'lasso', label: 'tool.lasso', icon: 'lasso' },
   { id: 'hand', label: 'tool.hand', icon: 'hand' },
   {
     id: 'sticky',

@@ -41,6 +41,14 @@ function arrowheads(prefix: 'start' | 'end', transform: string): Record<string, 
 
 const ICONS: Readonly<Record<string, readonly IconShape[]>> = {
   select: [['path', { d: 'M5 3l14 7-6 2-2 6z' }]],
+  lasso: [
+    [
+      'path',
+      { d: 'M7.5 17.2C4.8 16 3 14.1 3 12c0-3.9 4-7 9-7s9 3.1 9 7-4 7-9 7c-.9 0-1.8-.1-2.6-.3' },
+    ],
+    ['path', { d: 'M9.4 18.7c-.2 1.5-1.4 2.3-3.4 2.3' }],
+    ['circle', { cx: '8.5', cy: '17.5', r: '1.5' }],
+  ],
   hand: [
     ['path', { d: 'M8 13V5.5a1.5 1.5 0 0 1 3 0V12' }],
     ['path', { d: 'M11 11.5V4.5a1.5 1.5 0 0 1 3 0V12' }],

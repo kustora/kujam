@@ -156,6 +156,7 @@ import {
   reconcileContainersInTransaction,
   type BoardFrames,
 } from './elements/containers.js';
+import { createAnchorsRuntime, type BoardAnchors } from './anchors/anchors.js';
 
 export * from './types.js';
 export {
@@ -212,6 +213,7 @@ export {
   type BoardPlugins,
   type BoardUser,
   type DocumentSavedHook,
+  type PasteUrlHook,
   type PermissionAction,
   type PermissionHook,
   type PluginBrushDefinition,
@@ -300,6 +302,12 @@ export {
   type InsertContentOptions,
   type InsertContentResult,
 } from './clipboard/clipboard.js';
+export { createElementFromUrl, isPastableUrl } from './clipboard/paste-url.js';
+export {
+  dropOnTarget,
+  findDropTarget,
+  type DropOnTargetResult,
+} from './elements/drop-target.js';
 export type {
   ActionEvent,
   BoardErrorCode,
@@ -542,6 +550,18 @@ export {
   reconcileContainersInTransaction,
   type BoardFrames,
 } from './elements/containers.js';
+export {
+  ANCHOR_PLACE_TOOL_ID,
+  isAnchor,
+  type Anchor,
+  type AnchorEvent,
+  type AnchorFromPointOptions,
+  type AnchorPlaceOptions,
+  type BoardAnchors,
+  type ElementAnchor,
+  type PointAnchor,
+  type ResolvedAnchor,
+} from './anchors/anchors.js';
 export {
   alignElements,
   distributeElements,
@@ -1052,6 +1072,14 @@ export interface Board {
    * @public
    */
   readonly frames: BoardFrames;
+  /**
+   * Comment anchors (BOARD-1211): attachment points for application pins, their screen position,
+   * `anchor` events when an element anchor moves or loses its element, and a "place an anchor"
+   * mode.
+   *
+   * @public
+   */
+  readonly anchors: BoardAnchors;
   /**
    * Axis-aligned bounds enclosing every selected element, accounting for rotation and element
    * geometry (BOARD-405), or `null` when nothing is selected. Computed on every read.
@@ -2668,6 +2696,7 @@ export function createBoard(options: CreateBoardOptions = {}): Board {
     },
     pages: pages.api,
     frames: createFramesRuntime(() => board),
+    anchors: createAnchorsRuntime(() => board),
     get selection() {
       return selection.ids;
     },

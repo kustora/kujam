@@ -7,8 +7,10 @@
 import * as Y from 'yjs';
 import { Awareness } from 'y-protocols/awareness.js';
 import {
+  ReadOnlyBoardError,
   validateBoardRecord,
   type Board,
+  type BoardDocument,
   type BoardInputEvent,
   type BoardRecord,
   type ChangeOrigin,
@@ -59,6 +61,16 @@ import {
   type UpdateToYDocOptions,
   type YDocToDocumentOptions,
 } from './document.js';
+import {
+  applySnapshot,
+  decodeSnapshot,
+  encodeSnapshot,
+  RESTORE_SNAPSHOT_LABEL,
+  type DecodeSnapshotOptions,
+  type RestoreSnapshotOptions,
+  type RestoreSnapshotResult,
+} from './snapshot.js';
+export { compactUpdate, type CompactUpdateOptions } from './compaction.js';
 export {
   DEFAULT_PRESENCE_LIMITS,
   sanitizePresenceState,
@@ -90,6 +102,12 @@ export {
   yDocToDocument,
   yDocToUpdate,
   InvalidUpdateError,
+  decodeSnapshot,
+  encodeSnapshot,
+  RESTORE_SNAPSHOT_LABEL,
+  type DecodeSnapshotOptions,
+  type RestoreSnapshotOptions,
+  type RestoreSnapshotResult,
   type LiveStroke,
   type WhenLoadedPromise,
   type YjsIndexedDbOptions,
@@ -158,6 +176,10 @@ class SyncEventEmitter {
 export interface YjsSyncOptions {
   /**
    * Existing Y.Doc instance. If omitted, a fresh Y.Doc is created.
+   *
+   * Keep Yjs garbage collection on (`gc: true`, the Yjs default) so deleted content does not
+   * stay in memory and in stored state (BOARD-1515). Version snapshots do not need `gc: false`:
+   * see {@link YjsSyncAdapter.encodeSnapshot}.
    */
   doc?: Y.Doc;
 
@@ -316,6 +338,34 @@ export interface YjsSyncAdapter extends SyncAdapter {
    * Checks if a particular action requires an active online connection (BOARD-1508).
    */
   isOnlineRequired?(action: string): boolean;
+
+  /**
+   * Encodes the current board content as a version snapshot (BOARD-1511): bytes the application
+   * stores and schedules itself. Holds the content only, not the edit history.
+   */
+  encodeSnapshot(): Uint8Array;
+
+  /**
+   * Decodes a snapshot for a read-only preview without restoring it (BOARD-1511). Records the
+   * connected board would reject are dropped. Show the result on a separate board, for example
+   * `createBoard({ document, readOnly: true })`; the shared document is not touched. Also works
+   * on read-only clients.
+   *
+   * @throws `InvalidUpdateError` when the bytes are too large (above the board's
+   *   `maxDocumentBytes`) or corrupt.
+   */
+  previewSnapshot(bytes: Uint8Array): BoardDocument;
+
+  /**
+   * Restores a snapshot as a new local change (BOARD-1511): records that differ are written and
+   * records missing from the snapshot are removed, in one transaction. It syncs to every peer like
+   * any edit, keeps everyone's history (nobody's undo stack is cleared), and is one undo step for
+   * the local user. Document metadata (`meta`) is left as is.
+   *
+   * @throws `ReadOnlyBoardError` on a read-only client, `Error` when no board is connected or the
+   *   snapshot is newer than the board supports, or `InvalidUpdateError` for bad bytes.
+   */
+  restoreSnapshot(bytes: Uint8Array, options?: RestoreSnapshotOptions): RestoreSnapshotResult;
 
   /**
    * Destroys adapter resources including persistence, history, and listeners.
@@ -1043,6 +1093,37 @@ export function createYjsSyncAdapter(options: YjsSyncOptions = {}): YjsSyncAdapt
 
     isOnlineRequired(action: string): boolean {
       return options.isOnlineRequired ? options.isOnlineRequired(action) : false;
+    },
+
+    encodeSnapshot(): Uint8Array {
+      return encodeSnapshot(doc);
+    },
+
+    previewSnapshot(bytes: Uint8Array): BoardDocument {
+      const board = currentBoard;
+      const decodeOptions: DecodeSnapshotOptions = board
+        ? { registry: board.elements, limits: board.limits }
+        : {};
+      return decodeSnapshot(bytes, decodeOptions);
+    },
+
+    restoreSnapshot(
+      bytes: Uint8Array,
+      restoreOptions: RestoreSnapshotOptions = {},
+    ): RestoreSnapshotResult {
+      const board = currentBoard;
+      if (!board) {
+        throw new Error('restoreSnapshot membutuhkan papan yang terhubung.');
+      }
+      if (isReadOnly) throw new ReadOnlyBoardError();
+      const snapshot = decodeSnapshot(bytes, { limits: board.limits });
+      // A restore is its own undo step: never merged with the edit before or after it.
+      history?.stopCapturing();
+      try {
+        return applySnapshot(board, snapshot, restoreOptions.label ?? RESTORE_SNAPSHOT_LABEL);
+      } finally {
+        history?.stopCapturing();
+      }
     },
 
     destroy(): void {

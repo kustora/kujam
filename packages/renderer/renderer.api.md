@@ -4,10 +4,12 @@
 
 ```ts
 
+import { Anchor } from '@kujam/core';
 import { Board } from '@kujam/core';
 import { BoxBounds } from '@kujam/core';
 import { ChangeEvent } from '@kujam/core';
 import { ContextMenuEvent } from '@kujam/core';
+import { ElementCanvasContext } from '@kujam/core';
 import { ElementDefinition } from '@kujam/core';
 import { ElementRecord } from '@kujam/core';
 import { Point } from '@kujam/core';
@@ -16,6 +18,16 @@ import { PresenceLiveStroke } from '@kujam/core';
 import { ThemeDefinition } from '@kujam/core';
 import { ThemeMode } from '@kujam/core';
 import { ViewportSize } from '@kujam/core';
+
+// @public
+export interface AnchorPin {
+    readonly anchor: Anchor;
+    readonly element: HTMLElement;
+    readonly host: HTMLDivElement;
+    remove(): void;
+    update(anchor: Anchor): void;
+    readonly visible: boolean;
+}
 
 // @public
 export type BoardBackground = 'none' | 'dots' | 'grid';
@@ -29,6 +41,7 @@ export interface BoardView {
     readonly container: HTMLElement;
     debug: boolean;
     readonly layers: RendererLayers;
+    mountAnchor(element: HTMLElement, anchor: Anchor): AnchorPin;
     readonly mounted: boolean;
     mountEditor(editor: HTMLElement, bounds: EditorBounds, elementId?: string): () => void;
     readonly overlayStats: Readonly<OverlayRenderStats>;
@@ -135,6 +148,9 @@ export interface ConnectorSnapOverlay {
         readonly y: number;
     };
 }
+
+// @beta
+export function createDrawingContext(ctx: CanvasRenderingContext2D, thumbnailCache?: ThumbnailCache): ElementCanvasContext;
 
 // @public
 export const DEFAULT_COLLAB_COLORS: readonly ["#2F6FDB", "#6B4FA0", "#16754C", "#C2410C", "#9B3D7F"];
@@ -243,6 +259,7 @@ export class OverlayRenderer {
 
 // @public
 export interface OverlayRenderStats {
+    dropTargetId?: string | null;
     // (undocumented)
     guidesCount: number;
     // (undocumented)
@@ -294,6 +311,7 @@ export interface RemoteSelection {
 export interface RendererLayers {
     // @beta
     readonly a11y: HTMLDivElement;
+    readonly anchors: HTMLDivElement;
     readonly canvas: HTMLCanvasElement;
     readonly html: HTMLDivElement;
     readonly htmlCamera: HTMLDivElement;

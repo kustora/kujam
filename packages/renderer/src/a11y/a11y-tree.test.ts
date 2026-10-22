@@ -553,3 +553,47 @@ describe('BOARD-1904: Fokus Terlihat & Kontras Aksesibilitas (>= 3:1)', () => {
     expect(contrastRatio(targetEl.style.outlineColor, DEFAULT_DARK_THEME.canvas.background)).toBeGreaterThanOrEqual(3.0);
   });
 });
+
+describe('BOARD-1212: a11y(el, data) with external data', () => {
+  it('uses resolved data for the role and label and patches the item when data arrives', async () => {
+    let resolveItem: (value: { title: string }) => void = () => {};
+    const card = defineElement({
+      type: 'card',
+      version: 1,
+      props: object({ itemId: string() }),
+      defaults: { itemId: '' },
+      render: { canvas: noop },
+      resolve: (el, ctx) => ctx.resolvers.item!(el.props.itemId) as Promise<{ title: string }>,
+      a11y: (_el, data) => ({
+        role: 'article',
+        label: data ? `Item: ${data.title}` : 'Item',
+      }),
+    });
+    const board = createBoard({
+      plugins: [definePlugin({ id: 'cards', elements: [card] })],
+      platform: 'other',
+      resolvers: {
+        item: () =>
+          new Promise<{ title: string }>((resolve) => {
+            resolveItem = resolve;
+          }),
+      },
+    });
+    boards.push(board);
+    const container = document.body.appendChild(document.createElement('div'));
+    const view = mountRenderer(board, container);
+    views.push(view);
+    FakeResizeObserver.instances.at(-1)!.resize(800, 600);
+
+    board.create({ id: 'p', type: 'card', x: 0, y: 0, w: 100, h: 100, props: { itemId: 'x' } });
+    settle();
+    expect(target(view, 'p').getAttribute('role')).toBe('article');
+    expect(target(view, 'p').getAttribute('aria-label')).toBe('Item');
+
+    resolveItem({ title: 'Peluncuran' });
+    await Promise.resolve();
+    await Promise.resolve();
+    settle();
+    expect(target(view, 'p').getAttribute('aria-label')).toBe('Item: Peluncuran');
+  });
+});

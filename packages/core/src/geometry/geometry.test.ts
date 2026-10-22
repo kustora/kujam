@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   boardToLocal,
   containedInBox,
+  containedInPolygon,
   containsPoint,
   distanceToEdge,
   ellipse,
@@ -547,5 +548,100 @@ describe('BOARD-403: snapPoints', () => {
     expect(points[0]!.kind).toBe('corner');
     close(points[8]!, 60, 45);
     expect(points[8]!.kind).toBe('center');
+  });
+});
+
+describe('BOARD-910: containedInPolygon', () => {
+  /** Concave "C" shaped lasso opening to the right, around (0..100, 0..100). */
+  const cShape: Point[] = [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+    { x: 100, y: 30 },
+    { x: 30, y: 30 },
+    { x: 30, y: 70 },
+    { x: 100, y: 70 },
+    { x: 100, y: 100 },
+    { x: 0, y: 100 },
+  ];
+
+  it('contains a shape that lies fully inside a concave area', () => {
+    expect(containedInPolygon(rect(20, 20, 5, 5), cShape)).toBe(true);
+    expect(containedInPolygon(rect(20, 10, 60, 5), cShape)).toBe(true);
+  });
+
+  it('rejects a shape in the notch of a concave area even though its bounds fit', () => {
+    expect(containedInPolygon(rect(20, 20, 50, 40), cShape)).toBe(false);
+    expect(containedInPolygon(rect(60, 80, 10, 10), cShape)).toBe(false);
+  });
+
+  it('rejects a shape that sticks out, and areas with fewer than three points', () => {
+    expect(containedInPolygon(rect(50, 50, 90, 10), cShape)).toBe(false);
+    expect(
+      containedInPolygon(rect(1, 1), [
+        { x: 0, y: 0 },
+        { x: 10, y: 10 },
+      ]),
+    ).toBe(false);
+    expect(containedInPolygon(polyline([]), cShape)).toBe(false);
+  });
+
+  it('accounts for the stroke thickness of lines', () => {
+    const line = polyline(
+      [
+        { x: 5, y: 50 },
+        { x: 25, y: 50 },
+      ],
+      0,
+    );
+    expect(containedInPolygon(line, cShape)).toBe(true);
+    const thick = polyline(
+      [
+        { x: 5, y: 50 },
+        { x: 25, y: 50 },
+      ],
+      12,
+    );
+    // The 6-unit half thickness reaches past the notch edge at x = 30.
+    expect(containedInPolygon(thick, cShape)).toBe(false);
+  });
+
+  it('rejects a shape inside a hole of a self-intersecting area (even-odd)', () => {
+    // Outer square and an inner square drawn as one ring, joined by a seam at the top.
+    const ring: Point[] = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+      { x: 0, y: 100 },
+      { x: 0, y: 0 },
+      { x: 40, y: 40 },
+      { x: 40, y: 60 },
+      { x: 60, y: 60 },
+      { x: 60, y: 40 },
+      { x: 40, y: 40 },
+    ];
+    expect(containedInPolygon(rect(4, 4, 45, 45), ring)).toBe(false);
+    expect(containedInPolygon(rect(70, 70, 15, 15), ring)).toBe(false);
+    expect(containedInPolygon(rect(80, 10, 10, 75), ring)).toBe(true);
+  });
+
+  it('tests ellipses with their outline and applies the element transform', () => {
+    const diamond: Point[] = [
+      { x: 50, y: 0 },
+      { x: 100, y: 50 },
+      { x: 50, y: 100 },
+      { x: 0, y: 50 },
+    ];
+    // A circle inscribed in the diamond's bounding box pokes out of the diamond.
+    expect(containedInPolygon(ellipse(100, 100), diamond)).toBe(false);
+    expect(containedInPolygon(ellipse(60, 60, 20, 20), diamond)).toBe(true);
+    // The 100x50 element rotated by 90 degrees spans x 35..85 and y -5..95 on the board.
+    const tall: Point[] = [
+      { x: 30, y: -10 },
+      { x: 90, y: -10 },
+      { x: 90, y: 100 },
+      { x: 30, y: 100 },
+    ];
+    expect(containedInPolygon(rect(100, 50), tall, rotated)).toBe(true);
+    expect(containedInPolygon(rect(100, 50), tall, placed)).toBe(false);
   });
 });

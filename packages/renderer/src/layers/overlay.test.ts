@@ -270,6 +270,62 @@ describe('BOARD-805: Overlay Renderer', () => {
       expect(brushFill).toBeDefined();
     });
 
+    it('BOARD-910: draws the lasso path from toolData as a closed, dashed, filled polygon', () => {
+      const board = createBoard({ plugins: [testPlugin] });
+      boards.push(board);
+      board.camera.setViewport({ width: 800, height: 600 });
+      Object.defineProperty(board, 'toolData', {
+        value: {
+          brush: null,
+          lasso: [
+            { x: 10, y: 10 },
+            { x: 200, y: 20 },
+            { x: 100, y: 150 },
+            { x: Number.NaN, y: 5 },
+          ],
+          guides: [],
+        },
+        configurable: true,
+      });
+
+      const overlayRenderer = new OverlayRenderer(board);
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 600;
+      const ctx = createMockContext();
+
+      const stats = overlayRenderer.render(canvas, ctx as unknown as CanvasRenderingContext2D, 1);
+      expect(stats.rendered).toBe(true);
+      expect(stats.hasBrush).toBe(true);
+      const at = ctx.calls.indexOf('setLineDash(4,3)');
+      expect(at).toBeGreaterThan(-1);
+      const before = ctx.calls.slice(0, at);
+      const move = before.lastIndexOf('moveTo(10,10)');
+      expect(move).toBeGreaterThan(-1);
+      // The non-finite point is dropped: two lineTo calls, then the path is closed and filled.
+      expect(before.slice(move).filter((c) => c.startsWith('lineTo'))).toEqual([
+        'lineTo(200,20)',
+        'lineTo(100,150)',
+      ]);
+      expect(before.slice(move)).toContain('closePath');
+      expect(before.slice(move)).toContain('fill(evenodd)');
+    });
+
+    it('BOARD-910: ignores a lasso with fewer than two points', () => {
+      const board = createBoard({ plugins: [testPlugin] });
+      boards.push(board);
+      board.camera.setViewport({ width: 800, height: 600 });
+      Object.defineProperty(board, 'toolData', {
+        value: { brush: null, lasso: [{ x: 10, y: 10 }], guides: [] },
+        configurable: true,
+      });
+      const overlayRenderer = new OverlayRenderer(board);
+      const canvas = document.createElement('canvas');
+      const ctx = createMockContext();
+      const stats = overlayRenderer.render(canvas, ctx as unknown as CanvasRenderingContext2D, 1);
+      expect(stats.hasBrush).toBe(false);
+    });
+
     it('draws snap guides along x and y axes', () => {
       const board = createBoard({ plugins: [testPlugin] });
       boards.push(board);
@@ -940,5 +996,47 @@ describe('BOARD-805: Overlay Renderer', () => {
       const statsCleared = overlayRenderer.render(canvas, ctx2 as unknown as CanvasRenderingContext2D, 1);
       expect(statsCleared.hasDropIndicator).toBe(false);
     });
+  });
+});
+
+describe('BOARD-1208: element drop target highlight', () => {
+  it('highlights the element named by toolData.dropTargetId', () => {
+    const board = createBoard({ plugins: [testPlugin] });
+    board.camera.setViewport({ width: 800, height: 600 });
+    board.create({ id: 'target', type: 'box', x: 100, y: 100, w: 200, h: 100 });
+    Object.defineProperty(board, 'toolData', {
+      value: { brush: null, guides: [], dropTargetId: 'target' },
+      configurable: true,
+    });
+
+    const overlayRenderer = new OverlayRenderer(board);
+    const canvas = document.createElement('canvas');
+    canvas.width = 800;
+    canvas.height = 600;
+    const ctx = createMockContext();
+
+    const stats = overlayRenderer.render(canvas, ctx as unknown as CanvasRenderingContext2D, 1);
+    expect(stats.rendered).toBe(true);
+    expect(stats.dropTargetId).toBe('target');
+    expect(stats.selectedCount).toBe(0);
+    expect(ctx.fillRect).toHaveBeenCalledWith(-100, -50, 200, 100);
+    expect(ctx.strokeRect).toHaveBeenCalledWith(-100, -50, 200, 100);
+    board.dispose();
+  });
+
+  it('ignores a dropTargetId of a missing element', () => {
+    const board = createBoard({ plugins: [testPlugin] });
+    board.camera.setViewport({ width: 800, height: 600 });
+    Object.defineProperty(board, 'toolData', {
+      value: { dropTargetId: 'gone' },
+      configurable: true,
+    });
+    const overlayRenderer = new OverlayRenderer(board);
+    const canvas = document.createElement('canvas');
+    const ctx = createMockContext();
+    expect(overlayRenderer.render(canvas, ctx as unknown as CanvasRenderingContext2D, 1).rendered).toBe(
+      false,
+    );
+    board.dispose();
   });
 });

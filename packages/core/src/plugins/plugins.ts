@@ -26,6 +26,8 @@ import { checkMessagesMap, type BoardMessages } from '../i18n/i18n.js';
 import { defineTool, type AnyToolDefinition, type BoardTools, type ToolError } from '../tools/tools.js';
 import type { BoardDocument, ElementRecord } from '../types.js';
 import type { BoardErrorCode } from '../events/events.js';
+import type { ElementInput } from '../document/mutate.js';
+import type { Point } from '../geometry/geometry.js';
 
 const isThenable = (v: unknown): v is PromiseLike<unknown> =>
   typeof v === 'object' && v !== null && typeof (v as { then?: unknown }).then === 'function';
@@ -153,6 +155,31 @@ export type PermissionHook = (
 export type DocumentSavedHook = (doc: Readonly<BoardDocument>) => void | PromiseLike<void>;
 
 /**
+ * Hook called when a URL is pasted onto the board (BOARD-1209). Returns the element to create
+ * for the URL, for example a link card, or `null`/`undefined` to let the next plugin (or the
+ * default text paste) handle it. The first plugin in installation order that returns an element
+ * wins.
+ *
+ * The hook must be synchronous so the element appears right away. It must not fetch the URL
+ * itself: give the element type a `resolve` that asks a host resolver (for example
+ * `createBoard({ resolvers: { linkPreview } })`) for the preview metadata, so the element shows
+ * its loading placeholder until the host's server-side lookup finishes (BOARD-604).
+ *
+ * Only `http:` and `https:` URLs reach the hook. When the element omits `x` and `y`, it is
+ * centered on `point`. A throwing hook is reported as a `plugin-error` event and skipped.
+ *
+ * @param url - The pasted URL, trimmed.
+ * @param point - Paste position in board coordinates.
+ * @param board - The board the URL is pasted into.
+ * @beta
+ */
+export type PasteUrlHook = (
+  url: string,
+  point: Point,
+  board: Board,
+) => ElementInput | null | undefined;
+
+/**
  * Cleanup function returned by `setup(board)` and run on `board.dispose()`.
  *
  * @public
@@ -266,6 +293,13 @@ export interface PluginDefinition<
    * @beta
    */
   readonly onDocumentSaved?: DocumentSavedHook;
+  /**
+   * Creates an element for a pasted URL, for example a link card (BOARD-1209); see
+   * {@link PasteUrlHook}.
+   *
+   * @beta
+   */
+  readonly onPasteUrl?: PasteUrlHook;
   /**
    * Bilingual dictionary entries (`id` / `en`) contributed by the plugin (BOARD-1909).
    * Merged in plugin installation order; consumer `createBoard({ messages })` wins over plugins.
@@ -596,7 +630,7 @@ function collectPluginErrors(definition: unknown): string[] {
     errors.push(...checkMessagesMap(definition.messages, 'messages'));
   }
 
-  for (const fnKey of ['permissions', 'onDocumentSaved', 'setup'] as const) {
+  for (const fnKey of ['permissions', 'onDocumentSaved', 'onPasteUrl', 'setup'] as const) {
     if (definition[fnKey] !== undefined && typeof definition[fnKey] !== 'function') {
       errors.push(`${fnKey} wajib berupa fungsi.`);
     }

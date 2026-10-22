@@ -593,6 +593,51 @@ export function containedInBox(
 }
 
 /**
+ * Whether a geometry, including its stroke thickness, lies entirely inside the polygon `area`
+ * (for example a lasso, BOARD-910). `area` may be concave or self-intersecting (even-odd rule) and
+ * is in board coordinates when `element` is given, otherwise local. Ellipses are tested with their
+ * {@link ELLIPSE_SEGMENTS}-sided outline. An area with fewer than three points, or a geometry
+ * without points, never contains anything.
+ *
+ * @beta
+ */
+export function containedInPolygon(
+  geometry: Geometry,
+  area: readonly Point[],
+  element?: ElementTransform,
+): boolean {
+  const outline = outlineOf(geometry);
+  const ring = toLocalPoints(area, element);
+  if (outline.points.length === 0 || ring.length < 3) return false;
+
+  // Cheap rejection: the shape's bounds must fit in the area's bounds.
+  const g = geometryBounds(geometry);
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const p of ring) {
+    minX = Math.min(minX, p.x);
+    minY = Math.min(minY, p.y);
+    maxX = Math.max(maxX, p.x);
+    maxY = Math.max(maxY, p.y);
+  }
+  if (g.minX < minX || g.minY < minY || g.maxX > maxX || g.maxY > maxY) return false;
+
+  // Every vertex of the shape is inside the area...
+  for (const p of outline.points) if (!insideRing(p, ring)) return false;
+  // ...no part of the area's boundary reaches into the shape (a hole or a dent)...
+  if (insideArea(geometry, outline, ring[0]!)) return false;
+  // ...and the boundaries never cross or come within the stroke's half thickness.
+  for (const [a, b] of segmentsOf(outline.points, outline.closed)) {
+    for (const [c, d] of segmentsOf(ring, true)) {
+      if (segmentDistance(a, b, c, d) <= outline.halfWidth) return false;
+    }
+  }
+  return true;
+}
+
+/**
  * Kind of a snap point: a corner or vertex, the middle of an edge, or the center of the shape.
  *
  * @beta

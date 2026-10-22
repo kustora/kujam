@@ -573,3 +573,72 @@ describe('BOARD-907: system plain text and URL paste', () => {
   });
 });
 
+
+describe('BOARD-1209: pasted URLs through plugin onPasteUrl hooks', () => {
+  function pasteText(root: HTMLElement, value: string) {
+    const data = new FakeDataTransfer();
+    data.setData('text/plain', value);
+    const { event } = clipboardEvent('paste', data);
+    root.dispatchEvent(event);
+    return event;
+  }
+
+  const linkCard = defineElement({
+    type: 'link-card',
+    version: 1,
+    props: object({ url: string() }),
+    defaults: { url: '' },
+    geometry: (el) => rect(el.w, el.h),
+  });
+  const linkPlugin = definePlugin({
+    id: 'link-card',
+    elements: [linkCard],
+    onPasteUrl: (url) => ({ type: 'link-card', w: 240, h: 120, props: { url } }),
+  });
+
+  it('creates and selects the element returned by a plugin hook at the paste point', () => {
+    const { board, root } = setup({ plugins: [testPlugin, linkPlugin] });
+    const event = pasteText(root, 'https://example.com/item');
+    expect(event.defaultPrevented).toBe(true);
+
+    const elements = board.query() as ElementRecord[];
+    expect(elements).toHaveLength(1);
+    expect(elements[0]!.type).toBe('link-card');
+    expect(elements[0]!.props).toEqual({ url: 'https://example.com/item' });
+    expect(board.selection).toEqual([elements[0]!.id]);
+
+    board.undo();
+    expect(board.query()).toHaveLength(0);
+  });
+
+  it('runs plugin hooks after the renderer onPasteUrl option returns false', async () => {
+    const onPasteUrl = vi.fn().mockResolvedValue(false);
+    const { board, root } = setup({ plugins: [testPlugin, linkPlugin] }, { onPasteUrl });
+    pasteText(root, 'https://example.com/a');
+    await Promise.resolve();
+    expect((board.query() as ElementRecord[]).map((el) => el.type)).toEqual(['link-card']);
+  });
+
+  it('falls back to text when the plugin hook throws, reporting plugin-error', () => {
+    const throwing = definePlugin({
+      id: 'throwing',
+      onPasteUrl: () => {
+        throw new Error('boom');
+      },
+    });
+    const { board, root } = setup({ plugins: [testPlugin, throwing] });
+    const errors: string[] = [];
+    board.on('error', (e) => errors.push(e.code));
+    expect(() => pasteText(root, 'https://example.com')).not.toThrow();
+    expect((board.query() as ElementRecord[]).map((el) => el.type)).toEqual(['text']);
+    expect(errors).toEqual(['plugin-error']);
+  });
+
+  it('never passes javascript: URLs to plugin hooks', () => {
+    const hook = vi.fn(() => null);
+    const spy = definePlugin({ id: 'spy', onPasteUrl: hook });
+    const { root } = setup({ plugins: [testPlugin, spy] });
+    pasteText(root, 'javascript:alert(1)');
+    expect(hook).not.toHaveBeenCalled();
+  });
+});

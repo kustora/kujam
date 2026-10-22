@@ -49,6 +49,7 @@ export type Tests = [
       | 'drag-preview'
       | 'sync'
       | 'contextmenu'
+      | 'anchor'
     >
   >,
   Expect<Equal<BoardEventMap['contextmenu'], ContextMenuEvent>>,

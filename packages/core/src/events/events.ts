@@ -12,6 +12,7 @@ import type { CameraState } from '../types.js';
 import type { Point } from '../geometry/geometry.js';
 import type { SyncChangeEvent } from '../sync/sync.js';
 import type { ContextMenuEvent } from '../tools/context-menu.js';
+import type { AnchorEvent } from '../anchors/anchors.js';
 
 /**
  * Typed event listener.
@@ -271,6 +272,13 @@ export interface BoardEventMap {
    * @beta
    */
   contextmenu: ContextMenuEvent;
+  /**
+   * An anchor tracked with `board.anchors.track` moved, lost its element, or got it back
+   * (BOARD-1211).
+   *
+   * @public
+   */
+  anchor: AnchorEvent;
 }
 
 /**

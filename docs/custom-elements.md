@@ -77,6 +77,36 @@ Host elemen meneruskan event pointer ke tool papan (pilih, geser, resize) sehing
 
 Exception di `resolve`, resolver, `render.html`, `update`, `render.canvas`, `actions`, atau `a11y` hanya memengaruhi elemen itu: elemen menampilkan placeholder error dan papan memancarkan event `error` (`resolve-error`, `render-error`, `action-error`). Elemen lain tetap digambar.
 
+### Drop target (BOARD-1208)
+
+Elemen bisa menerima elemen lain yang dijatuhkan ke atasnya dengan tool select:
+
+```ts
+dropTarget: {
+  accepts: (dropped) => dropped.type === 'item-card',
+  onDrop(target, dropped, point, ctx) {
+    ctx.updateProps({ itemIds: [...target.props.itemIds, String(dropped.props.itemId)] });
+    ctx.removeDropped(); // tanpa ini elemen yang dijatuhkan tetap di posisi lepasnya
+  },
+},
+```
+
+Selama elemen yang diterima diseret di atas target, overlay menyorot target. Geser + `onDrop` menjadi satu transaksi dan satu langkah undo. `accepts` harus murah dan tanpa efek samping; error di `accepts`/`onDrop` dilaporkan sebagai event `error` `plugin-error`, dan `onDrop` yang melempar error membatalkan seluruh perubahan drop (geserannya tetap).
+
+### Tempel URL (BOARD-1209)
+
+Plugin bisa mengubah URL yang ditempel menjadi elemen, misalnya kartu tautan:
+
+```ts
+definePlugin({
+  id: 'example.link-card',
+  elements: [linkCard], // resolve: (el, ctx) => ctx.resolvers.linkPreview(el.props.url)
+  onPasteUrl: (url) => ({ type: 'link-card', w: 320, h: 120, props: { url } }),
+});
+```
+
+Hook wajib sinkron dan mengembalikan `ElementInput` atau `null`; plugin pertama (urutan pemasangan) yang mengembalikan elemen menang, dan tempel itu satu langkah undo. Hanya URL `http:`/`https:` yang sampai ke hook. Package **tidak** mengambil URL: metadata pratinjau diambil host (sebaiknya di server) lewat resolver, sehingga elemen langsung tampil dalam status memuat lalu terisi. Hook yang melempar error dilaporkan sebagai `plugin-error` dan plugin berikutnya dicoba; bila tidak ada yang menangani, URL ditempel sebagai teks.
+
 ## 3. Keamanan (ADR-009, T8)
 
 Kode plugin berjalan dengan hak penuh di origin aplikasi, jadi package tidak bisa melindungi dari plugin yang berbahaya. Yang bisa (dan wajib) dicegah adalah **data** yang tidak dipercaya masuk ke DOM sebagai kode. Props elemen dan data resolver dianggap tidak dipercaya: keduanya bisa berasal dari peer kolaborasi, berkas impor, atau server.
@@ -84,6 +114,6 @@ Kode plugin berjalan dengan hak penuh di origin aplikasi, jadi package tidak bis
 - **Teks:** pakai `textContent` atau `createTextNode`. Jangan pernah `innerHTML`, `outerHTML`, `insertAdjacentHTML`, atau `document.write` dengan props atau data. Aturan ESLint repo ini melarangnya di package, terapkan juga di plugin.
 - **Tautan dan gambar:** jalankan URL lewat `sanitizeUrl` / `isSafeUrl` dari `@kujam/core` sebelum dipasang ke `href` atau `src`; buka tautan dengan `safeLinkAttributes()` (`rel="noopener noreferrer"`).
 - **Style:** atur lewat CSSOM (`el.style.color = …`), jangan menyusun atribut `style` atau `<style>` dari data. Ini juga yang membuat papan berjalan di CSP ketat (`docs/csp.md`).
-- **Iframe:** jangan membuat iframe dari URL di props. Tunggu elemen embed resmi (BOARD-1107) yang memakai `sandbox` dan daftar domain.
+- **Iframe:** jangan membuat iframe dari URL di props. Pakai elemen embed resmi `createEmbedElement({ domains })` dari `@kujam/shapes` (BOARD-1107) yang memakai `sandbox` dan daftar origin.
 - **Placeholder:** `placeholder(reason)` tidak menerima data, sehingga elemen `forbidden` tidak bisa membocorkan isi yang dilarang.
 - **Resolver:** periksa izin di server atau aplikasi, lalu kembalikan `{ status: 'forbidden' }`; jangan mengandalkan elemen untuk menyembunyikan data yang sudah dikirim.

@@ -44,13 +44,14 @@ pnpm start
 
 ### Variabel Lingkungan (Environment Variables)
 
-| Variabel            | Bawaan                | Keterangan                                                                      |
-| ------------------- | --------------------- | ------------------------------------------------------------------------------- |
-| `PORT`              | `1234`                | Port HTTP & WebSocket server                                                    |
-| `DATABASE_PATH`     | `./data/kujam.sqlite` | Lokasi file database SQLite (atau `:memory:`)                                   |
-| `DEBOUNCE_MS`       | `2000`                | Jeda debounce penyimpanan ke SQLite (milidetik)                                 |
-| `AUTH_ENDPOINT`     | _(kosong)_            | URL endpoint HTTP eksternal untuk verifikasi token                              |
-| `ALLOW_MOCK_TOKENS` | _(kosong)_            | `true` untuk menerima token mock walau `NODE_ENV=production` (hanya demo lokal) |
+| Variabel              | Bawaan                | Keterangan                                                                          |
+| --------------------- | --------------------- | ----------------------------------------------------------------------------------- |
+| `PORT`                | `1234`                | Port HTTP & WebSocket server                                                        |
+| `DATABASE_PATH`       | `./data/kujam.sqlite` | Lokasi file database SQLite (atau `:memory:`)                                       |
+| `DEBOUNCE_MS`         | `2000`                | Jeda debounce penyimpanan ke SQLite (milidetik)                                     |
+| `AUTH_ENDPOINT`       | _(kosong)_            | URL endpoint HTTP eksternal untuk verifikasi token                                  |
+| `ALLOW_MOCK_TOKENS`   | _(kosong)_            | `true` untuk menerima token mock walau `NODE_ENV=production` (hanya demo lokal)     |
+| `COMPACT_INTERVAL_MS` | `3600000`             | Jeda pemadatan berkala dokumen tersimpan (milidetik); `0` mematikannya (BOARD-1515) |
 
 ---
 
@@ -72,6 +73,27 @@ docker compose down
 ```
 
 ---
+
+## Pengendalian Ukuran Dokumen (BOARD-1515)
+
+Dokumen Yjs bisa membengkak karena setiap edit menyisakan metadata. Server ini menjaganya dengan tiga lapis:
+
+1. **Garbage collection Yjs aktif.** `Y.Doc` di server dan di `@kujam/sync-yjs` memakai `gc: true` (bawaan Yjs), jadi isi yang dihapus diganti penanda kecil dan tidak ikut tersimpan. Jangan membuat `Y.Doc` dengan `gc: false`; snapshot versi (`encodeSnapshot`, BOARD-1511) tidak membutuhkannya.
+2. **Encode ulang state pada setiap simpan.** `onStoreDocument` menyimpan `Y.encodeStateAsUpdate` dari dokumen yang sudah di-GC, bukan menumpuk update satu per satu.
+3. **Pemadatan berkala.** Setiap `COMPACT_INTERVAL_MS` (opsi `compactIntervalMs`), `db.compactAll()` memuat state tersimpan dokumen yang sedang tidak dibuka ke `Y.Doc` ber-GC lalu meng-encode ulang (`compactUpdate` dari `@kujam/sync-yjs`). Baris hanya ditulis ulang bila hasilnya lebih kecil. Identitas CRDT tetap sama, jadi klien yang masih terhubung atau punya cache offline (y-indexeddb) tetap tersinkron normal.
+
+Bila server Anda menyimpan log update (append-only) alih-alih state penuh, padatkan lognya dengan cara yang sama:
+
+```ts
+import { compactUpdate } from '@kujam/sync-yjs';
+
+const compacted = compactUpdate(updateLog); // Uint8Array[] -> satu update
+await replaceLog(documentName, [compacted]);
+```
+
+Pemadatan **tidak** membuang riwayat struktur CRDT (ID item tetap disimpan agar penggabungan dengan klien lama aman). Membuang semuanya dengan membangun dokumen baru dari isi (`documentToUpdate(updateToDocument(state))`) memang lebih kecil, tetapi menghasilkan dokumen baru: lakukan hanya bila semua klien dan cache offline ikut diganti, misalnya saat migrasi.
+
+Benchmark di `packages/sync-yjs/src/size-control.test.ts`: papan dengan 200 elemen dan 10.000 operasi edit dimuat (terapkan update + sambungkan papan) jauh di bawah 1 detik.
 
 ## Keamanan (BOARD-2009, BOARD-2010)
 

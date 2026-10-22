@@ -309,6 +309,21 @@ export function createBoxTool<P = Record<string, unknown>>(options: BoxToolOptio
 // @public
 export function createDrawTool(options?: DrawToolOptions): ToolDefinition<DrawToolState, DrawToolData>;
 
+// @beta
+export function createEmbedElement(options: EmbedElementOptions): _kujam_core.ElementDefinition<"embed", {
+    url: _kujam_core.Schema<string>;
+    title: _kujam_core.Schema<string>;
+}, undefined>;
+
+// @beta
+export function createEmbedPlugin(options: EmbedElementOptions): Readonly<{
+    readonly id: "embed";
+    readonly elements: readonly [_kujam_core.ElementDefinition<"embed", {
+        url: _kujam_core.Schema<string>;
+        title: _kujam_core.Schema<string>;
+    }, undefined>];
+}>;
+
 // @public
 export function createEraserTool(options?: EraserToolOptions): ToolDefinition<EraserToolState, EraserToolData>;
 
@@ -342,6 +357,9 @@ export const DEFAULT_ELBOW_CLEARANCE = 16;
 // @public
 export const DEFAULT_ELEMENT_TYPES: readonly ["sticky", "draw", "text", "geo", "connector", "group", "frame", "image", "line"];
 
+// @beta
+export const DEFAULT_EMBED_COMPACT_ZOOM = 0.5;
+
 // @public
 export const DEFAULT_FRAME_SIZE: Readonly<{
     w: 800;
@@ -357,7 +375,7 @@ export const DEFAULT_IMAGE_SIZE: Readonly<{
 export { DEFAULT_LIGHT_THEME }
 
 // @public
-export const DEFAULT_TOOL_IDS: readonly ["select", "hand", "sticky", "draw", "geo", "rectangle", "ellipse", "connector", "line", "text", "frame", "eraser"];
+export const DEFAULT_TOOL_IDS: readonly ["select", "lasso", "hand", "sticky", "draw", "geo", "rectangle", "ellipse", "connector", "line", "text", "frame", "eraser"];
 
 // @public
 export const defaultElements: Readonly<{
@@ -484,7 +502,7 @@ export type DefaultToolId = (typeof DEFAULT_TOOL_IDS)[number];
 // @public
 export const defaultTools: Readonly<{
     readonly id: "default-tools";
-    readonly tools: readonly [_kujam_core.ToolDefinition<"idle" | "quick-connecting" | "pointing" | "translating" | "brushing" | "resizing" | "rotating" | "bending" | "reshaping" | "reconnecting", SelectToolData>, _kujam_core.ToolDefinition<"idle" | "panning", HandToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<DrawToolState, DrawToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<ConnectorToolState, ConnectorToolData>, _kujam_core.ToolDefinition<"idle", LineToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<EraserToolState, EraserToolData>];
+    readonly tools: readonly [_kujam_core.ToolDefinition<"idle" | "quick-connecting" | "pointing" | "translating" | "brushing" | "lassoing" | "resizing" | "rotating" | "bending" | "reshaping" | "reconnecting", SelectToolData>, _kujam_core.ToolDefinition<"idle" | "lassoing", LassoToolData>, _kujam_core.ToolDefinition<"idle" | "panning", HandToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<DrawToolState, DrawToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<ConnectorToolState, ConnectorToolData>, _kujam_core.ToolDefinition<"idle", LineToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<EraserToolState, EraserToolData>];
     readonly keybindings: {
         readonly v: "tool:select";
         readonly h: "tool:hand";
@@ -579,8 +597,46 @@ export interface DrawToolOptions {
     readonly thickness?: number;
 }
 
+// @beta
+export function elementsInLasso(board: Board, points: readonly Point[], partial: boolean): string[];
+
 // @public
 export const ellipseTool: ToolDefinition<BoxToolState, BoxToolData>;
+
+// @beta
+export const EMBED_SANDBOX_TOKENS: readonly ["allow-downloads", "allow-forms", "allow-modals", "allow-orientation-lock", "allow-pointer-lock", "allow-popups", "allow-popups-to-escape-sandbox", "allow-presentation", "allow-same-origin", "allow-scripts", "allow-storage-access-by-user-activation", "allow-top-navigation-by-user-activation"];
+
+// @beta
+export interface EmbedDomain {
+    readonly allow?: readonly string[];
+    readonly origin: string;
+    readonly referrerPolicy?: EmbedReferrerPolicy;
+    readonly sandbox?: readonly EmbedSandboxToken[];
+}
+
+// @beta
+export interface EmbedElementOptions {
+    readonly compactBelowZoom?: number;
+    readonly domains: readonly (string | EmbedDomain)[];
+}
+
+// @beta
+export interface EmbedProps extends Record<string, unknown> {
+    title: string;
+    url: string;
+}
+
+// @beta
+export const embedPropsSchema: _kujam_core.ObjectSchema<{
+    url: _kujam_core.Schema<string>;
+    title: _kujam_core.Schema<string>;
+}>;
+
+// @beta
+export type EmbedReferrerPolicy = 'no-referrer' | 'origin' | 'same-origin' | 'strict-origin' | 'strict-origin-when-cross-origin';
+
+// @beta
+export type EmbedSandboxToken = (typeof EMBED_SANDBOX_TOKENS)[number];
 
 // @public
 export const EMPTY_RICH_TEXT: RichText;
@@ -785,6 +841,19 @@ export const imagePropsSchema: _kujam_core.ObjectSchema<{
 export function isRichTextEmpty(delta: RichText): boolean;
 
 // @public
+export const LASSO_MIN_POINT_DISTANCE_PX = 3;
+
+// @beta
+export const lassoTool: _kujam_core.ToolDefinition<"idle" | "lassoing", LassoToolData>;
+
+// @beta
+export interface LassoToolData {
+    initialSelection: readonly string[];
+    lasso: readonly Point[] | null;
+    lastScreen: Point | null;
+}
+
+// @public
 export function layoutRichText(delta: RichText, options: TextLayoutOptions, measurer?: ReturnType<typeof createMeasurer>): TextLayout;
 
 // @public
@@ -861,6 +930,12 @@ export interface ListMarker {
 export const MAX_DRAW_POINTS = 5000;
 
 // @beta
+export const MAX_EMBED_URL_LENGTH = 2048;
+
+// @public
+export const MAX_LASSO_POINTS = 2000;
+
+// @beta
 export const MAX_LINE_POINTS = 1000;
 
 // @public
@@ -909,6 +984,21 @@ export function resolveAnchorWorldPoint(element: ElementTransform, anchor: Point
 // @public
 export function resolveConnectorRouteOptions(element: ElementRecord<ConnectorProps>, board?: Board): ConnectorRouteOptions;
 
+// @beta
+export interface ResolvedEmbed {
+    readonly allow: string;
+    // (undocumented)
+    readonly origin: string;
+    // (undocumented)
+    readonly referrerPolicy: EmbedReferrerPolicy;
+    readonly sandbox: string;
+    // (undocumented)
+    readonly url: string;
+}
+
+// @beta
+export function resolveEmbed(url: string, domains: readonly (string | EmbedDomain)[]): ResolvedEmbed | null;
+
 // @public
 export type RichText = Infer<typeof richTextSchema>;
 
@@ -952,13 +1042,14 @@ export function segmentDistance(a: readonly number[], b: readonly number[], c: r
 export type SelectHandle = ResizeHandle | 'rotate' | 'connector-start' | 'connector-end' | 'connector-segment' | 'line-point' | 'line-insert';
 
 // @beta
-export const selectTool: _kujam_core.ToolDefinition<"idle" | "quick-connecting" | "pointing" | "translating" | "brushing" | "resizing" | "rotating" | "bending" | "reshaping" | "reconnecting", SelectToolData>;
+export const selectTool: _kujam_core.ToolDefinition<"idle" | "quick-connecting" | "pointing" | "translating" | "brushing" | "lassoing" | "resizing" | "rotating" | "bending" | "reshaping" | "reconnecting", SelectToolData>;
 
 // @beta
 export interface SelectToolData {
     brush: BoxBounds | null;
     connectorPreview?: ConnectorPreview;
     connectorSnap?: ConnectorSnapTarget;
+    dropTargetId?: string | null;
     duplicating: boolean;
     enteredGroupId: string | null;
     guides: readonly SnapGuide[];
@@ -966,6 +1057,8 @@ export interface SelectToolData {
     hitId: string | null;
     hitLocked: boolean;
     initialSelection: readonly string[];
+    lasso: readonly Point[] | null;
+    lastScreen: Point | null;
     lineDragging?: boolean;
     linePoint?: number;
     originals: readonly Readonly<ElementRecord>[];
