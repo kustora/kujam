@@ -52,12 +52,12 @@ export type Checks = [
   Expect<
     Equal<
       (typeof defaultElements)['elements'][number]['type'],
-      'sticky' | 'draw' | 'text' | 'geo' | 'connector' | 'group' | 'frame' | 'image'
+      'sticky' | 'draw' | 'text' | 'geo' | 'connector' | 'group' | 'frame' | 'image' | 'line'
     >
   >,
   // BOARD-502: built-in select and hand tools, and the overlay data of the select tool.
   Expect<Equal<NonNullable<(typeof defaultTools)['tools']>[number]['id'], string>>,
-  Expect<Equal<NonNullable<(typeof defaultTools)['tools']>['length'], 15>>,
+  Expect<Equal<NonNullable<(typeof defaultTools)['tools']>['length'], 16>>,
   Expect<Equal<SelectToolData['brush'], BoxBounds | null>>,
   Expect<Equal<SelectToolData['guides'], readonly SnapGuide[]>>,
 ];

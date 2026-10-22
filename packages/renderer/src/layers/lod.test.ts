@@ -274,6 +274,24 @@ describe('BOARD-1204: Drawing context helpers', () => {
     expect(drawnMissing).toBe(false);
   });
 
+  it('invokes native accessors with the real context as `this`', () => {
+    // Mimics a native canvas brand check that throws "Illegal invocation" for foreign receivers.
+    class BrandedCtx {
+      #fill = '#000';
+      get fillStyle(): string {
+        if (!(#fill in this)) throw new TypeError('Illegal invocation');
+        return this.#fill;
+      }
+      set fillStyle(value: string) {
+        if (!(#fill in this)) throw new TypeError('Illegal invocation');
+        this.#fill = value;
+      }
+    }
+    const g = createDrawingContext(new BrandedCtx() as unknown as CanvasRenderingContext2D);
+    g.fillStyle = '#fff';
+    expect(g.fillStyle).toBe('#fff');
+  });
+
   it('polyills roundRect with clamped radii for numbers and arrays', () => {
     const ctx = {
       moveTo: vi.fn(),

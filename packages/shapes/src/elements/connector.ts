@@ -42,6 +42,7 @@ import { connectorActions, GEO_STROKE_WIDTHS } from '../styles.js';
 import {
   ARROWHEAD_STYLES,
   computeConnectorRoute,
+  CONNECTOR_DASH_PATTERNS,
   CONNECTOR_STYLES,
   drawArrowhead,
   resolveAnchorSide,
@@ -324,12 +325,6 @@ function traceRoundedCorners(
   g.lineTo(last.x, last.y);
 }
 
-const DASHES: Readonly<Record<ConnectorDash, readonly number[]>> = {
-  solid: [],
-  dashed: [4, 4],
-  dotted: [1, 3],
-};
-
 /**
  * Renders a `connector` element onto a 2D canvas context in local coordinates.
  *
@@ -355,7 +350,7 @@ export function renderConnectorCanvas(
   g.lineWidth = props.strokeWidth;
   g.lineCap = 'round';
   g.lineJoin = 'round';
-  g.setLineDash(DASHES[props.dash].map((d) => d * props.strokeWidth));
+  g.setLineDash(CONNECTOR_DASH_PATTERNS[props.dash].map((d) => d * props.strokeWidth));
 
   g.beginPath();
   const first = pts[0]!;

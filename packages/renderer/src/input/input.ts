@@ -443,8 +443,9 @@ export function attachInput(
           currentHoverId = nextHover;
           options?.onHover?.(nextHover);
         }
-        // Tools with hover feedback: connector anchors, and the select tool's quick-connect dots.
-        if (board.tool === 'connector' || board.tool === 'select') {
+        // Tools with hover feedback: connector anchors, the select tool's quick-connect dots, and
+        // the line tool's next segment (BOARD-1106).
+        if (board.tool === 'connector' || board.tool === 'select' || board.tool === 'line') {
           dispatch(createPointerEvent('pointer-move', e, screen, point, pointerKind(e.pointerType)));
         }
       }

@@ -238,6 +238,30 @@ const ARROW_NAMES = {
   diamond: { id: 'Belah ketupat', en: 'Diamond' },
 } as const;
 
+/** Styles shared by connectors and lines (BOARD-1106): same stroke, dash, and arrowheads. */
+const DASH_SPEC: StyleSpec = {
+  style: 'dash',
+  prop: 'dash',
+  options: named(['solid', 'dashed', 'dotted'], {
+    solid: { id: 'Penuh', en: 'Solid' },
+    dashed: { id: 'Putus-putus', en: 'Dashed' },
+    dotted: { id: 'Titik-titik', en: 'Dotted' },
+  }),
+};
+
+const ARROW_SPECS: readonly StyleSpec[] = [
+  {
+    style: 'startArrow',
+    prop: 'startArrow',
+    options: named(['none', 'arrow', 'triangle', 'dot', 'diamond'], ARROW_NAMES),
+  },
+  {
+    style: 'endArrow',
+    prop: 'endArrow',
+    options: named(['none', 'arrow', 'triangle', 'dot', 'diamond'], ARROW_NAMES),
+  },
+];
+
 /** @internal */
 export function connectorActions<P>(
   el: ElementRecord<P>,
@@ -246,15 +270,7 @@ export function connectorActions<P>(
   return styleActions(el, ctx, 'connector', [
     { style: 'color', prop: 'color', options: COLOR_OPTIONS },
     { style: 'thickness', prop: 'strokeWidth', options: presets(GEO_STROKE_WIDTHS) },
-    {
-      style: 'dash',
-      prop: 'dash',
-      options: named(['solid', 'dashed', 'dotted'], {
-        solid: { id: 'Penuh', en: 'Solid' },
-        dashed: { id: 'Putus-putus', en: 'Dashed' },
-        dotted: { id: 'Titik-titik', en: 'Dotted' },
-      }),
-    },
+    DASH_SPEC,
     {
       style: 'connectorStyle',
       prop: 'style',
@@ -264,16 +280,20 @@ export function connectorActions<P>(
         curved: { id: 'Lengkung', en: 'Curved' },
       }),
     },
-    {
-      style: 'startArrow',
-      prop: 'startArrow',
-      options: named(['none', 'arrow', 'triangle', 'dot', 'diamond'], ARROW_NAMES),
-    },
-    {
-      style: 'endArrow',
-      prop: 'endArrow',
-      options: named(['none', 'arrow', 'triangle', 'dot', 'diamond'], ARROW_NAMES),
-    },
+    ...ARROW_SPECS,
+  ]);
+}
+
+/** Style actions of a `line` (BOARD-1106): the connector's stroke, dash, and arrowheads. @internal */
+export function lineActions<P>(
+  el: ElementRecord<P>,
+  ctx: ElementActionContext<P>,
+): ElementAction[] {
+  return styleActions(el, ctx, 'line', [
+    { style: 'color', prop: 'color', options: COLOR_OPTIONS },
+    { style: 'thickness', prop: 'strokeWidth', options: presets(GEO_STROKE_WIDTHS) },
+    DASH_SPEC,
+    ...ARROW_SPECS,
   ]);
 }
 

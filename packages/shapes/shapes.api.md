@@ -340,7 +340,7 @@ export { DEFAULT_DARK_THEME }
 export const DEFAULT_ELBOW_CLEARANCE = 16;
 
 // @public
-export const DEFAULT_ELEMENT_TYPES: readonly ["sticky", "draw", "text", "geo", "connector", "group", "frame", "image"];
+export const DEFAULT_ELEMENT_TYPES: readonly ["sticky", "draw", "text", "geo", "connector", "group", "frame", "image", "line"];
 
 // @public
 export const DEFAULT_FRAME_SIZE: Readonly<{
@@ -357,7 +357,7 @@ export const DEFAULT_IMAGE_SIZE: Readonly<{
 export { DEFAULT_LIGHT_THEME }
 
 // @public
-export const DEFAULT_TOOL_IDS: readonly ["select", "hand", "sticky", "draw", "geo", "rectangle", "ellipse", "connector", "text", "frame", "eraser"];
+export const DEFAULT_TOOL_IDS: readonly ["select", "hand", "sticky", "draw", "geo", "rectangle", "ellipse", "connector", "line", "text", "frame", "eraser"];
 
 // @public
 export const defaultElements: Readonly<{
@@ -460,6 +460,16 @@ export const defaultElements: Readonly<{
         uploadStatus: _kujam_core.OptionalSchema<"pending" | "uploading" | "error" | "ready">;
         uploadProgress: _kujam_core.OptionalSchema<number>;
         uploadError: _kujam_core.OptionalSchema<string>;
+    }, undefined>, _kujam_core.ElementDefinition<"line", {
+        points: _kujam_core.Schema<{
+            x: number;
+            y: number;
+        }[]>;
+        color: _kujam_core.Schema<"yellow" | "green" | "blue" | "purple" | "black" | "grey" | "white" | "red" | "orange" | "violet">;
+        strokeWidth: _kujam_core.Schema<number>;
+        dash: _kujam_core.Schema<"solid" | "dashed" | "dotted">;
+        startArrow: _kujam_core.Schema<"none" | "diamond" | "triangle" | "arrow" | "dot">;
+        endArrow: _kujam_core.Schema<"none" | "diamond" | "triangle" | "arrow" | "dot">;
     }, undefined>];
     readonly brushes: readonly [_kujam_core.BrushDefinition, _kujam_core.BrushDefinition];
     readonly setup: (board: _kujam_core.Board) => () => void;
@@ -474,7 +484,7 @@ export type DefaultToolId = (typeof DEFAULT_TOOL_IDS)[number];
 // @public
 export const defaultTools: Readonly<{
     readonly id: "default-tools";
-    readonly tools: readonly [_kujam_core.ToolDefinition<"idle" | "quick-connecting" | "pointing" | "translating" | "brushing" | "resizing" | "rotating" | "bending" | "reconnecting", SelectToolData>, _kujam_core.ToolDefinition<"idle" | "panning", HandToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<DrawToolState, DrawToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<ConnectorToolState, ConnectorToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<EraserToolState, EraserToolData>];
+    readonly tools: readonly [_kujam_core.ToolDefinition<"idle" | "quick-connecting" | "pointing" | "translating" | "brushing" | "resizing" | "rotating" | "bending" | "reshaping" | "reconnecting", SelectToolData>, _kujam_core.ToolDefinition<"idle" | "panning", HandToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<DrawToolState, DrawToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<ConnectorToolState, ConnectorToolData>, _kujam_core.ToolDefinition<"idle", LineToolData>, _kujam_core.ToolDefinition<BoxToolState, BoxToolData>, _kujam_core.ToolDefinition<EraserToolState, EraserToolData>];
     readonly keybindings: {
         readonly v: "tool:select";
         readonly h: "tool:hand";
@@ -484,6 +494,7 @@ export const defaultTools: Readonly<{
         readonly r: "tool:rectangle";
         readonly o: "tool:ellipse";
         readonly l: "tool:connector";
+        readonly 'Shift+L': "tool:line";
         readonly f: "tool:frame";
         readonly e: "tool:eraser";
     };
@@ -779,6 +790,60 @@ export function layoutRichText(delta: RichText, options: TextLayoutOptions, meas
 // @public
 export function layoutStickyText(delta: RichText, options: StickyLayoutOptions, measurer?: ReturnType<typeof createMeasurer>): TextLayout;
 
+// @beta
+export const lineElement: _kujam_core.ElementDefinition<"line", {
+    points: _kujam_core.Schema<{
+        x: number;
+        y: number;
+    }[]>;
+    color: _kujam_core.Schema<"yellow" | "green" | "blue" | "purple" | "black" | "grey" | "white" | "red" | "orange" | "violet">;
+    strokeWidth: _kujam_core.Schema<number>;
+    dash: _kujam_core.Schema<"solid" | "dashed" | "dotted">;
+    startArrow: _kujam_core.Schema<"none" | "diamond" | "triangle" | "arrow" | "dot">;
+    endArrow: _kujam_core.Schema<"none" | "diamond" | "triangle" | "arrow" | "dot">;
+}, undefined>;
+
+// @beta
+export interface LineProps extends Record<string, unknown> {
+    // (undocumented)
+    color: ColorKey;
+    // (undocumented)
+    dash: ConnectorDash;
+    // (undocumented)
+    endArrow: ArrowheadStyle;
+    points: Point[];
+    // (undocumented)
+    startArrow: ArrowheadStyle;
+    // (undocumented)
+    strokeWidth: number;
+}
+
+// @beta
+export const linePropsSchema: _kujam_core.ObjectSchema<{
+    points: _kujam_core.Schema<{
+        x: number;
+        y: number;
+    }[]>;
+    color: _kujam_core.Schema<"yellow" | "green" | "blue" | "purple" | "black" | "grey" | "white" | "red" | "orange" | "violet">;
+    strokeWidth: _kujam_core.Schema<number>;
+    dash: _kujam_core.Schema<"solid" | "dashed" | "dotted">;
+    startArrow: _kujam_core.Schema<"none" | "diamond" | "triangle" | "arrow" | "dot">;
+    endArrow: _kujam_core.Schema<"none" | "diamond" | "triangle" | "arrow" | "dot">;
+}>;
+
+// @beta
+export const lineTool: _kujam_core.ToolDefinition<"idle", LineToolData>;
+
+// @beta
+export interface LineToolData {
+    connectorPreview?: ConnectorPreview;
+    points: Point[];
+    pressScreen: Point | null;
+}
+
+// @beta
+export type LineToolState = 'idle';
+
 // @public
 export const LINK_URL_SCHEMES: readonly string[];
 
@@ -794,6 +859,9 @@ export interface ListMarker {
 
 // @beta
 export const MAX_DRAW_POINTS = 5000;
+
+// @beta
+export const MAX_LINE_POINTS = 1000;
 
 // @public
 export const MAX_LINK_LENGTH = 2048;
@@ -881,10 +949,10 @@ export function sanitizePastedHtml(rawHtml: string): string;
 export function segmentDistance(a: readonly number[], b: readonly number[], c: readonly number[], d: readonly number[]): number;
 
 // @public
-export type SelectHandle = ResizeHandle | 'rotate' | 'connector-start' | 'connector-end' | 'connector-segment';
+export type SelectHandle = ResizeHandle | 'rotate' | 'connector-start' | 'connector-end' | 'connector-segment' | 'line-point' | 'line-insert';
 
 // @beta
-export const selectTool: _kujam_core.ToolDefinition<"idle" | "quick-connecting" | "pointing" | "translating" | "brushing" | "resizing" | "rotating" | "bending" | "reconnecting", SelectToolData>;
+export const selectTool: _kujam_core.ToolDefinition<"idle" | "quick-connecting" | "pointing" | "translating" | "brushing" | "resizing" | "rotating" | "bending" | "reshaping" | "reconnecting", SelectToolData>;
 
 // @beta
 export interface SelectToolData {
@@ -898,6 +966,8 @@ export interface SelectToolData {
     hitId: string | null;
     hitLocked: boolean;
     initialSelection: readonly string[];
+    lineDragging?: boolean;
+    linePoint?: number;
     originals: readonly Readonly<ElementRecord>[];
     quickConnect?: QuickConnectTarget;
     quickConnectHover?: string | null;

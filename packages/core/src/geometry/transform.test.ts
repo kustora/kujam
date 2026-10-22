@@ -3,6 +3,7 @@ import {
   createElementRegistry,
   defineElement,
   localToBoard,
+  midpointHandles,
   moveElements,
   object,
   resizeElements,
@@ -316,5 +317,30 @@ describe('BOARD-406: frames and handles', () => {
     expect(() =>
       defineElement({ type: 'bad', version: 1, props, minSize: { w: -1, h: 0 } }),
     ).toThrow(/minSize/);
+  });
+});
+
+describe('midpointHandles (BOARD-1106)', () => {
+  it('returns the middle of every segment with the index of its first point', () => {
+    const points = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 50 },
+    ];
+    expect(midpointHandles(points)).toEqual([
+      { index: 0, x: 50, y: 0 },
+      { index: 1, x: 100, y: 25 },
+    ]);
+  });
+
+  it('skips segments shorter than minLength and handles degenerate input', () => {
+    const points = [
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 100, y: 0 },
+    ];
+    expect(midpointHandles(points, 20).map((h) => h.index)).toEqual([1]);
+    expect(midpointHandles([])).toEqual([]);
+    expect(midpointHandles([{ x: 1, y: 1 }])).toEqual([]);
   });
 });

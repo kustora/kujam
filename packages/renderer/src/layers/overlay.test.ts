@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  array,
   createBoard,
   defineElement,
   definePlugin,
@@ -25,6 +26,10 @@ import {
   SNAP_GUIDE_COLOR,
   type BoardView,
 } from '../index.js';
+import {
+  LINE_INSERT_HANDLE_RADIUS_PX,
+  LINE_POINT_HANDLE_RADIUS_PX,
+} from './overlay.js';
 
 let boards: Board[] = [];
 let views: BoardView[] = [];
@@ -91,9 +96,20 @@ const connectorElement = defineElement({
   },
 });
 
+const lineElement = defineElement({
+  type: 'line',
+  version: 1,
+  props: schema({ points: array(object({ x: number(), y: number() })) }),
+  defaults: { points: [] },
+  geometry: (el) => rect(el.w, el.h),
+  render: {
+    canvas: () => {},
+  },
+});
+
 const testPlugin = definePlugin({
   id: 'test-elements',
-  elements: [boxElement, connectorElement],
+  elements: [boxElement, connectorElement, lineElement],
 });
 
 function createMockContext() {
@@ -414,6 +430,55 @@ describe('BOARD-805: Overlay Renderer', () => {
       expect(ctx.arc).toHaveBeenCalledWith(300, 200, CONNECTOR_HANDLE_RADIUS_PX, 0, Math.PI * 2);
       expect(ctx.arc).toHaveBeenCalledWith(100, 120, 2.5, 0, Math.PI * 2);
       expect(ctx.arc).not.toHaveBeenCalledWith(300, 200, 2.5, 0, Math.PI * 2);
+    });
+
+    it('draws a handle on every point and insertion handles on long segments of a selected line (BOARD-1106)', () => {
+      const board = createBoard({ plugins: [testPlugin] });
+      boards.push(board);
+      board.camera.setViewport({ width: 800, height: 600 });
+      board.create({
+        id: 'line1',
+        type: 'line',
+        x: 100,
+        y: 100,
+        w: 210,
+        h: 100,
+        props: {
+          points: [
+            { x: 0, y: 0 },
+            { x: 200, y: 0 },
+            { x: 210, y: 0 },
+            { x: 210, y: 100 },
+          ],
+        },
+      });
+      board.select(['line1']);
+
+      const overlayRenderer = new OverlayRenderer(board);
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 600;
+      const ctx = createMockContext();
+      overlayRenderer.render(canvas, ctx as unknown as CanvasRenderingContext2D, 1);
+
+      // No resize box: lines are edited point by point.
+      expect(ctx.strokeRect).not.toHaveBeenCalled();
+      expect(ctx.moveTo).toHaveBeenCalledWith(100, 100);
+      expect(ctx.lineTo).toHaveBeenCalledWith(310, 200);
+      for (const [x, y] of [
+        [100, 100],
+        [300, 100],
+        [310, 100],
+        [310, 200],
+      ] as const) {
+        expect(ctx.arc).toHaveBeenCalledWith(x, y, LINE_POINT_HANDLE_RADIUS_PX, 0, Math.PI * 2);
+      }
+      const inserts = ctx.arc.mock.calls.filter((c) => c[2] === LINE_INSERT_HANDLE_RADIUS_PX);
+      // The 10px segment is too short for an insertion handle.
+      expect(inserts.map((c) => [c[0], c[1]])).toEqual([
+        [200, 100],
+        [310, 150],
+      ]);
     });
 
     it('draws connectorSnap candidate anchors and snapped point with halo (BOARD-1101d)', () => {

@@ -1,0 +1,153 @@
+/* Live plugin lab (BOARD-2412). Uses the playground tokens when present, with fallbacks so the
+   component also works on other pages (BOARD-2205). */
+.plugin-lab {
+  --lab-bg: var(--bg, #0f172a);
+  --lab-panel: var(--panel, #1e293b);
+  --lab-border: var(--border, #334155);
+  --lab-text: var(--text, #f8fafc);
+  --lab-muted: var(--muted, #94a3b8);
+  --lab-code: var(--code, #93c5fd);
+  --lab-ok: var(--ok, #22c55e);
+  --lab-warn: var(--warn, #f59e0b);
+  --lab-error: var(--error, #ef4444);
+  display: grid;
+  grid-template-columns: minmax(320px, 40%) minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  color: var(--lab-text);
+  background: var(--lab-bg);
+}
+.plugin-lab-code {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--lab-border);
+}
+.plugin-lab-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--lab-border);
+  background: var(--lab-panel);
+  font-size: 12px;
+  min-width: 0;
+}
+.plugin-lab-auto {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.plugin-lab-status {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--lab-muted);
+}
+.plugin-lab-status[data-state='ok'] {
+  color: var(--lab-ok);
+}
+.plugin-lab-status[data-state='error'] {
+  color: var(--lab-error);
+}
+.plugin-lab-status[data-state='idle'] {
+  color: var(--lab-warn);
+}
+.plugin-lab-editor {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.plugin-lab-editor .cm-editor {
+  height: 100%;
+}
+.plugin-lab-issues {
+  flex: none;
+  max-height: 34%;
+  overflow-y: auto;
+  border-top: 1px solid var(--lab-border);
+  background: var(--lab-panel);
+  font-size: 12px;
+}
+.plugin-lab-issues[data-empty='false'] {
+  border-top-color: var(--lab-error);
+}
+.plugin-lab-issues-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--lab-panel);
+}
+.plugin-lab-issue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 10px 8px;
+  display: grid;
+  gap: 6px;
+}
+.plugin-lab-issue-empty {
+  color: var(--lab-muted);
+}
+.plugin-lab-issue {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--lab-border);
+  border-left: 3px solid var(--lab-error);
+  background: var(--lab-bg);
+}
+.plugin-lab-issue[data-kind='render'] {
+  border-left-color: var(--lab-warn);
+}
+.plugin-lab-issue-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+.plugin-lab-kind {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 10px;
+  color: var(--lab-error);
+}
+.plugin-lab-issue[data-kind='render'] .plugin-lab-kind {
+  color: var(--lab-warn);
+}
+.plugin-lab-issue-head code {
+  color: var(--lab-code);
+}
+.plugin-lab-line {
+  padding: 0 6px;
+  font-size: 11px;
+}
+.plugin-lab-message {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.plugin-lab-board {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+@media (max-width: 900px) {
+  .plugin-lab {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .plugin-lab-code {
+    border-right: none;
+    border-bottom: 1px solid var(--lab-border);
+  }
+}

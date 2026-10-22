@@ -13,6 +13,7 @@ import { DEFAULT_BRUSHES } from './brushes.js';
 import { connectorElement, registerConnectorBoard } from './elements/connector.js';
 import { drawElement } from './elements/draw.js';
 import { geoElement } from './elements/geo.js';
+import { lineElement } from './elements/line.js';
 import { stickyElement } from './elements/sticky.js';
 import { textElement } from './elements/text.js';
 import { connectorTool } from './tools/connector.js';
@@ -32,6 +33,7 @@ import { groupElement } from './elements/group.js';
 import { frameElement } from './elements/frame.js';
 import { imageElement } from './elements/image.js';
 import { handTool } from './tools/hand.js';
+import { lineTool } from './tools/line.js';
 import { selectTool } from './tools/select.js';
 import { stickyTool } from './tools/sticky.js';
 import { textTool } from './tools/text.js';
@@ -106,6 +108,13 @@ export {
   triangleDownTool,
   triangleTool,
 } from './tools/geo.js';
+export {
+  lineElement,
+  linePropsSchema,
+  MAX_LINE_POINTS,
+  type LineProps,
+} from './elements/line.js';
+export { lineTool, type LineToolData, type LineToolState } from './tools/line.js';
 export {
   connectorTool,
   DEFAULT_CONNECTOR_LENGTH,
@@ -206,8 +215,8 @@ export {
 } from './elements/image.js';
 
 /**
- * Built-in elements plugin (`sticky`, `draw`, `text`, `geo`, `connector`, `group`, `frame`, `image`) with the `pen` and
- * `highlighter` brushes used by `draw` (BOARD-603, BOARD-1101, BOARD-1103, BOARD-1104, BOARD-1105), ready to install via
+ * Built-in elements plugin (`sticky`, `draw`, `text`, `geo`, `connector`, `group`, `frame`, `image`, `line`) with the `pen` and
+ * `highlighter` brushes used by `draw` (BOARD-603, BOARD-1101, BOARD-1103, BOARD-1104, BOARD-1105, BOARD-1106), ready to install via
  * `createBoard({ plugins: [defaultElements, defaultTools] })` or `createElementRegistry(defaultElements)`.
  *
  * @public
@@ -223,6 +232,7 @@ export const defaultElements = definePlugin({
     groupElement,
     frameElement,
     imageElement,
+    lineElement,
   ] as const),
   brushes: DEFAULT_BRUSHES,
   setup: (board) => registerConnectorBoard(board),
@@ -230,7 +240,7 @@ export const defaultElements = definePlugin({
 
 /**
  * Built-in tools plugin, ready to install via `createBoard({ plugins: [defaultElements, defaultTools] })`.
- * Contains navigation, selection, and creation tools (BOARD-502, BOARD-913, BOARD-1101, BOARD-1105) with standard shortcuts.
+ * Contains navigation, selection, and creation tools (BOARD-502, BOARD-913, BOARD-1101, BOARD-1105, BOARD-1106) with standard shortcuts.
  *
  * @public
  */
@@ -250,6 +260,7 @@ export const defaultTools = definePlugin({
     triangleDownTool,
     pillTool,
     connectorTool,
+    lineTool,
     frameTool,
     eraserTool,
   ] as const),
@@ -262,6 +273,7 @@ export const defaultTools = definePlugin({
     r: 'tool:rectangle',
     o: 'tool:ellipse',
     l: 'tool:connector',
+    'Shift+L': 'tool:line',
     f: 'tool:frame',
     e: 'tool:eraser',
   },
@@ -283,6 +295,7 @@ export const DEFAULT_ELEMENT_TYPES = [
   'group',
   'frame',
   'image',
+  'line',
 ] as const;
 
 /**
@@ -306,6 +319,7 @@ export const DEFAULT_TOOL_IDS = [
   'rectangle',
   'ellipse',
   'connector',
+  'line',
   'text',
   'frame',
   'eraser',

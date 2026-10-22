@@ -377,6 +377,7 @@ export {
 } from './a11y/reading-order.js';
 export {
   DEFAULT_MIN_SIZE,
+  midpointHandles,
   moveElements,
   QUICK_CONNECT_OFFSET_PX,
   quickConnectHandles,
@@ -387,6 +388,7 @@ export {
   segmentHandles,
   selectionFrame,
   transformHandles,
+  type MidpointHandle,
   type QuickConnectHandle,
   type QuickConnectSide,
   type ResizeHandle,

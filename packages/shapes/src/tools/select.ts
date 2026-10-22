@@ -2,6 +2,7 @@ import {
   containedInBox,
   defineTool,
   intersectsBox,
+  midpointHandles,
   moveElements,
   resizeElements,
   resolveElementGeometry,
@@ -34,6 +35,13 @@ import {
   type ConnectorSnapTarget,
 } from '../elements/connector-routing.js';
 import { computeElementConnectorRoute, type ConnectorProps } from '../elements/connector.js';
+import {
+  insertLinePoint,
+  lineWorldPoints,
+  moveLinePoint,
+  removeLinePoint,
+  type LineProps,
+} from '../elements/line.js';
 import { buildDuplicate } from './duplicate.js';
 import { handlePinch, handleWheel } from './navigation.js';
 import {
@@ -53,10 +61,18 @@ export const ROTATE_HANDLE_OFFSET_PX = 24;
 export const HIT_TOLERANCE_PX = 4;
 /** Shortest elbow segment, in screen pixels, that gets a drag handle (twice the renderer's pill). */
 const SEGMENT_MIN_LENGTH_PX = 32;
+/** Shortest line segment, in screen pixels, that gets an insertion handle (same rule as the renderer). */
+const LINE_MIDPOINT_MIN_LENGTH_PX = 24;
 
 /** Handle identifier for select tool interactions. @public */
 export type SelectHandle =
-  ResizeHandle | 'rotate' | 'connector-start' | 'connector-end' | 'connector-segment';
+  | ResizeHandle
+  | 'rotate'
+  | 'connector-start'
+  | 'connector-end'
+  | 'connector-segment'
+  | 'line-point'
+  | 'line-insert';
 
 /**
  * `ctx.data` of the select tool. The renderer reads it from `board.toolData` to draw feedback:
@@ -77,6 +93,13 @@ export interface SelectToolData {
   reconnectBindingId?: string;
   /** Axis of the elbow segment being dragged (`connector-segment` handle). */
   segmentAxis?: 'x' | 'y';
+  /**
+   * Point of a `line` being dragged (`line-point` handle), or the segment whose middle gets a new
+   * point (`line-insert` handle) (BOARD-1106).
+   */
+  linePoint?: number;
+  /** Whether the `line-point` or `line-insert` press has turned into a drag. */
+  lineDragging?: boolean;
   /** Board and screen position of the press that started the interaction. */
   start: Point;
   startScreen: Point;
@@ -114,6 +137,7 @@ type State =
   | 'rotating'
   | 'reconnecting'
   | 'bending'
+  | 'reshaping'
   | 'quick-connecting';
 type Ctx = ToolContext<State, SelectToolData>;
 
@@ -191,6 +215,11 @@ function clearQuickConnect(ctx: Ctx): void {
 /** The resize, rotate, or connector endpoint handle under `screen`, closest first. */
 function handleAt(board: Board, screen: Point): SelectHandle | null {
   const items = transformable(board);
+  if (items.length === 1 && items[0]!.type === 'line') {
+    return (
+      lineHandleAt(board, items[0] as Readonly<ElementRecord<LineProps>>, screen)?.handle ?? null
+    );
+  }
   if (items.length === 1 && items[0]!.type === 'connector') {
     const conn = items[0]! as ElementRecord<ConnectorProps>;
     const startWorld: Point = {
@@ -246,6 +275,8 @@ function hoverCursor(board: Board, screen: Point): string | null {
   if (!handle) return null;
   if (handle === 'rotate') return 'grab';
   if (handle === 'connector-start' || handle === 'connector-end') return 'crosshair';
+  if (handle === 'line-point') return 'move';
+  if (handle === 'line-insert') return 'copy';
   if (handle === 'connector-segment') {
     const items = transformable(board);
     const conn = items[0] as Readonly<ElementRecord<ConnectorProps>> | undefined;
@@ -277,6 +308,80 @@ function segmentAt(
     }
   }
   return null;
+}
+
+/**
+ * The point handle (closest first) or segment insertion handle of `line` under `screen`
+ * (BOARD-1106). Point handles win over insertion handles.
+ */
+function lineHandleAt(
+  board: Board,
+  line: Readonly<ElementRecord<LineProps>>,
+  screen: Point,
+): { handle: 'line-point' | 'line-insert'; index: number } | null {
+  const onScreen = lineWorldPoints(line).map((p) => board.camera.boardToScreen(p));
+  let best = -1;
+  let bestDistance = HANDLE_TOLERANCE_PX;
+  onScreen.forEach((p, i) => {
+    const d = Math.hypot(p.x - screen.x, p.y - screen.y);
+    if (d <= bestDistance) {
+      bestDistance = d;
+      best = i;
+    }
+  });
+  if (best >= 0) return { handle: 'line-point', index: best };
+  for (const mid of midpointHandles(onScreen, LINE_MIDPOINT_MIN_LENGTH_PX)) {
+    if (Math.hypot(mid.x - screen.x, mid.y - screen.y) <= HANDLE_TOLERANCE_PX) {
+      return { handle: 'line-insert', index: mid.index };
+    }
+  }
+  return null;
+}
+
+/**
+ * Point inserted by the last click on a line's insertion handle, per board: the second press of
+ * a double click there lands on that new point and must not delete it again.
+ */
+const lastInsertedPoint = new WeakMap<Board, { id: string; index: number }>();
+
+/**
+ * Starts editing a lone selected `line` from the handle under the press (BOARD-1106): Alt+click or
+ * double click on a point deletes it (lines keep at least 2 points); other presses start dragging
+ * a point or a new one from a segment's middle. Returns the next state, or `undefined` when the
+ * press was fully handled.
+ */
+function startLineEdit(ctx: Ctx, e: ToolPointerEvent): State | undefined {
+  const { board, data } = ctx;
+  const line = data.originals[0] as Readonly<ElementRecord<LineProps>> | undefined;
+  if (!line || line.type !== 'line') return undefined;
+  const hit = lineHandleAt(board, line, e.screen);
+  if (!hit) return undefined;
+  if (hit.handle === 'line-point' && (e.modifiers.alt || (e.clickCount ?? 1) >= 2)) {
+    const inserted = lastInsertedPoint.get(board);
+    lastInsertedPoint.delete(board);
+    const justInserted =
+      !e.modifiers.alt && inserted?.id === line.id && inserted.index === hit.index;
+    const next = justInserted ? null : removeLinePoint(line, hit.index);
+    if (next) ctx.change((tx) => tx.put(next as ElementRecord), { label: 'line-point-delete' });
+    return undefined;
+  }
+  lastInsertedPoint.delete(board);
+  data.linePoint = hit.index;
+  return 'reshaping';
+}
+
+/** Applies a line point drag or insertion to the pointer (or `world`), from the snapshot. */
+function reshapeLine(ctx: Ctx, world: Point): void {
+  const { data } = ctx;
+  const orig = data.originals[0] as Readonly<ElementRecord<LineProps>> | undefined;
+  if (!orig || orig.type !== 'line' || data.linePoint === undefined) return;
+  const next =
+    data.handle === 'line-insert'
+      ? insertLinePoint(orig, data.linePoint + 1, world)
+      : moveLinePoint(orig, data.linePoint, world);
+  ctx.change((tx) => tx.put(next as ElementRecord), {
+    label: data.handle === 'line-insert' ? 'line-point-insert' : 'line-point',
+  });
 }
 
 /** Moves the dragged elbow segment to the pointer, stored as the connector's `bend`. */
@@ -530,6 +635,9 @@ export const selectTool = defineTool({
           if (handle === 'connector-start' || handle === 'connector-end') {
             return 'reconnecting';
           }
+          if (handle === 'line-point' || handle === 'line-insert') {
+            return startLineEdit(ctx, e);
+          }
           if (handle === 'connector-segment') {
             const conn = data.originals[0] as ElementRecord<ConnectorProps> | undefined;
             const segment = conn ? segmentAt(board, conn, e.screen) : null;
@@ -707,7 +815,9 @@ export const selectTool = defineTool({
           data.handle === 'rotate' ||
           data.handle === 'connector-start' ||
           data.handle === 'connector-end' ||
-          data.handle === 'connector-segment'
+          data.handle === 'connector-segment' ||
+          data.handle === 'line-point' ||
+          data.handle === 'line-insert'
         ) {
           return;
         }
@@ -744,6 +854,51 @@ export const selectTool = defineTool({
       },
       onCancel(ctx) {
         delete ctx.data.segmentAxis;
+        restoreSelection(ctx);
+      },
+    },
+
+    reshaping: {
+      cursor: 'grabbing',
+      onPointerMove(ctx, e) {
+        const { data } = ctx;
+        const s = data.startScreen;
+        // A click leaves the line as it is; a drag has to travel first. Once started, small moves
+        // back near the press still apply.
+        if (
+          !data.lineDragging &&
+          Math.hypot(e.screen.x - s.x, e.screen.y - s.y) < DRAG_THRESHOLD_PX
+        ) {
+          return;
+        }
+        data.lineDragging = true;
+        reshapeLine(ctx, e.point);
+      },
+      onPointerUp(ctx) {
+        const { board, data } = ctx;
+        const orig = data.originals[0] as Readonly<ElementRecord<LineProps>> | undefined;
+        // A click on an insertion handle adds the point right in the middle of the segment.
+        if (
+          !data.lineDragging &&
+          orig &&
+          data.handle === 'line-insert' &&
+          data.linePoint !== undefined
+        ) {
+          const world = lineWorldPoints(orig);
+          const a = world[data.linePoint];
+          const b = world[data.linePoint + 1];
+          if (a && b) {
+            reshapeLine(ctx, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+            lastInsertedPoint.set(board, { id: orig.id, index: data.linePoint + 1 });
+          }
+        }
+        delete data.linePoint;
+        delete data.lineDragging;
+        return 'idle';
+      },
+      onCancel(ctx) {
+        delete ctx.data.linePoint;
+        delete ctx.data.lineDragging;
         restoreSelection(ctx);
       },
     },

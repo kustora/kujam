@@ -74,6 +74,11 @@ const ICONS: Readonly<Record<string, readonly IconShape[]>> = {
     ['path', { d: 'M8.5 15.5L19 5' }],
     ['path', { d: 'M13 5h6v6' }],
   ],
+  line: [
+    ['path', { d: 'M4 18l6-10 5 7 5-9' }],
+    ['circle', { cx: '4', cy: '18', r: '1.5' }],
+    ['circle', { cx: '20', cy: '6', r: '1.5' }],
+  ],
   text: [
     ['path', { d: 'M5 6V4h14v2' }],
     ['path', { d: 'M12 4v16' }],

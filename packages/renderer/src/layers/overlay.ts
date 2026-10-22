@@ -6,6 +6,8 @@
  */
 
 import {
+  localToBoard,
+  midpointHandles,
   QUICK_CONNECT_OFFSET_PX,
   quickConnectHandles,
   segmentHandles,
@@ -39,6 +41,12 @@ export const QUICK_CONNECT_RADIUS_PX = 5;
 export const SEGMENT_HANDLE_LENGTH_PX = 16;
 /** Thickness of the elbow segment pill, in screen pixels. @public */
 export const SEGMENT_HANDLE_THICKNESS_PX = 6;
+/** Radius of a `line` point handle in screen pixels (BOARD-1106). @public */
+export const LINE_POINT_HANDLE_RADIUS_PX = 5;
+/** Radius of a `line` segment insertion handle in screen pixels (BOARD-1106). @public */
+export const LINE_INSERT_HANDLE_RADIUS_PX = 3.5;
+/** Shortest `line` segment, in screen pixels, that shows an insertion handle (BOARD-1106). @public */
+export const LINE_INSERT_MIN_SEGMENT_PX = 24;
 /** Alignment snap guide line color. @public */
 export const SNAP_GUIDE_COLOR = '#e02874';
 /** Marquee selection box fill color. @public */
@@ -753,7 +761,45 @@ export class OverlayRenderer {
     }
 
     // --- B. Selection Frame and Handles ---
-    if (selectedElements.length === 1 && selectedElements[0]!.type === 'connector') {
+    const loneLine =
+      selectedElements.length === 1 && selectedElements[0]!.type === 'line'
+        ? selectedElements[0]!
+        : null;
+    const linePoints = loneLine
+      ? (loneLine.props as { readonly points?: readonly { x: number; y: number }[] }).points
+      : undefined;
+    if (loneLine && Array.isArray(linePoints) && linePoints.length > 0) {
+      // Lines (BOARD-1106): the path, a handle on every point, and an insertion handle in the
+      // middle of every segment long enough to hold one.
+      const route = linePoints.map((p) => camera.boardToScreen(localToBoard(loneLine, p)));
+      ctx.save();
+      ctx.scale(pixelRatio, pixelRatio);
+      ctx.beginPath();
+      ctx.moveTo(route[0]!.x, route[0]!.y);
+      for (let i = 1; i < route.length; i++) ctx.lineTo(route[i]!.x, route[i]!.y);
+      ctx.strokeStyle = selectionStroke;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      for (const mid of midpointHandles(route, LINE_INSERT_MIN_SEGMENT_PX)) {
+        ctx.beginPath();
+        ctx.arc(mid.x, mid.y, LINE_INSERT_HANDLE_RADIUS_PX, 0, Math.PI * 2);
+        ctx.fillStyle = selectionStroke;
+        ctx.globalAlpha = 0.45;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      for (const point of route) {
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, LINE_POINT_HANDLE_RADIUS_PX, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.strokeStyle = selectionStroke;
+        ctx.lineWidth = selectionLineWidth;
+        ctx.stroke();
+      }
+      ctx.restore();
+    } else if (selectedElements.length === 1 && selectedElements[0]!.type === 'connector') {
       const el = selectedElements[0]!;
       const props = el.props as {
         readonly start?: { readonly x: number; readonly y: number };

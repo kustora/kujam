@@ -16,6 +16,19 @@ import {
 export type ConnectorDash = 'solid' | 'dashed' | 'dotted';
 
 /**
+ * Dash pattern of each {@link ConnectorDash}, in multiples of the stroke width. Shared by
+ * connectors and lines (BOARD-1106).
+ *
+ * @internal
+ */
+export const CONNECTOR_DASH_PATTERNS: Readonly<Record<ConnectorDash, readonly number[]>> =
+  Object.freeze({
+    solid: [],
+    dashed: [4, 4],
+    dotted: [1, 3],
+  });
+
+/**
  * Cardinal side of a shape's bounding box for anchor attachment and orthogonal routing.
  *
  * @public

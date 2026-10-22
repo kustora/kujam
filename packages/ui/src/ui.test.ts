@@ -128,6 +128,23 @@ describe('BOARD-1402: buildToolbarItems', () => {
     expect(connector).toMatchObject({ label: 'Konektor', shortcut: 'L', toolId: 'connector' });
   });
 
+  it('shows the line tool right after the connector (BOARD-1106)', () => {
+    const board = createBoard({
+      plugins: [
+        definePlugin({
+          id: 'with-line',
+          tools: [tool('select'), tool('connector'), tool('line')],
+          keybindings: { 'Shift+L': 'tool:line' },
+        }),
+      ],
+    });
+    boards.push(board);
+    const items = buildToolbarItems(board);
+    expect(items.map((i) => i.id)).toEqual(['select', 'connector', 'line']);
+    expect(items[2]).toMatchObject({ label: 'Garis', icon: 'line', toolId: 'line' });
+    expect(items[2]!.shortcut).toBeTruthy();
+  });
+
   it('uses the board locale', () => {
     const items = buildToolbarItems(newBoard({ locale: 'en' }));
     expect(items.map((i) => i.label)).toContain('Select');

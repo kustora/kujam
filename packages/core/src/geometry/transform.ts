@@ -237,6 +237,35 @@ export function segmentHandles(points: readonly Point[], minLength = 8): Segment
   return out;
 }
 
+/**
+ * Insertion handle in the middle of one segment of a polyline (`points[index]` to
+ * `points[index + 1]`), for adding a point there (BOARD-1106).
+ *
+ * @beta
+ */
+export interface MidpointHandle extends Point {
+  /** Index of the segment's first point in the path; a new point goes at `index + 1`. */
+  readonly index: number;
+}
+
+/**
+ * Midpoint handles of a polyline's segments, skipping segments shorter than `minLength` (in the
+ * same units as `points`, usually screen pixels so short segments keep room for their vertex
+ * handles).
+ *
+ * @beta
+ */
+export function midpointHandles(points: readonly Point[], minLength = 0): MidpointHandle[] {
+  const out: MidpointHandle[] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i]!;
+    const b = points[i + 1]!;
+    if (Math.hypot(b.x - a.x, b.y - a.y) < minLength) continue;
+    out.push({ index: i, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  }
+  return out;
+}
+
 /** Normalizes degrees to `[0, 360)` without returning `-0`. */
 function normalizeRotation(degrees: number): number {
   const r = ((degrees % 360) + 360) % 360;

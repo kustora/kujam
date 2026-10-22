@@ -402,6 +402,30 @@ function seedAllElements(board: Board): void {
       }
     });
   }
+
+  // 6. Polyline with per-point editing (BOARD-1106): select it to drag, add, or delete points.
+  if (board.elements.has('line')) {
+    board.create({
+      type: 'line',
+      x: 80,
+      y: 620,
+      w: 360,
+      h: 80,
+      props: {
+        points: [
+          { x: 0, y: 80 },
+          { x: 120, y: 0 },
+          { x: 240, y: 80 },
+          { x: 360, y: 0 },
+        ],
+        color: 'violet',
+        strokeWidth: 2,
+        dash: 'solid',
+        startArrow: 'dot',
+        endArrow: 'arrow',
+      },
+    });
+  }
 }
 
 export default defineScenario({
@@ -439,6 +463,7 @@ export default defineScenario({
       { id: 'rectangle', label: '◻️ Kotak (R)' },
       { id: 'ellipse', label: '⬭ Elips (O)' },
       { id: 'connector', label: '↗️ Konektor (L)' },
+      { id: 'line', label: '〰️ Garis (Shift+L)' },
       { id: 'text', label: '🔤 Teks (T)' },
       { id: 'eraser', label: '🧹 Hapus (E)' },
     ];

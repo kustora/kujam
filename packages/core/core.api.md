@@ -1611,6 +1611,14 @@ export interface MemorySyncBus {
     subscribe(channel: string, listener: (message: unknown) => void): () => void;
 }
 
+// @beta
+export interface MidpointHandle extends Point {
+    readonly index: number;
+}
+
+// @beta
+export function midpointHandles(points: readonly Point[], minLength?: number): MidpointHandle[];
+
 // @public
 export function migrateSchema(doc: BoardDocument, migrations?: SchemaMigrations, targetVersion?: number): BoardDocument;
 

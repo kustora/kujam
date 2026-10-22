@@ -177,6 +177,12 @@ const BUILT_INS: readonly BuiltIn[] = [
     icon: 'connector',
     styles: (board) => [colorStyle(board, 'connector', 'colors')],
   },
+  {
+    id: 'line',
+    label: 'tool.line',
+    icon: 'line',
+    styles: (board) => [colorStyle(board, 'line', 'colors')],
+  },
   { id: 'text', label: 'tool.text', icon: 'text' },
   { id: 'eraser', label: 'tool.eraser', icon: 'eraser' },
 ];

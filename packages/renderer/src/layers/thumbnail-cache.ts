@@ -287,18 +287,20 @@ export function createDrawingContext(
   };
 
   return new Proxy(ctx as unknown as ElementCanvasContext, {
-    get(target, prop, receiver) {
+    // Native canvas accessors (fillStyle, font, ...) throw "Illegal invocation"
+    // when invoked with the proxy as `this`, so always use the real context.
+    get(target, prop) {
       if (prop in helpers) {
         return (helpers as Record<string | symbol, unknown>)[prop];
       }
-      const val = Reflect.get(target, prop, receiver);
+      const val = Reflect.get(target, prop, target);
       if (typeof val === 'function') {
         return val.bind(target);
       }
       return val;
     },
-    set(target, prop, value, receiver) {
-      return Reflect.set(target, prop, value, receiver);
+    set(target, prop, value) {
+      return Reflect.set(target, prop, value, target);
     },
   });
 }
