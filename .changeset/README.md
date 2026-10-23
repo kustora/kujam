@@ -1,5 +1,5 @@
 # Changesets
 
-Folder ini digunakan oleh [`@changesets/cli`](https://github.com/changesets/changesets) untuk mengelola versi serentak (`fixed`) dan changelog seluruh package `@kujam/*`.
+This folder is used by [`@changesets/cli`](https://github.com/changesets/changesets) to manage the shared (`fixed`) version and the changelog of all `@kujam/*` packages.
 
-Jalankan `pnpm changeset` setiap kali membuat perubahan pada `packages/*/src` yang berdampak pada pemakai package.
+Run `pnpm changeset` for every change under `packages/*/src` that affects package users.

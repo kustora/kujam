@@ -1,24 +1,24 @@
-# Aksesibilitas `@kujam/*` untuk Pemakai Package
+# Accessibility in `@kujam/*` for Package Users
 
-Panduan untuk developer yang memasang papan dan menulis plugin (BOARD-2208). Dokumen ini menjelaskan apa yang sudah disediakan package, apa yang wajib diisi penulis elemen kustom, daftar shortcut bawaan, dan keterbatasan yang masih ada. Checklist uji per rilis ada di [`a11y-checklist.md`](./a11y-checklist.md).
+A guide for developers who embed the board and write plugins (BOARD-2208). It covers what the packages already provide, what custom element authors must fill in, the built-in shortcuts, and the known limitations. The per-release test checklist is in [`a11y-checklist.md`](./a11y-checklist.md).
 
-## 1. Yang sudah disediakan package
+## 1. What the packages provide
 
-| Kemampuan                   | Keterangan                                                                                                                                                                                                                                                                     | Tiket                       |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------- |
-| Pohon aksesibilitas paralel | Kanvas tidak terbaca pembaca layar, jadi renderer membuat daftar `role="list"` tersembunyi berisi satu item per elemen, dalam urutan baca: frame (atas ke bawah, kiri ke kanan), isinya, lalu elemen lepas. `aria-setsize` dan `aria-posinset` memberi tahu jumlah sebenarnya. | BOARD-1901                  |
-| Navigasi keyboard           | `Tab`/`Shift+Tab` berpindah antar elemen, panah menggeser, `Enter` mengedit, `Esc` keluar. Papan bukan jebakan fokus: `Esc` lalu `Tab` keluar dari papan.                                                                                                                      | BOARD-1902                  |
-| Pengumuman live region      | Elemen yang dibuat atau dihapus oleh pengguna sendiri, kolaborator yang bergabung atau keluar, dan koneksi terputus atau pulih diumumkan dengan jeda agar tidak membanjiri. Pesan aplikasi bisa ditambahkan dengan `view.announce(message)`.                                   | BOARD-1903                  |
-| Reduced motion              | Mengikuti `prefers-reduced-motion`: animasi kamera langsung lompat, transisi UI dimatikan, dan inersia sentuh tidak berjalan. Bisa ditimpa dengan `mountRenderer(board, el, { reducedMotion })`.                                                                               | BOARD-1905, BOARD-911       |
-| Teks alternatif gambar      | Elemen gambar punya `alt` yang bisa diedit dan ikut ke pohon aksesibilitas serta ekspor SVG.                                                                                                                                                                                   | BOARD-1906                  |
-| Kontras dan fokus           | Token tema terang dan gelap lolos WCAG AA untuk teks UI, dan cincin fokus 2 px tampil di semua kontrol `@kujam/ui`.                                                                                                                                                            | BOARD-1006, BOARD-1907      |
-| Bahasa                      | Semua teks bawaan tersedia dalam `id` dan `en` (`board.setLocale`), dan aplikasi bisa menambah atau menimpa kamus.                                                                                                                                                             | BOARD-1909                  |
-| Target sentuh               | Handle resize, rotasi, titik garis, dan konektor punya area sentuh minimal 24 × 24 px CSS untuk jari (WCAG 2.5.8).                                                                                                                                                             | BOARD-911                   |
-| Komponen `@kujam/ui`        | Toolbar dengan roving tabindex dan navigasi panah, menu dengan `role="menu"`, serta dialog (command palette, bantuan shortcut) dengan `aria-modal`, fokus yang dikembalikan saat ditutup, dan `Esc`. Diaudit `axe-core` di `e2e/a11y.spec.ts`.                                 | BOARD-1402–1409, BOARD-1908 |
+| Capability                  | Details                                                                                                                                                                                                                                                               | Ticket                      |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| Parallel accessibility tree | Screen readers cannot read the canvas, so the renderer builds a hidden `role="list"` with one item per element, in reading order: frames (top to bottom, left to right), their contents, then loose elements. `aria-setsize` and `aria-posinset` give the real count. | BOARD-1901                  |
+| Keyboard navigation         | `Tab`/`Shift+Tab` move between elements, arrows nudge, `Enter` edits, `Esc` leaves. The board is not a focus trap: `Esc` then `Tab` moves out of it.                                                                                                                  | BOARD-1902                  |
+| Live region announcements   | Elements the user creates or deletes, collaborators joining or leaving, and the connection dropping or recovering are announced with throttling so they do not flood. Add app messages with `view.announce(message)`.                                                 | BOARD-1903                  |
+| Reduced motion              | Follows `prefers-reduced-motion`: camera animations jump, UI transitions are turned off, and touch inertia does not run. Override with `mountRenderer(board, el, { reducedMotion })`.                                                                                 | BOARD-1905, BOARD-911       |
+| Image alt text              | Image elements have an editable `alt` that flows into the accessibility tree and SVG export.                                                                                                                                                                          | BOARD-1906                  |
+| Contrast and focus          | Light and dark theme tokens pass WCAG AA for UI text, and a 2 px focus ring shows on every `@kujam/ui` control.                                                                                                                                                       | BOARD-1006, BOARD-1907      |
+| Language                    | All built-in text is available in `id` and `en` (`board.setLocale`), and apps can add or override dictionaries.                                                                                                                                                       | BOARD-1909                  |
+| Touch targets               | Resize, rotate, line point, and connector handles have touch areas of at least 24 × 24 CSS px for fingers (WCAG 2.5.8).                                                                                                                                               | BOARD-911                   |
+| `@kujam/ui` components      | Toolbars with roving tabindex and arrow navigation, menus with `role="menu"`, and dialogs (command palette, shortcut help) with `aria-modal`, focus restored on close, and `Esc`. Audited with `axe-core` in `e2e/a11y.spec.ts`.                                      | BOARD-1402–1409, BOARD-1908 |
 
-## 2. Menulis `a11y` untuk elemen kustom
+## 2. Writing `a11y` for custom elements
 
-Setiap elemen kustom sebaiknya punya callback `a11y`. Tanpa callback itu, pembaca layar hanya membacakan "Elemen {type}", misalnya "Elemen contact-card", yang tidak berguna bagi pemakai.
+Every custom element should have an `a11y` callback. Without it, screen readers only hear "Element {type}", for example "Element contact-card", which is useless to users.
 
 ```ts
 const TEXT = {
@@ -43,86 +43,86 @@ const contactCard = defineElement({
 });
 ```
 
-Aturan yang perlu diikuti:
+Rules to follow:
 
-- **`label` pendek dan bermakna**, dimulai dengan jenis lalu isi: "Kartu kontak: Budi Santoso", bukan "Kartu" atau seluruh isi kartu. Sekitar 80 karakter sudah cukup. Detail tambahan masuk `description`.
-- **Ikuti `ctx.locale`** (`'id'` atau `'en'`) agar label berganti bersama `board.setLocale`, seperti elemen bawaan. Simpan teks per bahasa di satu tempat, bukan tersebar di kode.
-- **Tangani semua status data.** `data` bernilai `undefined` saat masih dimuat. Untuk placeholder `forbidden`, jangan bocorkan isi: cukup "Kartu terkunci". Label diperbarui otomatis saat resolver selesai atau `board.invalidate(...)` dipanggil.
-- **Pilih `role` yang tepat:** `article` untuk kartu berisi konten, `note` untuk catatan, `img` untuk visual tanpa teks (wajib dengan label deskriptif), dan `group` untuk wadah. Jangan memakai role interaktif (`button`, `link`) kecuali elemennya memang bertindak seperti itu saat diaktifkan dengan `Enter`.
-- **Status penting masuk ke label atau description**, misalnya "Tenggat lewat" atau "Menunggu persetujuan 2 dari 3". Warna saja tidak cukup (WCAG 1.4.1). Status terkunci ditambahkan otomatis oleh renderer.
-- **Callback harus murah dan tidak boleh melempar.** Callback dipanggil untuk elemen di sekitar viewport saat dokumen berubah. Bila melempar, elemen kembali ke label bawaan dan elemen lain tidak terganggu.
-- **Konten `render.html` yang interaktif** (tombol di dalam kartu) wajib bisa dijangkau keyboard dan punya nama sendiri. Tandai dengan `data-board-interactive` (BOARD-1304) agar klik dan tombol tidak diambil papan. Aksi utama sebaiknya juga tersedia sebagai aksi kontekstual (`actions`), supaya muncul di toolbar seleksi dan menu konteks yang sudah aksesibel.
-- **`export.text`** dipakai pencarian dan ekspor teks. Isi dengan teks yang sama pentingnya dengan label.
+- **Keep `label` short and meaningful**, starting with the kind and then the content: "Contact card: Budi Santoso", not "Card" or the whole card content. About 80 characters is enough. Extra detail goes in `description`.
+- **Follow `ctx.locale`** (`'id'` or `'en'`) so the label changes with `board.setLocale`, like the built-in elements. Keep the text per language in one place, not scattered through the code.
+- **Handle every data state.** `data` is `undefined` while loading. For a `forbidden` placeholder, do not leak content: "Locked card" is enough. The label updates automatically when the resolver finishes or `board.invalidate(...)` is called.
+- **Pick the right `role`:** `article` for cards with content, `note` for notes, `img` for visuals without text (with a descriptive label), and `group` for containers. Do not use interactive roles (`button`, `link`) unless the element really acts that way when activated with `Enter`.
+- **Put important status in the label or description**, for example "Overdue" or "Waiting for approval 2 of 3". Color alone is not enough (WCAG 1.4.1). The locked state is added automatically by the renderer.
+- **The callback must be cheap and must not throw.** It runs for elements around the viewport when the document changes. If it throws, the element falls back to the default label and other elements are unaffected.
+- **Interactive `render.html` content** (a button inside a card) must be reachable by keyboard and have its own name. Mark it with `data-board-interactive` (BOARD-1304) so the board does not take its clicks and keys. Main actions should also be available as contextual actions (`actions`), so they show up in the selection toolbar and the context menu, which are already accessible.
+- **`export.text`** is used by search and text export. Fill it with text that matters as much as the label.
 
-Contoh lengkap ada di `examples/contact-card` dan di panduan [elemen kustom](./custom-elements.md).
+A complete example is in `examples/contact-card` and in the [custom elements](./custom-elements.md) guide.
 
-### Komponen UI sendiri
+### Your own UI components
 
-Bila mengganti UI bawaan (lihat [custom-ui.md](./custom-ui.md)), pertahankan perilaku berikut:
+If you replace the built-in UI (see [custom-ui.md](./custom-ui.md)), keep this behavior:
 
-- nama tombol tool memuat shortcut-nya (`board.keybindings.forTarget`), dan tombol memakai `aria-pressed`;
-- dialog punya `role="dialog"`, `aria-modal`, fokus awal di dalam dialog, `Esc` untuk menutup, dan fokus dikembalikan saat ditutup;
-- area yang bisa di-scroll bisa difokus dengan keyboard;
-- target sentuh minimal 24 × 24 px CSS.
+- tool button names include their shortcut (`board.keybindings.forTarget`), and buttons use `aria-pressed`;
+- dialogs have `role="dialog"`, `aria-modal`, initial focus inside, `Esc` to close, and focus restored on close;
+- scrollable areas can be focused with the keyboard;
+- touch targets are at least 24 × 24 CSS px.
 
-## 3. Shortcut bawaan
+## 3. Built-in shortcuts
 
-Daftar di bawah berlaku untuk `defaultTools` dan `defaultCommands`. `Mod` adalah `⌘` di macOS dan `Ctrl` di sistem lain. Aplikasi bisa mengubah atau menghapus binding mana pun (`createBoard({ keybindings })` atau `board.keybindings.set`). Daftar yang berlaku di papan selalu bisa dilihat dengan menekan `?` (panel `<kujam-shortcut-help>`, BOARD-1409), atau dibaca dengan `buildShortcutHelp(board)`.
+This list applies to `defaultTools` and `defaultCommands`. `Mod` is `⌘` on macOS and `Ctrl` elsewhere. Apps can change or remove any binding (`createBoard({ keybindings })` or `board.keybindings.set`). The bindings active on a board can always be shown by pressing `?` (the `<kujam-shortcut-help>` panel, BOARD-1409) or read with `buildShortcutHelp(board)`.
 
-### Tool
+### Tools
 
-| Tool   | Shortcut | Tool      | Shortcut  |
-| ------ | -------- | --------- | --------- |
-| Pilih  | `V`      | Konektor  | `L`       |
-| Tangan | `H`      | Garis     | `Shift+L` |
-| Sticky | `S`      | Frame     | `F`       |
-| Pena   | `P`      | Penghapus | `E`       |
-| Teks   | `T`      | Kotak     | `R`       |
-| Elips  | `O`      |           |           |
+| Tool    | Shortcut | Tool      | Shortcut  |
+| ------- | -------- | --------- | --------- |
+| Select  | `V`      | Connector | `L`       |
+| Hand    | `H`      | Line      | `Shift+L` |
+| Sticky  | `S`      | Frame     | `F`       |
+| Pen     | `P`      | Eraser    | `E`       |
+| Text    | `T`      | Rectangle | `R`       |
+| Ellipse | `O`      |           |           |
 
-Tahan `Space` untuk memakai Tangan sementara. `Esc` membatalkan interaksi yang sedang berjalan, lalu kembali ke tool Pilih.
+Hold `Space` to use the Hand tool temporarily. `Esc` cancels the current interaction, then returns to the Select tool.
 
-### Perintah
+### Commands
 
-| Perintah                       | Shortcut                         |
-| ------------------------------ | -------------------------------- |
-| Urungkan / Ulangi              | `Mod+Z` / `Mod+Shift+Z`, `Mod+Y` |
-| Pilih semua / Batalkan seleksi | `Mod+A` / `Esc`                  |
-| Elemen berikutnya / sebelumnya | `Tab` / `Shift+Tab`              |
-| Geser 1 px / 10 px             | Panah / `Shift+Panah`            |
-| Edit teks elemen terpilih      | `Enter`                          |
-| Duplikat                       | `Mod+D`                          |
-| Hapus                          | `Delete`, `Backspace`            |
-| Grup / Lepas grup              | `Mod+G` / `Mod+Shift+G`          |
-| Kunci atau buka kunci          | `Mod+Shift+L`                    |
-| Bawa maju / Kirim mundur       | `Mod+]` / `Mod+[`                |
-| Paling depan / Paling belakang | `Mod+Shift+]` / `Mod+Shift+[`    |
-| Perbesar / Perkecil / 100%     | `Mod+=` / `Mod+-` / `Mod+0`      |
-| Pas ke layar / Zoom ke seleksi | `Shift+1` / `Shift+2`            |
-| Potong / Salin / Tempel        | `Mod+X` / `Mod+C` / `Mod+V`      |
-| Command palette                | `Mod+K`, `/`                     |
-| Bantuan shortcut               | `?`                              |
+| Command                          | Shortcut                         |
+| -------------------------------- | -------------------------------- |
+| Undo / Redo                      | `Mod+Z` / `Mod+Shift+Z`, `Mod+Y` |
+| Select all / Clear selection     | `Mod+A` / `Esc`                  |
+| Next / previous element          | `Tab` / `Shift+Tab`              |
+| Nudge 1 px / 10 px               | Arrows / `Shift+Arrows`          |
+| Edit the selected element's text | `Enter`                          |
+| Duplicate                        | `Mod+D`                          |
+| Delete                           | `Delete`, `Backspace`            |
+| Group / Ungroup                  | `Mod+G` / `Mod+Shift+G`          |
+| Lock or unlock                   | `Mod+Shift+L`                    |
+| Bring forward / Send backward    | `Mod+]` / `Mod+[`                |
+| Bring to front / Send to back    | `Mod+Shift+]` / `Mod+Shift+[`    |
+| Zoom in / Zoom out / 100%        | `Mod+=` / `Mod+-` / `Mod+0`      |
+| Zoom to fit / Zoom to selection  | `Shift+1` / `Shift+2`            |
+| Cut / Copy / Paste               | `Mod+X` / `Mod+C` / `Mod+V`      |
+| Command palette                  | `Mod+K`, `/`                     |
+| Shortcut help                    | `?`                              |
 
-### Sentuh dan stylus
+### Touch and stylus
 
-| Gestur                                | Hasil                                     |
-| ------------------------------------- | ----------------------------------------- |
-| Ketuk dua jari / tiga jari            | Urungkan / Ulangi (bisa dimatikan)        |
-| Dua jari geser dan cubit              | Geser dan zoom kamera                     |
-| Tekan lama di elemen                  | Menu konteks                              |
-| Tekan lama di area kosong, lalu seret | Kotak seleksi (tanpa seret: menu konteks) |
+| Gesture                              | Result                                       |
+| ------------------------------------ | -------------------------------------------- |
+| Two-finger / three-finger tap        | Undo / Redo (can be turned off)              |
+| Two-finger drag and pinch            | Pan and zoom the camera                      |
+| Long press on an element             | Context menu                                 |
+| Long press on empty space, then drag | Selection box (without a drag: context menu) |
 
-## 4. Keterbatasan yang diakui
+## 4. Known limitations
 
-Kami mencatatnya terus terang agar aplikasi bisa memberi alternatif:
+We list these openly so apps can offer alternatives:
 
-- **Isi visual tidak dideskripsikan secara spasial.** Pembaca layar mendengar daftar elemen dan labelnya, bukan tata letak ("sticky ini di kanan atas frame itu"). Hubungan konektor juga belum dibacakan sebagai "A terhubung ke B".
-- **Coretan bebas hanya berlabel "Coretan".** Bentuk dan makna gambar tangan tidak bisa diketahui. Bila penting, minta pengguna menambahkan teks di dekatnya.
-- **Beberapa aksi masih butuh pointer:** membuat konektor dan garis, mengubah ukuran dan memutar elemen, lasso, menggambar, dan penghapus. Memindah, memilih, mengedit teks, menyusun lapisan, grup, dan perintah lain bisa dengan keyboard.
-- **Hanya 200 elemen di sekitar viewport yang ada di pohon aksesibilitas** pada satu waktu, demi performa. Jumlah total tetap diumumkan, dan `Tab` menggeser kamera ke elemen berikutnya.
-- **Mode kontras tinggi Windows (`forced-colors`) belum didukung.** Warna kanvas tidak mengikuti warna sistem.
-- **Bahasa kanan-ke-kiri (RTL) belum didukung**; dijadwalkan di BOARD-1910 (0.6).
-- **Kursor dan goresan kolaborator tidak diumumkan**, hanya bergabung atau keluarnya. Aktivitas orang lain tidak dibacakan agar tidak bising.
-- **Uji pembaca layar manual belum dilakukan.** Yang sudah berjalan adalah audit otomatis `axe-core` di Chromium dan WebKit serta tes struktur pohon aksesibilitas. VoiceOver (macOS, iPadOS), NVDA, dan iPad dengan Apple Pencil belum diuji manual (BOARD-1901, BOARD-2105), jadi perilaku nyata di pembaca layar bisa berbeda dari yang dijelaskan di sini.
+- **Visual content is not described spatially.** Screen readers hear the list of elements and their labels, not the layout ("this sticky is at the top right of that frame"). Connector relationships are not read as "A connects to B" yet.
+- **Freehand strokes are only labeled "Drawing".** The shape and meaning of hand drawings cannot be known. If it matters, ask users to add text next to them.
+- **Some actions still need a pointer:** creating connectors and lines, resizing and rotating elements, lasso, drawing, and the eraser. Moving, selecting, editing text, reordering layers, grouping, and other commands work with the keyboard.
+- **Only 200 elements around the viewport are in the accessibility tree** at a time, for performance. The total count is still announced, and `Tab` moves the camera to the next element.
+- **Windows high contrast mode (`forced-colors`) is not supported yet.** Canvas colors do not follow system colors.
+- **Right-to-left (RTL) languages are not supported yet**; planned in BOARD-1910 (0.6).
+- **Collaborator cursors and strokes are not announced**, only collaborators joining or leaving. Other people's activity is not read out, to avoid noise.
+- **No manual screen reader testing has been done yet.** What runs today is automated `axe-core` auditing in Chromium and WebKit plus tests of the accessibility tree structure. VoiceOver (macOS, iPadOS), NVDA, and iPad with Apple Pencil have not been tested manually (BOARD-1901, BOARD-2105), so real screen reader behavior may differ from what is described here.
 
-Laporan masalah aksesibilitas diperlakukan sebagai bug biasa. Masalah yang membuat sebuah fitur tidak bisa dipakai sama sekali dengan keyboard atau pembaca layar diprioritaskan seperti bug fungsional.
+Accessibility issues are treated as regular bugs. An issue that makes a feature completely unusable with a keyboard or screen reader is prioritized like a functional bug.

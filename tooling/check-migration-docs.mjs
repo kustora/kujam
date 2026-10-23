@@ -1,8 +1,8 @@
 /* global process, console */
 /**
  * Verifies that `CHANGELOG.md` and `docs/MIGRATION.md` exist and that every
- * `### [Breaking] ...` section in `docs/MIGRATION.md` includes both `#### Sebelum`
- * and `#### Sesudah` sections with fenced code examples (BOARD-2206).
+ * `### [Breaking] ...` section in `docs/MIGRATION.md` includes both `#### Before`
+ * and `#### After` sections with fenced code examples (BOARD-2206).
  */
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -13,7 +13,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
  * Parses markdown content of `docs/MIGRATION.md` (ignoring fenced markdown templates)
- * and checks that every `### [Breaking]` heading has both `#### Sebelum` and `#### Sesudah`
+ * and checks that every `### [Breaking]` heading has both `#### Before` and `#### After`
  * subsections with code blocks.
  *
  * @param {string} markdown
@@ -40,23 +40,23 @@ export function validateMigrationMarkdown(markdown) {
     const nextH2 = slice.search(/^##\s+/m);
     const body = nextH2 >= 0 ? slice.slice(0, nextH2) : slice;
 
-    const hasBeforeHeading = /^####\s+Sebelum\b/m.test(body);
-    const hasAfterHeading = /^####\s+Sesudah\b/m.test(body);
+    const hasBeforeHeading = /^####\s+Before\b/m.test(body);
+    const hasAfterHeading = /^####\s+After\b/m.test(body);
 
-    const beforeMatch = /####\s+Sebelum\b([\s\S]*?)(?=####\s+Sesudah\b|$)/.exec(body);
-    const afterMatch = /####\s+Sesudah\b([\s\S]*?)$/.exec(body);
+    const beforeMatch = /####\s+Before\b([\s\S]*?)(?=####\s+After\b|$)/.exec(body);
+    const afterMatch = /####\s+After\b([\s\S]*?)$/.exec(body);
 
     const hasBeforeCode = Boolean(beforeMatch && /```[a-zA-Z]*\r?\n[\s\S]+?```/.test(beforeMatch[1]));
     const hasAfterCode = Boolean(afterMatch && /```[a-zA-Z]*\r?\n[\s\S]+?```/.test(afterMatch[1]));
 
     if (!hasBeforeHeading || !hasBeforeCode) {
       issues.push(
-        `Bagian "[Breaking] ${title}" tidak memiliki subbagian "#### Sebelum" dengan contoh blok kode.`,
+        `Section "[Breaking] ${title}" has no "#### Before" subsection with a code example.`,
       );
     }
     if (!hasAfterHeading || !hasAfterCode) {
       issues.push(
-        `Bagian "[Breaking] ${title}" tidak memiliki subbagian "#### Sesudah" dengan contoh blok kode.`,
+        `Section "[Breaking] ${title}" has no "#### After" subsection with a code example.`,
       );
     }
 
@@ -70,7 +70,7 @@ export function validateMigrationMarkdown(markdown) {
   }
 
   if (entries.length === 0) {
-    issues.push('Tidak ditemukan bagian "### [Breaking] ..." di docs/MIGRATION.md.');
+    issues.push('No "### [Breaking] ..." section found in docs/MIGRATION.md.');
   }
 
   return {
@@ -85,10 +85,10 @@ export function verifyChangelogAndMigrationFiles(rootDir = ROOT) {
   const migrationPath = join(rootDir, 'docs', 'MIGRATION.md');
 
   if (!existsSync(changelogPath)) {
-    return { valid: false, entries: [], issues: ['Berkas CHANGELOG.md tidak ditemukan.'] };
+    return { valid: false, entries: [], issues: ['CHANGELOG.md not found.'] };
   }
   if (!existsSync(migrationPath)) {
-    return { valid: false, entries: [], issues: ['Berkas docs/MIGRATION.md tidak ditemukan.'] };
+    return { valid: false, entries: [], issues: ['docs/MIGRATION.md not found.'] };
   }
 
   const changelogContent = readFileSync(changelogPath, 'utf8');
@@ -96,7 +96,7 @@ export function verifyChangelogAndMigrationFiles(rootDir = ROOT) {
 
   const result = validateMigrationMarkdown(migrationContent);
   if (!changelogContent.includes('docs/MIGRATION.md')) {
-    result.issues.push('CHANGELOG.md wajib menautkan ke docs/MIGRATION.md.');
+    result.issues.push('CHANGELOG.md must link to docs/MIGRATION.md.');
     result.valid = false;
   }
 
@@ -106,13 +106,13 @@ export function verifyChangelogAndMigrationFiles(rootDir = ROOT) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const res = verifyChangelogAndMigrationFiles(ROOT);
   if (!res.valid) {
-    console.error('[migration-docs] Pemeriksaan panduan migrasi gagal:');
+    console.error('[migration-docs] Migration guide check failed:');
     for (const issue of res.issues) {
       console.error(`  - ${issue}`);
     }
     process.exit(1);
   }
   console.log(
-    `[migration-docs] Valid (${res.entries.length} entri breaking change dengan contoh kode Sebelum & Sesudah).`,
+    `[migration-docs] Valid (${res.entries.length} breaking change entries with Before and After code).`,
   );
 }

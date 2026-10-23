@@ -1,60 +1,60 @@
-# Kebijakan Keamanan
+# Security Policy
 
-Kebijakan ini berlaku untuk package `@kujam/*` di `packages/`, contoh di `examples/` (termasuk server Hocuspocus contoh), dan playground di `apps/playground` (BOARD-2007).
+This policy covers the `@kujam/*` packages in `packages/`, the examples in `examples/` (including the sample Hocuspocus server), and the playground in `apps/playground` (BOARD-2007).
 
-## Versi yang didukung
+## Supported versions
 
-| Versi                                 | Didukung                        |
-| ------------------------------------- | ------------------------------- |
-| Cabang `main` (belum dirilis ke npm)  | Ya                              |
-| `0.x` setelah dirilis: minor terakhir | Ya, perbaikan masuk rilis patch |
-| `0.x` yang lebih lama                 | Tidak                           |
+| Version                                  | Supported                  |
+| ---------------------------------------- | -------------------------- |
+| `main` branch (not yet published to npm) | Yes                        |
+| `0.x` after release: latest minor        | Yes, fixes ship in a patch |
+| Older `0.x`                              | No                         |
 
-Sampai `1.0`, perbaikan keamanan hanya dibuat untuk rilis minor terakhir. Setelah `1.0`, mayor terakhir dan mayor sebelumnya mendapat perbaikan selama enam bulan.
+Until `1.0`, security fixes are made only for the latest minor release. After `1.0`, the latest major and the previous major receive fixes for six months.
 
-## Melaporkan kerentanan
+## Reporting a vulnerability
 
-**Jangan membuka issue publik, pull request, atau diskusi untuk kerentanan.**
+**Do not open a public issue, pull request, or discussion for a vulnerability.**
 
-1. Laporkan secara privat lewat GitHub: tab **Security**, lalu **Report a vulnerability** ([buat laporan](https://github.com/kustora/kujam/security/advisories/new)). Laporan hanya terlihat oleh maintainer.
-2. Bila tidak bisa memakai GitHub, hubungi pemilik teknis package, [@riziq](https://github.com/riziq) (ADR-002), lewat pesan langsung, lalu minta kanal privat. Jangan kirim detail teknis lewat kanal publik.
+1. Report it privately on GitHub: open the **Security** tab, then **Report a vulnerability** ([create a report](https://github.com/kustora/kujam/security/advisories/new)). Only maintainers can see the report.
+2. If you cannot use GitHub, send a direct message to the packages' technical owner, [@riziq](https://github.com/riziq) (ADR-002), and ask for a private channel. Do not share technical details on a public channel.
 
-Sertakan bila ada:
+Include, where available:
 
-- package dan versi atau commit yang terdampak;
-- jenis masalah (misalnya XSS lewat rich text, data peer yang tidak tervalidasi, bypass mode baca saja) dan dampaknya;
-- langkah reproduksi minimal atau dokumen/update yang memicunya;
-- usulan perbaikan atau mitigasi, bila ada.
+- the affected package and version or commit;
+- the kind of issue (for example XSS through rich text, unvalidated peer data, a read-only mode bypass) and its impact;
+- minimal reproduction steps, or the document or update that triggers it;
+- a suggested fix or mitigation, if any.
 
-## Proses
+## Process
 
-| Tahap                                   | Target                                        |
-| --------------------------------------- | --------------------------------------------- |
-| Konfirmasi laporan diterima             | 3 hari kerja                                  |
-| Penilaian awal dan tingkat keparahan    | 7 hari kerja                                  |
-| Perbaikan untuk keparahan kritis/tinggi | 30 hari                                       |
-| Perbaikan untuk keparahan sedang/rendah | Rilis minor berikutnya, paling lambat 90 hari |
+| Stage                             | Target                              |
+| --------------------------------- | ----------------------------------- |
+| Acknowledge the report            | 3 business days                     |
+| Initial assessment and severity   | 7 business days                     |
+| Fix for critical or high severity | 30 days                             |
+| Fix for medium or low severity    | Next minor release, at most 90 days |
 
-Tingkat keparahan memakai CVSS 3.1. Pelapor mendapat kabar di setiap tahap. Setelah perbaikan dirilis, kami menerbitkan GitHub Security Advisory (dengan CVE bila perlu), mencatatnya di `CHANGELOG.md`, dan mencantumkan nama pelapor bila bersedia. Kami meminta pengungkapan terkoordinasi: detail tidak dipublikasikan sebelum perbaikan tersedia atau sebelum 90 hari sejak laporan, mana yang lebih dulu.
+Severity follows CVSS 3.1. Reporters hear from us at every stage. Once a fix is released, we publish a GitHub Security Advisory (with a CVE when appropriate), note it in `CHANGELOG.md`, and credit the reporter if they wish. We ask for coordinated disclosure: details stay private until a fix is available or 90 days after the report, whichever comes first.
 
-## Cakupan
+## Scope
 
-Termasuk:
+In scope:
 
-- eksekusi skrip atau HTML yang lolos sanitasi (rich text, `render.html`, ekspor SVG, embed iframe);
-- data dari peer atau server yang melewati validasi (`validateBoardRecord`, validasi presence, `maxUpdateBytes`);
-- klien baca saja atau token lihat saja yang bisa mengubah dokumen;
-- kebocoran data elemen tanpa akses lewat resolver, ekspor, pencarian, atau thumbnail;
-- kerentanan di dependensi yang benar-benar bisa dieksploitasi lewat package ini.
+- script or HTML execution that gets past sanitization (rich text, `render.html`, SVG export, iframe embeds);
+- peer or server data that bypasses validation (`validateBoardRecord`, presence validation, `maxUpdateBytes`);
+- read-only clients or view-only tokens that can change a document;
+- leaking element data without access through resolvers, export, search, or thumbnails;
+- vulnerabilities in dependencies that are actually exploitable through these packages.
 
-Tidak termasuk:
+Out of scope:
 
-- kode aplikasi pemakai yang memakai API secara tidak aman, misalnya plugin yang memasang HTML tanpa sanitasi;
-- server contoh yang dijalankan dengan token mock khusus pengembangan;
-- serangan yang membutuhkan akses ke perangkat atau browser korban yang sudah dikuasai.
+- application code that uses the API unsafely, for example a plugin that inserts unsanitized HTML;
+- the sample server running with its development-only mock tokens;
+- attacks that require an already compromised device or browser.
 
-Model ancaman lengkap ada di [ADR-009](docs/adr/ADR-009-threat-model.md), dan panduan Content Security Policy di [docs/csp.md](docs/csp.md).
+The full threat model is in [ADR-009](docs/adr/ADR-009-threat-model.md), and Content Security Policy guidance is in [docs/csp.md](docs/csp.md).
 
-## Dependensi
+## Dependencies
 
-Dependabot memeriksa dependensi npm (pnpm), GitHub Actions, dan image Docker server contoh setiap minggu (`.github/dependabot.yml`). Peringatan keamanan dari Dependabot langsung membuka pull request di luar jadwal itu. Pemeriksaan lisensi dan ukuran bundle dependensi baru di CI direncanakan di BOARD-108 dan BOARD-109, tetapi belum aktif.
+Dependabot checks npm (pnpm) dependencies, GitHub Actions, and the sample server's Docker image every week (`.github/dependabot.yml`). Dependabot security alerts open pull requests immediately, outside that schedule. License and bundle-size checks for new dependencies in CI are planned in BOARD-108 and BOARD-109 but are not active yet.

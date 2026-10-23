@@ -1,20 +1,20 @@
-# Panduan Server-Side Rendering (SSR): Next.js & Nuxt 3
+# Server-Side Rendering (SSR) Guide: Next.js and Nuxt 3
 
-Panduan arsitektur dan praktik terbaik untuk menjalankan `@kujam/react` dan `@kujam/vue` di lingkungan Server-Side Rendering (SSR) seperti Next.js dan Nuxt 3 (BOARD-1308).
+Architecture and best practices for running `@kujam/react` and `@kujam/vue` in Server-Side Rendering (SSR) environments such as Next.js and Nuxt 3 (BOARD-1308).
 
 ---
 
-## 1. Arsitektur SSR Kujam
+## 1. kujam's SSR architecture
 
-Papan tulis (whiteboard) interaktif pada dasarnya bergantung pada API browser (`HTMLCanvasElement`, context 2D/WebGL, listener `PointerEvent`, `ResizeObserver`, dan DOM). Namun, aplikasi web modern sering kali berjalan pada framework hybrid SSR seperti Next.js atau Nuxt.
+An interactive whiteboard depends on browser APIs (`HTMLCanvasElement`, 2D/WebGL contexts, `PointerEvent` listeners, `ResizeObserver`, and the DOM). Modern web apps, however, often run on hybrid SSR frameworks such as Next.js or Nuxt.
 
-Desain SSR di Kujam berpegang pada prinsip:
-1. **Aman diimpor di server (Zero-eval on import)**:
-   Mengimpor `@kujam/core`, `@kujam/renderer`, `@kujam/react`, maupun `@kujam/vue` di Node.js tidak akan memicu error `window is not defined` atau `document is not defined`.
-2. **Mounting renderer ditunda ke klien**:
-   Fungsi `mountRenderer` dari `@kujam/renderer` hanya dipanggil saat siklus hidup mount browser (`useEffect` di React, `onMounted` di Vue). Sisi server tidak pernah mencoba membuat elemen canvas atau memasang listener input.
-3. **Markup kontainer konsisten (No Hydration Mismatch)**:
-   Saat SSR, komponen `<Board>` merender kontainer placeholder `<div>` dengan dimensi dan gaya posisi relatif yang sama seperti di klien (`width: 100%; height: 100%; position: relative`), mencegah layout shift saat hidrasi.
+kujam's SSR design follows these principles:
+1. **Safe to import on the server (zero evaluation on import)**:
+   Importing `@kujam/core`, `@kujam/renderer`, `@kujam/react`, or `@kujam/vue` in Node.js never throws `window is not defined` or `document is not defined`.
+2. **Renderer mounting is deferred to the client**:
+   `mountRenderer` from `@kujam/renderer` is only called in the browser mount lifecycle (`useEffect` in React, `onMounted` in Vue). The server never tries to create a canvas element or attach input listeners.
+3. **Consistent container markup (no hydration mismatch)**:
+   During SSR, `<Board>` renders a placeholder `<div>` with the same size and relative positioning as on the client (`width: 100%; height: 100%; position: relative`), which prevents layout shift during hydration.
 
 ---
 
@@ -22,11 +22,11 @@ Desain SSR di Kujam berpegang pada prinsip:
 
 ### App Router (Next.js 13+)
 
-Di Next.js App Router (direktori `app/`), semua komponen secara default adalah React Server Components (RSC). Komponen yang menggunakan `<Board>` atau hooks Kujam memerlukan interaktivitas klien, sehingga harus diberi direktif `'use client'`.
+In the Next.js App Router (the `app/` directory), every component is a React Server Component (RSC) by default. Components that use `<Board>` or kujam hooks need client interactivity, so they must have the `'use client'` directive.
 
-#### Pola Standar: Client Component Wrapper
+#### Standard pattern: a client component wrapper
 
-Buat komponen client-side wrapper untuk papan tulis:
+Create a client-side wrapper component for the whiteboard:
 
 ```tsx
 // app/components/Whiteboard.tsx
@@ -37,14 +37,14 @@ import { createBoard } from '@kujam/core';
 import { Board } from '@kujam/react';
 
 export default function Whiteboard() {
-  // 1. Buat instance board sekali menggunakan useMemo
+  // 1. Create the board instance once with useMemo
   const board = useMemo(() => {
     return createBoard({
-      // Daftarkan plugins dan tools di sini
+      // Register plugins and tools here
     });
   }, []);
 
-  // 2. Bersihkan resource board saat komponen dilepas secara permanen
+  // 2. Release the board's resources when the component is permanently unmounted
   useEffect(() => {
     return () => {
       board.dispose();
@@ -63,7 +63,7 @@ export default function Whiteboard() {
 }
 ```
 
-Kemudian gunakan langsung di Server Component halaman:
+Then use it directly in the page's Server Component:
 
 ```tsx
 // app/page.tsx
@@ -78,9 +78,9 @@ export default function Page() {
 }
 ```
 
-#### Pola Alternatif: Dynamic Import dengan `ssr: false`
+#### Alternative pattern: dynamic import with `ssr: false`
 
-Jika Anda menggunakan plugin atau adaptor penyimpanan yang secara eksplisit mengakses browser storage saat modul dimuat, atau ingin menampilkan skeleton khusus selama pemuatan:
+If you use a plugin or storage adapter that touches browser storage when its module loads, or you want a custom skeleton while loading:
 
 ```tsx
 // app/page.tsx
@@ -92,7 +92,7 @@ const Whiteboard = dynamic(() => import('./components/Whiteboard'), {
   ssr: false,
   loading: () => (
     <div style={{ display: 'grid', placeItems: 'center', height: '100vh' }}>
-      <p>Memuat papan tulis...</p>
+      <p>Loading whiteboard...</p>
     </div>
   ),
 });
@@ -102,9 +102,9 @@ export default function Page() {
 }
 ```
 
-### Pages Router (Next.js Klasik)
+### Pages Router (classic Next.js)
 
-Di Pages Router (`pages/index.tsx`), dynamic import dengan `ssr: false` direkomendasikan untuk membungkus papan tulis:
+In the Pages Router (`pages/index.tsx`), wrapping the whiteboard in a dynamic import with `ssr: false` is recommended:
 
 ```tsx
 // pages/index.tsx
@@ -123,11 +123,11 @@ export default function HomePage() {
 
 ## 3. Nuxt 3 (Vue)
 
-Nuxt 3 mengeksekusi blok `<script setup>` di server dan klien secara default.
+Nuxt 3 runs `<script setup>` blocks on both the server and the client by default.
 
-#### Pola 1: Menggunakan `<ClientOnly>`
+#### Pattern 1: `<ClientOnly>`
 
-Komponen bawaan `<ClientOnly>` memastikan rendering komponen `<Board>` hanya berjalan di sisi klien:
+The built-in `<ClientOnly>` component makes sure `<Board>` only renders on the client:
 
 ```vue
 <!-- pages/board.vue -->
@@ -155,7 +155,7 @@ onBeforeUnmount(() => {
       <Board v-if="board" :board="board" theme="light" background="dots" />
       <template #fallback>
         <div class="loading-state">
-          <span>Memuat papan tulis...</span>
+          <span>Loading whiteboard...</span>
         </div>
       </template>
     </ClientOnly>
@@ -163,9 +163,9 @@ onBeforeUnmount(() => {
 </template>
 ```
 
-#### Pola 2: Komponen Khusus Klien (`.client.vue`)
+#### Pattern 2: client-only components (`.client.vue`)
 
-Nuxt 3 otomatis mengisolasi komponen yang memiliki akhiran nama file `.client.vue` sehingga kode tidak akan pernah dieksekusi di server:
+Nuxt 3 automatically isolates components whose file name ends in `.client.vue`, so their code never runs on the server:
 
 ```vue
 <!-- components/Whiteboard.client.vue -->
@@ -174,7 +174,7 @@ import { shallowRef, onBeforeUnmount } from 'vue';
 import { createBoard } from '@kujam/core';
 import { Board } from '@kujam/vue';
 
-// Aman membuat board langsung di script setup karena file ini .client.vue
+// Safe to create the board directly in script setup because this file is .client.vue
 const board = shallowRef(createBoard());
 
 onBeforeUnmount(() => {
@@ -189,7 +189,7 @@ onBeforeUnmount(() => {
 </template>
 ```
 
-Lalu panggil di halaman mana pun tanpa pembungkus tambahan:
+Then use it on any page without an extra wrapper:
 
 ```vue
 <!-- pages/index.vue -->
@@ -202,24 +202,24 @@ Lalu panggil di halaman mana pun tanpa pembungkus tambahan:
 
 ---
 
-## 4. Praktik Terbaik Manajemen Board
+## 4. Board management best practices
 
-### Hindari Pembuatan Ulang Instance saat Re-render
+### Avoid recreating the instance on re-render
 
 - **React**:
-  Gunakan `useMemo(() => createBoard(...), [])` atau `useRef(null)`. Jangan pernah memanggil `createBoard()` langsung di dalam tubuh fungsi render tanpa memoize, karena setiap re-render akan membuat board baru dan menyebabkan canvas di-mount ulang.
+  Use `useMemo(() => createBoard(...), [])` or `useRef(null)`. Never call `createBoard()` directly in the render body without memoizing it: every re-render would create a new board and remount the canvas.
 - **Vue**:
-  Selalu gunakan `shallowRef(createBoard(...))` atau `shallowRef<Board | null>(null)`. **Jangan** gunakan `ref` mendalam atau `reactive()`, karena instance Board memiliki method internal dan state Yjs/event emitter yang tidak perlu diproxy oleh sistem reaktivitas Vue.
+  Always use `shallowRef(createBoard(...))` or `shallowRef<Board | null>(null)`. Do **not** use a deep `ref` or `reactive()`: a Board instance has internal methods and Yjs/event emitter state that Vue's reactivity system should not proxy.
 
 ### React 18 & 19 StrictMode
 
-Di lingkungan development dengan StrictMode aktif, React menjalankan siklus effect dua kali (`mount` -> `unmount` -> `mount`).
-- `<Board>` dirancang agar aman terhadap StrictMode: view renderer lama akan di-unmount dan dibersihkan, lalu view baru dipasang kembali tanpa kebocoran memori.
-- **Peringatan**: Jangan memanggil `board.dispose()` di dalam fungsi cleanup efek yang sama jika efek tersebut dapat berjalan ulang saat re-render. `board.dispose()` membuat board tidak dapat digunakan kembali secara permanen. Pastikan `dispose()` hanya dipanggil saat lifecycle komponen benar-benar selesai.
+In development with StrictMode on, React runs effects twice (`mount` -> `unmount` -> `mount`).
+- `<Board>` is StrictMode-safe: the old renderer view is unmounted and cleaned up, then a new view is mounted without leaking memory.
+- **Warning**: do not call `board.dispose()` in the cleanup of an effect that can run again on re-render. `board.dispose()` makes the board permanently unusable. Only call `dispose()` when the component's lifecycle has truly ended.
 
-### Inisialisasi Storage & Jaringan Klien
+### Initializing storage and client networking
 
-Penyimpanan lokal seperti `@kujam/storage-indexeddb` atau sinkronisasi WebRTC/WebSocket (`@kujam/sync-yjs`) memerlukan API browser (`window.indexedDB`, `window.WebSocket`, dll).
-- Inisialisasi provider ini di dalam hook klien:
-  - React: di dalam `useEffect(() => { ... }, [])`.
-  - Vue: di dalam `onMounted(() => { ... })` atau komponen `.client.vue`.
+Local storage such as `@kujam/storage-indexeddb` and WebRTC/WebSocket sync (`@kujam/sync-yjs`) need browser APIs (`window.indexedDB`, `window.WebSocket`, and so on).
+- Initialize these providers in a client hook:
+  - React: inside `useEffect(() => { ... }, [])`.
+  - Vue: inside `onMounted(() => { ... })` or a `.client.vue` component.

@@ -1,10 +1,10 @@
-# Elemen Kustom: Data Luar, `render.html`, dan Keamanan
+# Custom Elements: External Data, `render.html`, and Security
 
-Panduan untuk penulis plugin yang membuat elemen dengan data dari aplikasi (BOARD-604, BOARD-1201, BOARD-1202, BOARD-1203, BOARD-1206). Contoh di bawah memakai kartu post generik.
+A guide for plugin authors building elements whose data comes from the app (BOARD-604, BOARD-1201, BOARD-1202, BOARD-1203, BOARD-1206). The examples use a generic post card.
 
-## 1. Resolver di aplikasi
+## 1. Resolvers in the app
 
-Aplikasi mendaftarkan fungsi pengambil data per nama. Hasilnya boleh langsung (dari cache aplikasi), berupa `Promise`, atau `ResolveError`:
+The app registers a data fetcher per name. It may return the data directly (from the app's cache), a `Promise`, or a `ResolveError`:
 
 ```ts
 const board = createBoard({
@@ -21,11 +21,11 @@ const board = createBoard({
 });
 ```
 
-- Hasil disimpan per `(resolver, id)`. Permintaan yang sedang berjalan dipakai bersama, jadi sepuluh kartu untuk post yang sama hanya memanggil `post` sekali.
-- Kegagalan (exception atau promise yang ditolak) **tidak** di-cache. Elemen menampilkan error dengan tombol "Coba lagi" (`board.reloadElementData(id)`).
-- Saat data berubah di aplikasi, panggil `board.invalidate('post', id)`. Hanya elemen yang memakai post itu yang dimuat ulang dan di-update. `board.invalidate('post')` membuang seluruh cache resolver `post`.
+- Results are cached per `(resolver, id)`. In-flight requests are shared, so ten cards for the same post call `post` only once.
+- Failures (an exception or a rejected promise) are **not** cached. The element shows an error with a "Try again" button (`board.reloadElementData(id)`).
+- When the data changes in the app, call `board.invalidate('post', id)`. Only the elements using that post are reloaded and updated. `board.invalidate('post')` drops the whole `post` resolver cache.
 
-## 2. Elemen
+## 2. The element
 
 ```ts
 const postCard = defineElement({
@@ -33,19 +33,19 @@ const postCard = defineElement({
   version: 1,
   props: schema({ postId: string() }),
   defaults: { postId: '' },
-  // Menentukan data elemen dari props. Pasangan (resolver, id) yang dipanggil di sini dicatat,
-  // sehingga invalidate hanya menyentuh elemen yang benar-benar memakainya.
+  // Derives the element's data from its props. The (resolver, id) pairs called here are
+  // recorded, so invalidate only touches the elements that actually use them.
   resolve: (el, ctx) => ctx.resolvers.post!(el.props.postId) as Post | Promise<Post>,
-  placeholder: (reason) => ({ label: reason === 'forbidden' ? 'Post privat' : '' }),
+  placeholder: (reason) => ({ label: reason === 'forbidden' ? 'Private post' : '' }),
   render: {
     html(host, el, data) {
       const title = host.ownerDocument.createElement('strong');
       const like = host.ownerDocument.createElement('button');
-      like.dataset.boardInteractive = ''; // satu-satunya area yang menerima klik
-      like.textContent = 'Suka';
+      like.dataset.boardInteractive = ''; // the only area that receives clicks
+      like.textContent = 'Like';
       host.append(title, like);
       const show = (post?: Post) => {
-        title.textContent = post?.title ?? ''; // textContent, bukan innerHTML
+        title.textContent = post?.title ?? ''; // textContent, not innerHTML
       };
       show(data);
       return { update: (_el, next) => show(next), destroy() {} };
@@ -54,48 +54,48 @@ const postCard = defineElement({
 });
 ```
 
-Siklus hidup:
+Lifecycle:
 
-| Saat                                   | Yang terjadi                                                                                   |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Elemen masuk viewport                  | `resolve` dijalankan (sekali, lalu di-cache), lalu `render.html(host, el, data, ctx)`.         |
-| Data sedang dimuat                     | Skeleton seukuran elemen. Ganti lewat `placeholder('loading')`.                                |
-| `forbidden` / `not-found`              | `placeholder(reason)`, atau label bawaan. **Tidak pernah** menampilkan data.                   |
-| `error`                                | Placeholder error dengan tombol "Coba lagi".                                                   |
-| Record atau data berubah               | `update(el, data)`. Kamera bergeser atau zoom **tidak** memanggil `update`.                    |
-| `invalidate` dengan resolver async     | Tampilan lama tetap terlihat sampai data baru datang, lalu `update`.                           |
-| Keluar viewport, dihapus, atau unmount | `destroy()`.                                                                                   |
-| Props berubah                          | `resolve` dijalankan lagi. Memindahkan atau mengubah ukuran elemen tidak memicu resolve ulang. |
+| When                                     | What happens                                                                         |
+| ---------------------------------------- | ------------------------------------------------------------------------------------ |
+| The element enters the viewport          | `resolve` runs (once, then cached), then `render.html(host, el, data, ctx)`.         |
+| Data is loading                          | An element-sized skeleton. Replace it with `placeholder('loading')`.                 |
+| `forbidden` / `not-found`                | `placeholder(reason)`, or the built-in label. Data is **never** shown.               |
+| `error`                                  | An error placeholder with a "Try again" button.                                      |
+| The record or the data changes           | `update(el, data)`. Panning or zooming the camera does **not** call `update`.        |
+| `invalidate` with an async resolver      | The old view stays visible until the new data arrives, then `update`.                |
+| Leaves the viewport, deleted, or unmount | `destroy()`.                                                                         |
+| Props change                             | `resolve` runs again. Moving or resizing the element does not trigger a new resolve. |
 
-`render.canvas`, `actions`, dan `a11y` menerima `data` yang sama begitu siap. Elemen canvas dengan `resolve` digambar sebagai placeholder sampai datanya siap.
+`render.canvas`, `actions`, and `a11y` receive the same `data` once it is ready. A canvas element with `resolve` is drawn as a placeholder until its data is ready.
 
 ### Pointer
 
-Host elemen meneruskan event pointer ke tool papan (pilih, geser, resize) sehingga kartu HTML bisa dipilih dan dipindah seperti elemen lain. Hanya node yang ditandai `data-board-interactive` yang menerima klik dan ketikan sendiri, misalnya tombol, tautan, atau input.
+The element host forwards pointer events to the board tools (select, move, resize), so HTML cards can be selected and moved like any other element. Only nodes marked `data-board-interactive` receive their own clicks and typing, for example buttons, links, or inputs.
 
-### Isolasi kesalahan
+### Error isolation
 
-Exception di `resolve`, resolver, `render.html`, `update`, `render.canvas`, `actions`, atau `a11y` hanya memengaruhi elemen itu: elemen menampilkan placeholder error dan papan memancarkan event `error` (`resolve-error`, `render-error`, `action-error`). Elemen lain tetap digambar.
+An exception in `resolve`, a resolver, `render.html`, `update`, `render.canvas`, `actions`, or `a11y` only affects that element: it shows an error placeholder and the board emits an `error` event (`resolve-error`, `render-error`, `action-error`). Other elements keep rendering.
 
-### Drop target (BOARD-1208)
+### Drop targets (BOARD-1208)
 
-Elemen bisa menerima elemen lain yang dijatuhkan ke atasnya dengan tool select:
+An element can accept other elements dropped onto it with the select tool:
 
 ```ts
 dropTarget: {
   accepts: (dropped) => dropped.type === 'item-card',
   onDrop(target, dropped, point, ctx) {
     ctx.updateProps({ itemIds: [...target.props.itemIds, String(dropped.props.itemId)] });
-    ctx.removeDropped(); // tanpa ini elemen yang dijatuhkan tetap di posisi lepasnya
+    ctx.removeDropped(); // without this, the dropped element stays where it was released
   },
 },
 ```
 
-Selama elemen yang diterima diseret di atas target, overlay menyorot target. Geser + `onDrop` menjadi satu transaksi dan satu langkah undo. `accepts` harus murah dan tanpa efek samping; error di `accepts`/`onDrop` dilaporkan sebagai event `error` `plugin-error`, dan `onDrop` yang melempar error membatalkan seluruh perubahan drop (geserannya tetap).
+While an accepted element is dragged over the target, the overlay highlights the target. The move plus `onDrop` is one transaction and one undo step. `accepts` must be cheap and free of side effects; errors in `accepts` or `onDrop` are reported as an `error` event of kind `plugin-error`, and an `onDrop` that throws cancels all of the drop's changes (the move itself stays).
 
-### Tempel URL (BOARD-1209)
+### Pasting URLs (BOARD-1209)
 
-Plugin bisa mengubah URL yang ditempel menjadi elemen, misalnya kartu tautan:
+A plugin can turn a pasted URL into an element, for example a link card:
 
 ```ts
 definePlugin({
@@ -105,15 +105,15 @@ definePlugin({
 });
 ```
 
-Hook wajib sinkron dan mengembalikan `ElementInput` atau `null`; plugin pertama (urutan pemasangan) yang mengembalikan elemen menang, dan tempel itu satu langkah undo. Hanya URL `http:`/`https:` yang sampai ke hook. Package **tidak** mengambil URL: metadata pratinjau diambil host (sebaiknya di server) lewat resolver, sehingga elemen langsung tampil dalam status memuat lalu terisi. Hook yang melempar error dilaporkan sebagai `plugin-error` dan plugin berikutnya dicoba; bila tidak ada yang menangani, URL ditempel sebagai teks.
+The hook must be synchronous and return an `ElementInput` or `null`; the first plugin (in install order) that returns an element wins, and the paste is one undo step. Only `http:` and `https:` URLs reach the hook. The packages do **not** fetch the URL: the host fetches preview metadata (preferably on its server) through a resolver, so the element appears immediately in a loading state and then fills in. A hook that throws is reported as `plugin-error` and the next plugin is tried; if none handles it, the URL is pasted as text.
 
-## 3. Keamanan (ADR-009, T8)
+## 3. Security (ADR-009, T8)
 
-Kode plugin berjalan dengan hak penuh di origin aplikasi, jadi package tidak bisa melindungi dari plugin yang berbahaya. Yang bisa (dan wajib) dicegah adalah **data** yang tidak dipercaya masuk ke DOM sebagai kode. Props elemen dan data resolver dianggap tidak dipercaya: keduanya bisa berasal dari peer kolaborasi, berkas impor, atau server.
+Plugin code runs with full privileges on the app's origin, so the packages cannot protect against a malicious plugin. What can (and must) be prevented is untrusted **data** entering the DOM as code. Element props and resolver data are untrusted: both can come from collaboration peers, imported files, or a server.
 
-- **Teks:** pakai `textContent` atau `createTextNode`. Jangan pernah `innerHTML`, `outerHTML`, `insertAdjacentHTML`, atau `document.write` dengan props atau data. Aturan ESLint repo ini melarangnya di package, terapkan juga di plugin.
-- **Tautan dan gambar:** jalankan URL lewat `sanitizeUrl` / `isSafeUrl` dari `@kujam/core` sebelum dipasang ke `href` atau `src`; buka tautan dengan `safeLinkAttributes()` (`rel="noopener noreferrer"`).
-- **Style:** atur lewat CSSOM (`el.style.color = …`), jangan menyusun atribut `style` atau `<style>` dari data. Ini juga yang membuat papan berjalan di CSP ketat (`docs/csp.md`).
-- **Iframe:** jangan membuat iframe dari URL di props. Pakai elemen embed resmi `createEmbedElement({ domains })` dari `@kujam/shapes` (BOARD-1107) yang memakai `sandbox` dan daftar origin.
-- **Placeholder:** `placeholder(reason)` tidak menerima data, sehingga elemen `forbidden` tidak bisa membocorkan isi yang dilarang.
-- **Resolver:** periksa izin di server atau aplikasi, lalu kembalikan `{ status: 'forbidden' }`; jangan mengandalkan elemen untuk menyembunyikan data yang sudah dikirim.
+- **Text:** use `textContent` or `createTextNode`. Never use `innerHTML`, `outerHTML`, `insertAdjacentHTML`, or `document.write` with props or data. This repository's ESLint rules forbid them in packages; apply the same rule in plugins.
+- **Links and images:** pass URLs through `sanitizeUrl` / `isSafeUrl` from `@kujam/core` before setting `href` or `src`; open links with `safeLinkAttributes()` (`rel="noopener noreferrer"`).
+- **Styles:** set them through the CSSOM (`el.style.color = …`); never build a `style` attribute or a `<style>` element from data. This is also what lets the board run under a strict CSP (`docs/csp.md`).
+- **Iframes:** never create an iframe from a URL in props. Use the official embed element `createEmbedElement({ domains })` from `@kujam/shapes` (BOARD-1107), which uses `sandbox` and an origin allow-list.
+- **Placeholders:** `placeholder(reason)` does not receive data, so a `forbidden` element cannot leak the content it hides.
+- **Resolvers:** check permissions on the server or in the app, then return `{ status: 'forbidden' }`; do not rely on the element to hide data that has already been sent.

@@ -190,40 +190,40 @@ describe('BOARD-111: api-extractor laporan API publik per package', () => {
 });
 
 describe('BOARD-2206 & BOARD-2301: Changelog, panduan migrasi, dan kebijakan deprecation', () => {
-  it('CHANGELOG.md dan docs/MIGRATION.md valid dengan contoh kode Sebelum & Sesudah', () => {
+  it('CHANGELOG.md dan docs/MIGRATION.md valid dengan contoh kode Before & After', () => {
     const res = verifyChangelogAndMigrationFiles(ROOT);
     expect(res.issues).toEqual([]);
     expect(res.valid).toBe(true);
     expect(res.entries.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('validator panduan migrasi menolak bagian [Breaking] yang tidak punya kode Sebelum atau Sesudah', () => {
+  it('validator panduan migrasi menolak bagian [Breaking] yang tidak punya kode Before atau After', () => {
     const missingAfter = validateMigrationMarkdown(`
 ## Rilis 0.2.0
 
 ### [Breaking] Perubahan Tanda Tangan createBoard
 
-#### Sebelum
+#### Before
 
 \`\`\`ts
 createBoard();
 \`\`\`
 `);
     expect(missingAfter.valid).toBe(false);
-    expect(missingAfter.issues[0]).toContain('#### Sesudah');
+    expect(missingAfter.issues[0]).toContain('#### After');
 
     const complete = validateMigrationMarkdown(`
 ## Rilis 0.2.0
 
 ### [Breaking] Perubahan Tanda Tangan createBoard
 
-#### Sebelum
+#### Before
 
 \`\`\`ts
 createBoard(oldArg);
 \`\`\`
 
-#### Sesudah
+#### After
 
 \`\`\`ts
 createBoard({ newArg });

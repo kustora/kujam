@@ -1,29 +1,29 @@
-# Panduan Migrasi per Rilis (`@kujam/*`)
+# Migration Guide (`@kujam/*`)
 
-Dokumen ini mencatat panduan migrasi antarrilis untuk seluruh keluarga package `@kujam/*` (`BOARD-2206`).
+This document collects migration notes between releases for the whole `@kujam/*` package family (`BOARD-2206`).
 
-## Kebijakan Versi dan Perubahan *Breaking*
+## Versioning and breaking change policy
 
-1. **Versi Serentak (*Fixed Versioning*, `BOARD-110`):**
-   Semua package `@kujam/*` selalu diterbitkan dengan nomor versi yang sama. Saat menaikkan versi, perbarui seluruh dependensi `@kujam/*` di `package.json` ke versi target yang sama.
-2. **Aturan Fase `0.x` vs `1.0+` (`BOARD-2301`):**
-   - Sebelum `1.0.0`, perubahan yang memecah API (*breaking change*) boleh hadir di rilis minor (`0.N.0`), tetapi **wajib**:
-     1. Didahului peringatan `@deprecated` + `deprecate(message)` minimal **satu rilis minor penuh** sebelum API lama dihapus.
-     2. Memiliki bagian **`### [Breaking] ...`** di dokumen ini lengkap dengan blok kode **`#### Sebelum`** dan **`#### Sesudah`**.
-   - Setelah `1.0.0`, perubahan yang memecah API hanya boleh terjadi di rilis mayor (`2.0.0`, dst.).
-3. **Migrasi Skema Dokumen (`schemaVersion`) vs Migrasi Kode:**
-   - Perubahan pada bentuk data `BoardDocument` atau `props` elemen ditangani otomatis saat runtime oleh `board.loadDocument(doc)` / `migrateSchema` / `defineElement({ migrate })`.
-   - Dokumen ini berfokus pada perubahan kontrak kode TypeScript/JavaScript yang dipanggil aplikasi pemakai.
+1. **Fixed versioning (`BOARD-110`):**
+   All `@kujam/*` packages are always published under the same version number. When upgrading, move every `@kujam/*` dependency in `package.json` to the same target version.
+2. **`0.x` versus `1.0+` (`BOARD-2301`):**
+   - Before `1.0.0`, breaking changes may ship in a minor release (`0.N.0`), but they **must**:
+     1. Be preceded by an `@deprecated` tag and a `deprecate(message)` warning for at least **one full minor release** before the old API is removed.
+     2. Have a **`### [Breaking] ...`** section in this document with **`#### Before`** and **`#### After`** code blocks.
+   - After `1.0.0`, breaking changes only ship in major releases (`2.0.0` and later).
+3. **Document schema migrations (`schemaVersion`) versus code migrations:**
+   - Changes to the shape of `BoardDocument` data or element `props` are handled automatically at runtime by `board.loadDocument(doc)`, `migrateSchema`, and `defineElement({ migrate })`.
+   - This document covers changes to the TypeScript/JavaScript contract that applications call.
 
 ---
 
-## Rilis `0.1.0` (Fondasi Awal)
+## Release `0.1.0` (Foundation)
 
-### [Breaking] Penyatuan Scope Package `@board/*` menjadi `@kujam/*` (ADR-001)
+### [Breaking] Package scope `@board/*` renamed to `@kujam/*` (ADR-001)
 
-Pada draf PRD awal dan prototipe pra-`0.1.0`, package menggunakan scope sementara `@board/*`. Sejak rilis `0.1.0` (`BOARD-001`), seluruh package resmi menggunakan scope `@kujam/*`.
+Early drafts and pre-`0.1.0` prototypes used the temporary `@board/*` scope. Since `0.1.0` (`BOARD-001`), every official package uses the `@kujam/*` scope.
 
-#### Sebelum
+#### Before
 
 ```ts
 import { createBoard, defineElement } from '@board/core';
@@ -31,7 +31,7 @@ import { mountRenderer } from '@board/renderer';
 import { shapesPlugin } from '@board/shapes';
 ```
 
-#### Sesudah
+#### After
 
 ```ts
 import { createBoard, defineElement } from '@kujam/core';
@@ -41,11 +41,11 @@ import { shapesPlugin } from '@kujam/shapes';
 
 ---
 
-### [Breaking] Model Teks Kaya Kanonikal (`RichTextBlock[]`) Menggantikan HTML Mentah di Props (ADR-008)
+### [Breaking] Canonical rich text model (`RichTextBlock[]`) replaces raw HTML in props (ADR-008)
 
-Untuk menjamin keamanan XSS dan konsistensi render di Canvas 2D maupun DOM tanpa ketergantungan *sanitizer* eksternal, properti teks pada elemen `sticky`, `text`, dan `geo` menyimpan array `RichTextBlock[]` terstruktur (atau string polos yang dinormalisasi via `normalizeRichText`), bukan string HTML mentah.
+To guarantee XSS safety and consistent rendering on Canvas 2D and in the DOM without an external sanitizer, the text props of `sticky`, `text`, and `geo` elements store a structured `RichTextBlock[]` array (or plain text normalized with `normalizeRichText`) instead of a raw HTML string.
 
-#### Sebelum
+#### Before
 
 ```ts
 board.create({
@@ -55,13 +55,13 @@ board.create({
   w: 200,
   h: 200,
   props: {
-    html: '<p>Catatan <b>penting</b></p>',
+    html: '<p>An <b>important</b> note</p>',
     color: 'yellow',
   },
 });
 ```
 
-#### Sesudah
+#### After
 
 ```ts
 import { htmlToRichText } from '@kujam/shapes';
@@ -73,7 +73,7 @@ board.create({
   w: 200,
   h: 200,
   props: {
-    text: htmlToRichText('<p>Catatan <b>penting</b></p>'),
+    text: htmlToRichText('<p>An <b>important</b> note</p>'),
     color: 'yellow',
   },
 });
@@ -81,24 +81,24 @@ board.create({
 
 ---
 
-## Template Entri *Breaking Change* untuk Rilis Berikutnya (`0.2.0` – `1.0.0`)
+## Template for breaking change entries in future releases (`0.2.0` to `1.0.0`)
 
-Setiap perubahan *breaking* baru wajib menambahkan subbagian dengan format berikut (diverifikasi otomatis oleh `tooling/check-migration-docs.mjs`):
+Every new breaking change must add a subsection in this format (checked automatically by `tooling/check-migration-docs.mjs`):
 
 ```markdown
-### [Breaking] <Judul Singkat Perubahan API> (<ID Tiket>)
+### [Breaking] <Short title of the API change> (<Ticket ID>)
 
-Penjelasan singkat alasan perubahan, API lama yang dihapus/diubah, dan versi saat `deprecate()` pertama kali ditambahkan.
+Why the change was made, which old API was removed or changed, and the version in which `deprecate()` was first added.
 
-#### Sebelum
+#### Before
 
 \`\`\`ts
-// Contoh kode sebelum migrasi
+// Code before the migration
 \`\`\`
 
-#### Sesudah
+#### After
 
 \`\`\`ts
-// Contoh kode sesudah migrasi
+// Code after the migration
 \`\`\`
 ```

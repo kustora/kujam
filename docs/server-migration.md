@@ -1,25 +1,21 @@
-# Migrasi dokumen massal di server (BOARD-705)
+# Bulk document migration on the server (BOARD-705)
 
-`@kujam/server` menjalankan migrasi dokumen dengan kode yang sama seperti klien
-(`board.prepareDocument`), di Node murni tanpa DOM. Input boleh JSON `BoardDocument` atau
-update Yjs biner (`Uint8Array`).
+`@kujam/server` migrates documents with the same code as the client (`board.prepareDocument`), in plain Node without a DOM. The input can be a JSON `BoardDocument` or a binary Yjs update (`Uint8Array`).
 
-## Satu dokumen
+## One document
 
 ```ts
 import { migrateServerDocument } from '@kujam/server';
 
 const result = migrateServerDocument(rowFromDatabase, { plugins: [defaultElements, myPlugin] });
 if (result.changed) {
-  await save(result.update ?? result.document); // `update` terisi bila inputnya biner
+  await save(result.update ?? result.document); // `update` is set when the input was binary
 }
 ```
 
-`result` berisi `changed`, `fromVersion`, `toVersion`, dan `rejected` (record tidak valid yang
-dibuang). Dokumen yang lebih baru dari yang dipahami server ditolak (melempar error), bukan
-diturunkan versinya.
+`result` holds `changed`, `fromVersion`, `toVersion`, and `rejected` (invalid records that were dropped). A document newer than the server understands is rejected (it throws) rather than downgraded.
 
-## Skrip massal dengan dry-run dan laporan
+## Bulk script with a dry run and a report
 
 ```ts
 import { migrateServerBatch } from '@kujam/server';
@@ -29,24 +25,23 @@ const dryRun = process.argv.includes('--dry-run');
 const report = await migrateServerBatch(await loadAllBoards(), {
   plugins: [defaultElements, myPlugin],
   dryRun,
-  // Hanya dipanggil untuk dokumen yang berubah, dan tidak pernah saat --dry-run.
+  // Called only for documents that changed, and never with --dry-run.
   onMigrated: async (id, result) => {
     await saveBoard(id, result.update ?? result.document);
   },
 });
 
-console.log(dryRun ? 'DRY RUN, tidak ada yang disimpan' : 'Migrasi selesai');
-console.log(`${report.migrated} diubah, ${report.unchanged} tetap, ${report.failed} gagal`);
+console.log(dryRun ? 'DRY RUN, nothing saved' : 'Migration finished');
+console.log(`${report.migrated} changed, ${report.unchanged} unchanged, ${report.failed} failed`);
 for (const entry of report.entries.filter((e) => e.status === 'failed')) {
   console.error(`${entry.id}: ${entry.error}`);
 }
 process.exitCode = report.failed > 0 ? 1 : 0;
 ```
 
-Satu dokumen yang gagal tidak menghentikan batch; kegagalannya muncul di `report.entries`.
-Selalu jalankan `--dry-run` dulu pada data produksi.
+A failing document does not stop the batch; its failure shows up in `report.entries`. Always run with `--dry-run` first on production data.
 
-## Thumbnail di server (BOARD-1804)
+## Thumbnails on the server (BOARD-1804)
 
 ```ts
 import { renderThumbnail } from '@kujam/server';
@@ -54,11 +49,8 @@ import { renderThumbnail } from '@kujam/server';
 const png = await renderThumbnail(doc, { width: 400, plugins: [defaultElements] });
 ```
 
-`@napi-rs/canvas` bersifat opsional dan dimuat saat dipakai. Bila tidak terpasang, fungsi melempar
-error yang jelas sehingga aplikasi bisa jatuh ke thumbnail klien (BOARD-1708). Untuk canvas
-lain, berikan `canvasFactory(width, height)` yang mengembalikan `{ canvas, ctx }`; `canvas` harus
-punya `toBuffer('image/png')` atau `encode('png')`.
+`@napi-rs/canvas` is optional and loaded on first use. If it is not installed, the function throws a clear error so the app can fall back to client-side thumbnails (BOARD-1708). For another canvas, pass `canvasFactory(width, height)` returning `{ canvas, ctx }`; `canvas` must have `toBuffer('image/png')` or `encode('png')`.
 
-## Worker lengkap (BOARD-1805)
+## Complete worker (BOARD-1805)
 
-Contoh worker yang menggabungkan validasi, ekstraksi referensi dengan diff penempatan, dan thumbnail setelah perubahan reda ada di [`examples/server-worker`](../examples/server-worker/README.md).
+A worker that combines validation, reference extraction with a placement diff, and thumbnails once changes settle is in [`examples/server-worker`](../examples/server-worker/README.md).

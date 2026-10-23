@@ -1,97 +1,97 @@
-# Checklist Aksesibilitas Per Rilis (`BOARD-1908`)
+# Per-Release Accessibility Checklist (`BOARD-1908`)
 
-Dokumen ini adalah daftar periksa (checklist) aksesibilitas wajib yang harus dijalankan dan ditandatangani sebelum setiap rilis `@kujam/*`. Pengujian mencakup **audit otomatis (`axe-core`)** di CI serta **pengujian manual** untuk navigasi keyboard, pembaca layar (VoiceOver & NVDA), zoom browser 200%, dan preferensi sistem.
+This is the mandatory accessibility checklist to run and sign off before every `@kujam/*` release. It covers **automated audits (`axe-core`)** in CI and **manual testing** of keyboard navigation, screen readers (VoiceOver and NVDA), 200% browser zoom, and system preferences.
 
 ---
 
-## 1. Audit Otomatis (`axe-core` di Playwright)
+## 1. Automated audit (`axe-core` in Playwright)
 
-Sebelum memulai pengujian manual, pastikan seluruh tes aksesibilitas otomatis lulus tanpa pelanggaran `serious` atau `critical`:
+Before manual testing, make sure every automated accessibility test passes with no `serious` or `critical` violations:
 
 ```bash
 pnpm test:e2e e2e/a11y.spec.ts
 ```
 
-- [ ] Skenario papan dengan `@kujam/ui` dan elemen `0.1.0/kitchen-sink` (tema terang, bahasa Indonesia) bebas dari pelanggaran `serious` / `critical`.
-- [ ] Skenario papan dengan elemen terpilih (`<kujam-selection-toolbar>` terbuka, tema gelap, bahasa Inggris) bebas dari pelanggaran `serious` / `critical`.
+- [ ] A board with `@kujam/ui` and the `0.1.0/kitchen-sink` elements (light theme, Indonesian) has no `serious` / `critical` violations.
+- [ ] A board with a selected element (`<kujam-selection-toolbar>` open, dark theme, English) has no `serious` / `critical` violations.
 
 ---
 
-## 2. Navigasi Keyboard Lengkap (`BOARD-1902`, `BOARD-1402`, `BOARD-1403`)
+## 2. Full keyboard navigation (`BOARD-1902`, `BOARD-1402`, `BOARD-1403`)
 
-Uji menggunakan browser desktop (Chromium, Firefox, Safari) tanpa menggunakan mouse/trackpad:
+Test in desktop browsers (Chromium, Firefox, Safari) without a mouse or trackpad:
 
-- [ ] **Masuk & Keluar Papan (Tanpa Jebakan Fokus / *No Keyboard Trap*):**
-  - [ ] Tekan `Tab` dari luar papan untuk memfokuskan region papan tulis (`role="region"`).
-  - [ ] Bila ada satu elemen yang sedang terpilih saat masuk ke papan, fokus otomatis diarahkan ke item aksesibilitas elemen tersebut.
-  - [ ] Tekan `Esc` hingga seleksi kosong, lalu tekan `Tab` untuk keluar dari papan ke kontrol berikutnya di halaman (tidak terjebak di dalam kanvas).
-- [ ] **Berpindah Antar Elemen di Kanvas:**
-  - [ ] `Tab` dan `Shift+Tab` berpindah antar elemen sesuai urutan baca deterministik (`getReadingOrder`: frame diurutkan posisi `y` lalu `x`, diikuti elemen di dalamnya, lalu elemen lepas).
-  - [ ] Fokus keyboard menampilkan cincin fokus (`focus-ring` 2px dengan jarak 2px dari batas elemen).
-- [ ] **Manipulasi Elemen via Keyboard:**
-  - [ ] Tombol panah (`ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`) menggeser elemen terpilih sejauh `1px`.
-  - [ ] `Shift + Panah` menggeser elemen terpilih sejauh `10px`.
-  - [ ] `Enter` pada elemen teks/sticky/bentuk membuka editor teks; `Escape` menutup editor dan mengembalikan fokus ke elemen di papan.
-  - [ ] `Delete` / `Backspace` menghapus elemen terpilih dan menjaga fokus tetap berada di dalam papan (tidak jatuh ke `document.body`).
-- [ ] **Toolbar Utama (`<kujam-toolbar>`) & Selection Toolbar (`<kujam-selection-toolbar>`):**
-  - [ ] Toolbar adalah satu *tab stop* (*roving tabindex*): `ArrowRight` / `ArrowLeft` berpindah antar tombol, `Home` / `End` melompat ke awal/akhir.
-  - [ ] `ArrowUp` atau `Alt+ArrowDown` pada tombol ber-menu membuka pop-up menu (`role="menu"`), panah atas/bawah memilih opsi, `Enter`/`Space` mengaktifkan, dan `Escape` menutup menu serta mengembalikan fokus ke tombol pemicu.
-
----
-
-## 3. Pembaca Layar — VoiceOver (macOS & iPadOS Safari) (`BOARD-1901`)
-
-Aktifkan VoiceOver (`Cmd + F5` di macOS, atau pengaturan Aksesibilitas di iPadOS) pada halaman playground `/s/all-elements`:
-
-- [ ] **Landmark & Bantuan Papan:**
-  - [ ] Papan dikenali sebagai region dengan deskripsi peran `"papan tulis"` (`id`) atau `"whiteboard"` (`en`) dan nama `"Papan tulis"` / `"Whiteboard"`.
-  - [ ] Deskripsi bantuan (`aria-describedby`) dibacakan saat fokus masuk ke papan.
-- [ ] **Pohon Aksesibilitas Paralel (`role="list"`):**
-  - [ ] Daftar elemen (`"Elemen papan"` / `"Board elements"`) melaporkan jumlah total elemen (`aria-setsize`) dan indeks posisi (`aria-posinset`) secara akurat, termasuk ketika papan memiliki >200 elemen.
-  - [ ] Setiap tipe elemen membacakan peran dan label yang bermakna (isi teks pada sticky/teks/bentuk, titik awal-akhir pada konektor, jumlah elemen dalam grup/frame).
-  - [ ] Elemen yang dikunci (`locked: true`) menyertakan keterangan `"Terkunci"` / `"Locked"` pada deskripsi aksesibilitasnya.
-- [ ] **Live Region Perubahan Penting (`BOARD-1903`):**
-  - [ ] Membuat atau menghapus elemen (termasuk undo/redo) dibacakan, misalnya `"Sticky kuning dibuat"` atau `"3 elemen dihapus"`. Perubahan dari orang lain tidak dibacakan.
-  - [ ] Di `/s/sync-lab`, kolaborator yang bergabung atau keluar dibacakan (`"Budi bergabung"`), begitu juga koneksi terputus dan tersambung kembali, tanpa daftar orang yang "keluar" karena koneksi sendiri putus.
-  - [ ] Banyak perubahan beruntun digabung jadi satu kalimat dan dibacakan paling sering sekali per detik; status koneksi tidak dibacakan dua kali oleh `<kujam-presence-bar>`.
-- [ ] **Eksplorasi Sentuh iPadOS (*Touch Exploration*):**
-  - [ ] Menyeret jari di atas kanvas pada iPadOS dengan VoiceOver aktif menemukan item elemen pada koordinat layar yang sesuai (mengikuti transformasi kamera pan/zoom).
+- [ ] **Entering and leaving the board (no keyboard trap):**
+  - [ ] Press `Tab` from outside the board to focus the whiteboard region (`role="region"`).
+  - [ ] If one element is selected when entering the board, focus goes to that element's accessibility item.
+  - [ ] Press `Esc` until the selection is empty, then `Tab` to leave the board for the next control on the page (focus is not trapped in the canvas).
+- [ ] **Moving between elements on the canvas:**
+  - [ ] `Tab` and `Shift+Tab` move between elements in deterministic reading order (`getReadingOrder`: frames sorted by `y` then `x`, followed by their contents, then loose elements).
+  - [ ] Keyboard focus shows the focus ring (a 2 px `focus-ring`, 2 px away from the element's edge).
+- [ ] **Changing elements with the keyboard:**
+  - [ ] The arrow keys (`ArrowUp`, `ArrowDown`, `ArrowLeft`, `ArrowRight`) nudge the selected element by `1px`.
+  - [ ] `Shift + Arrow` nudges the selected element by `10px`.
+  - [ ] `Enter` on a text, sticky, or shape element opens the text editor; `Escape` closes it and returns focus to the element on the board.
+  - [ ] `Delete` / `Backspace` deletes the selected element and keeps focus inside the board (it does not fall to `document.body`).
+- [ ] **Main toolbar (`<kujam-toolbar>`) and selection toolbar (`<kujam-selection-toolbar>`):**
+  - [ ] The toolbar is a single tab stop (roving tabindex): `ArrowRight` / `ArrowLeft` move between buttons, `Home` / `End` jump to the first and last.
+  - [ ] `ArrowUp` or `Alt+ArrowDown` on a button with a menu opens the popup menu (`role="menu"`), up/down arrows pick an option, `Enter`/`Space` activate it, and `Escape` closes the menu and returns focus to the button that opened it.
 
 ---
 
-## 4. Pembaca Layar — NVDA (Windows Firefox & Chrome) (`BOARD-1901`, `BOARD-1902`)
+## 3. Screen reader: VoiceOver (macOS and iPadOS Safari) (`BOARD-1901`)
 
-Aktifkan NVDA di Windows dan buka halaman playground `/s/all-elements`:
+Turn on VoiceOver (`Cmd + F5` on macOS, or the Accessibility settings on iPadOS) on the playground page `/s/all-elements`:
 
-- [ ] **Interaksi Mode Fokus & Browse:**
-  - [ ] Saat berpindah dengan `Tab` di dalam papan, NVDA membacakan label elemen, peran, posisi dalam daftar (`X of Y`), dan status terkunci.
-  - [ ] Saat mengedit teks di dalam elemen (`contenteditable`), NVDA membaca perubahan karakter/baris tanpa terganggu oleh pintasan alat satu huruf (`V`, `H`, `S`, `P`, `R`, `O`, `C`, `T`, `E`).
-- [ ] **Kontrol UI (`@kujam/ui`):**
-  - [ ] Semua tombol pada `<kujam-toolbar>`, `<kujam-selection-toolbar>`, `<kujam-zoom-control>`, dan `<kujam-history-control>` memiliki nama aksesibel yang menyertakan nama alat/aksi beserta pintasan keyboardnya.
-  - [ ] Status tombol aktif (`aria-pressed="true"`) dan status menu (`aria-expanded`, `aria-checked`) diumumkan dengan benar.
-
----
-
-## 5. Zoom Browser 200%, Kontras, & Gerak Dikurangi (`BOARD-1904`, `BOARD-1905`)
-
-- [ ] **Zoom Browser 200%:**
-  - [ ] Atur tingkat zoom browser ke **200%** pada viewport `1280×800`.
-  - [ ] Pastikan `<kujam-toolbar>`, `<kujam-zoom-control>`, `<kujam-history-control>`, dan `<kujam-selection-toolbar>` tetap terlihat utuh, tidak saling bertumpuk, tidak terpotong di tepi layar, dan semua menu pop-up tetap dapat dijangkau.
-  - [ ] Pastikan koordinat pointer pada kanvas tetap presisi saat menggambar atau memilih elemen pada zoom browser 200%.
-- [ ] **Kontras Warna (WCAG 2.1 AA):**
-  - [ ] Teks UI pada tema terang (`light`) dan gelap (`dark`) memenuhi rasio kontras minimum **4.5:1**.
-  - [ ] Ikon UI, batas kontrol, dan indikator fokus memenuhi rasio kontras minimum **3:1**.
-- [ ] **Gerak Dikurangi (`prefers-reduced-motion`):**
-  - [ ] Aktifkan *Reduce motion* di pengaturan OS (atau emulasi DevTools `prefers-reduced-motion: reduce`).
-  - [ ] Pastikan `camera.animateTo` / `camera.zoomToFit` berpindah secara instan tanpa animasi perantara, dan transisi CSS pada `@kujam/ui` dinonaktifkan (`--kujam-ui-motion: 0ms`).
-  - [ ] Pastikan opsi `reducedMotion: false` pada `mountRenderer` atau `view.reducedMotion = false` dapat menimpa preferensi sistem bila diminta secara eksplisit.
+- [ ] **Landmark and board help:**
+  - [ ] The board is announced as a region with the role description "whiteboard" (`en`) or "papan tulis" (`id`) and the name "Whiteboard" / "Papan tulis".
+  - [ ] The help description (`aria-describedby`) is read when focus enters the board.
+- [ ] **Parallel accessibility tree (`role="list"`):**
+  - [ ] The element list ("Board elements" / "Elemen papan") reports the total element count (`aria-setsize`) and position (`aria-posinset`) accurately, including when the board has more than 200 elements.
+  - [ ] Every element type reads a meaningful role and label (the text of stickies, text, and shapes; the start and end points of connectors; the number of elements in a group or frame).
+  - [ ] Locked elements (`locked: true`) include "Locked" / "Terkunci" in their accessible description.
+- [ ] **Live region for important changes (`BOARD-1903`):**
+  - [ ] Creating or deleting elements (including undo/redo) is announced, for example a yellow sticky being created or 3 elements being deleted. Other people's changes are not announced.
+  - [ ] In `/s/sync-lab`, collaborators joining or leaving are announced, as are the connection dropping and reconnecting, without listing people as "left" because your own connection dropped.
+  - [ ] Bursts of changes are merged into one sentence and announced at most once per second; the connection status is not announced twice by `<kujam-presence-bar>`.
+- [ ] **iPadOS touch exploration:**
+  - [ ] Dragging a finger over the canvas on iPadOS with VoiceOver on finds element items at the matching screen coordinates (following the camera pan/zoom transform).
 
 ---
 
-## 6. Catatan Sign-Off Rilis
+## 4. Screen reader: NVDA (Windows Firefox and Chrome) (`BOARD-1901`, `BOARD-1902`)
 
-Isi baris baru pada tabel di bawah ini setiap kali menyiapkan rilis baru:
+Turn on NVDA on Windows and open the playground page `/s/all-elements`:
 
-| Versi Rilis | Tanggal | Penguji | `axe-core` (CI) | Keyboard | VoiceOver | NVDA | Zoom 200% & Reduced Motion | Status |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `0.1.0-alpha.0` | 2026-10-19 | Tim Kujam | Lulus | Lulus | Siap diuji | Siap diuji | Lulus | Baseline awal |
+- [ ] **Focus and browse mode:**
+  - [ ] When moving with `Tab` inside the board, NVDA reads the element label, role, position in the list (`X of Y`), and locked state.
+  - [ ] When editing text inside an element (`contenteditable`), NVDA reads character and line changes without being disturbed by single-letter tool shortcuts (`V`, `H`, `S`, `P`, `R`, `O`, `C`, `T`, `E`).
+- [ ] **UI controls (`@kujam/ui`):**
+  - [ ] Every button in `<kujam-toolbar>`, `<kujam-selection-toolbar>`, `<kujam-zoom-control>`, and `<kujam-history-control>` has an accessible name that includes the tool or action name and its keyboard shortcut.
+  - [ ] Active button state (`aria-pressed="true"`) and menu state (`aria-expanded`, `aria-checked`) are announced correctly.
+
+---
+
+## 5. 200% browser zoom, contrast, and reduced motion (`BOARD-1904`, `BOARD-1905`)
+
+- [ ] **200% browser zoom:**
+  - [ ] Set the browser zoom to **200%** on a `1280×800` viewport.
+  - [ ] `<kujam-toolbar>`, `<kujam-zoom-control>`, `<kujam-history-control>`, and `<kujam-selection-toolbar>` stay fully visible, do not overlap, are not cut off at the screen edge, and every popup menu stays reachable.
+  - [ ] Pointer coordinates on the canvas stay precise when drawing or selecting at 200% browser zoom.
+- [ ] **Color contrast (WCAG 2.1 AA):**
+  - [ ] UI text in the `light` and `dark` themes meets the minimum contrast ratio of **4.5:1**.
+  - [ ] UI icons, control borders, and focus indicators meet the minimum contrast ratio of **3:1**.
+- [ ] **Reduced motion (`prefers-reduced-motion`):**
+  - [ ] Turn on _Reduce motion_ in the OS settings (or emulate `prefers-reduced-motion: reduce` in DevTools).
+  - [ ] `camera.animateTo` / `camera.zoomToFit` move instantly without intermediate animation, and CSS transitions in `@kujam/ui` are off (`--kujam-ui-motion: 0ms`).
+  - [ ] `reducedMotion: false` on `mountRenderer` or `view.reducedMotion = false` overrides the system preference when explicitly requested.
+
+---
+
+## 6. Release sign-off
+
+Add a row to the table below for every new release:
+
+| Release         | Date       | Tester     | `axe-core` (CI) | Keyboard | VoiceOver     | NVDA          | 200% zoom & reduced motion | Status           |
+| :-------------- | :--------- | :--------- | :-------------- | :------- | :------------ | :------------ | :------------------------- | :--------------- |
+| `0.1.0-alpha.0` | 2026-10-19 | Kujam team | Passed          | Passed   | Ready to test | Ready to test | Passed                     | Initial baseline |

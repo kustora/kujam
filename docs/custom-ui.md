@@ -1,16 +1,16 @@
-# UI Papan: Bawaan, Wrapper Framework, atau Buatan Sendiri
+# Board UI: Built-in, Framework Wrappers, or Your Own
 
-Panduan untuk aplikasi yang memasang UI di atas papan (BOARD-1410). Ada tiga tingkat, dan semuanya bisa dicampur: misalnya toolbar buatan sendiri dengan minimap dan command palette bawaan.
+A guide for apps that place UI over the board (BOARD-1410). There are three levels, and they can be mixed: for example, your own toolbar with the built-in minimap and command palette.
 
-| Tingkat              | Cara                                                    | Cocok untuk                                      |
-| -------------------- | ------------------------------------------------------- | ------------------------------------------------ |
-| 1. UI bawaan         | `mountDefaultUi({ board, container })` dari `@kujam/ui` | Prototipe dan aplikasi tanpa design system       |
-| 2. Wrapper framework | `<Toolbar board={board} />` dari `@kujam/react` / `vue` | Menaruh komponen bawaan di tata letak sendiri    |
-| 3. Komponen sendiri  | Hooks/composables + API board                           | Design system sendiri (misalnya aplikasi Tayang) |
+| Level                  | How                                                     | Good for                                    |
+| ---------------------- | ------------------------------------------------------- | ------------------------------------------- |
+| 1. Built-in UI         | `mountDefaultUi({ board, container })` from `@kujam/ui` | Prototypes and apps without a design system |
+| 2. Framework wrappers  | `<Toolbar board={board} />` from `@kujam/react` / `vue` | Placing built-in components in your layout  |
+| 3. Your own components | Hooks/composables + the board API                       | Your own design system                      |
 
-Package tidak punya state UI tersembunyi. Semua yang dipakai UI bawaan (tool aktif, riwayat, kamera, seleksi, aksi elemen, shortcut) tersedia lewat API publik board. Komponen sendiri pun bisa menyamai UI bawaan.
+The packages keep no hidden UI state. Everything the built-in UI uses (active tool, history, camera, selection, element actions, shortcuts) is available through the board's public API, so your own components can match the built-in UI.
 
-## 1. UI bawaan
+## 1. Built-in UI
 
 ```ts
 import { mountRenderer } from '@kujam/renderer';
@@ -18,24 +18,24 @@ import { mountDefaultUi } from '@kujam/ui';
 
 const view = mountRenderer(board, container);
 const ui = mountDefaultUi({ board, container });
-// nanti
+// later
 ui.unmount();
 view.unmount();
 ```
 
-`mountDefaultUi` memasang toolbar, zoom, undo/redo, toolbar seleksi, minimap, command palette, menu konteks, presence bar, dan panel bantuan shortcut (`?`) beserta posisinya. Warna diatur lewat properti CSS `--kujam-ui-*` (lihat `uiToken`).
+`mountDefaultUi` installs and positions the toolbar, zoom, undo/redo, selection toolbar, minimap, command palette, context menu, presence bar, and the shortcut help panel (`?`). Colors are set through `--kujam-ui-*` CSS properties (see `uiToken`).
 
-## 2. Wrapper React dan Vue
+## 2. React and Vue wrappers
 
-Wrapper merender elemen bawaan dengan prop bertipe dan meneruskan `board` sebagai properti DOM. Adapter tidak mengimpor `@kujam/ui`, karena adapter hanya boleh bergantung pada core dan renderer (BOARD-106). Daftarkan elemennya sekali saja di aplikasi:
+The wrappers render the built-in elements with typed props and pass `board` as a DOM property. The adapters do not import `@kujam/ui`, because adapters may only depend on core and the renderer (BOARD-106). Register the elements once in your app:
 
 ```ts
 import { defineUiElements } from '@kujam/ui';
 
-defineUiElements(); // sekali, di sisi klien
+defineUiElements(); // once, on the client
 ```
 
-Tanpa langkah ini, tag-nya tetap elemen tak dikenal dan wrapper mencatat peringatan di konsol.
+Without this step, the tags stay unknown elements and the wrappers log a console warning.
 
 ### React
 
@@ -58,7 +58,7 @@ export function Editor({ board }: { board: CoreBoard }) {
 }
 ```
 
-Komponen yang tersedia: `Toolbar`, `ZoomControl`, `HistoryControl`, `SelectionToolbar`, `Minimap`, `CommandPalette` (prop `source`), `ContextMenu`, `PresenceBar`, dan `ShortcutHelp`. Semuanya menerima `board`, `className`, `style`, dan `id`, dan `ref`-nya menunjuk ke elemen DOM. Untuk metode seperti `open()`, cast ke tipe elemen dari `@kujam/ui` (`ShortcutHelpElement`, `CommandPaletteElement`, `ContextMenuElement`). Saat SSR, wrapper hanya merender tag kosong.
+Available components: `Toolbar`, `ZoomControl`, `HistoryControl`, `SelectionToolbar`, `Minimap`, `CommandPalette` (`source` prop), `ContextMenu`, `PresenceBar`, and `ShortcutHelp`. They all accept `board`, `className`, `style`, and `id`, and their `ref` points at the DOM element. For methods such as `open()`, cast to the element type from `@kujam/ui` (`ShortcutHelpElement`, `CommandPaletteElement`, `ContextMenuElement`). During SSR, the wrappers render only an empty tag.
 
 ### Vue
 
@@ -79,15 +79,15 @@ const help = ref<{ element: ShortcutHelpElement | null }>();
 </template>
 ```
 
-`class` dan `style` diteruskan ke elemen. Instance komponen punya properti `element`. Template tidak perlu pengaturan `isCustomElement`, karena wrapper membuat elemennya lewat render function.
+`class` and `style` are passed to the element. Component instances have an `element` property. Templates need no `isCustomElement` setting, because the wrappers create the elements through render functions.
 
-## 3. UI buatan sendiri dengan hooks
+## 3. Your own UI with hooks
 
-Kerangka tiap kontrol di bawah memakai React. Composables Vue di `@kujam/vue` bernama sama (`useTool`, `useHistory`, `useCamera`, `useSelection`, `useBoardEvent`) dan mengembalikan `Ref`.
+The sketches below use React. The Vue composables in `@kujam/vue` have the same names (`useTool`, `useHistory`, `useCamera`, `useSelection`, `useBoardEvent`) and return `Ref`s.
 
 ### Toolbar
 
-`buildToolbarItems(board)` dari `@kujam/ui` adalah fungsi biasa tanpa DOM. Fungsi ini mengembalikan tool bawaan dan item plugin (`toolbarItems`) dengan label yang sudah diterjemahkan dan shortcut yang sudah diformat, jadi toolbar sendiri tetap mengikuti plugin dan binding pemakai:
+`buildToolbarItems(board)` from `@kujam/ui` is a plain function with no DOM. It returns the built-in tools and plugin items (`toolbarItems`) with translated labels and formatted shortcuts, so your own toolbar still follows plugins and user key bindings:
 
 ```tsx
 import { useTool } from '@kujam/react';
@@ -115,9 +115,9 @@ function MyToolbar({ board }: { board: CoreBoard }) {
 }
 ```
 
-Tanpa `@kujam/ui`, sumber yang sama tersedia langsung: `board.tools.list()`, `board.keybindings.forTarget('tool:draw')`, dan `board.keybindings.format(shortcut)`.
+Without `@kujam/ui`, the same sources are available directly: `board.tools.list()`, `board.keybindings.forTarget('tool:draw')`, and `board.keybindings.format(shortcut)`.
 
-### Undo, redo, dan zoom
+### Undo, redo, and zoom
 
 ```tsx
 function MyHistory({ board }: { board: CoreBoard }) {
@@ -145,26 +145,26 @@ function MyZoom({ board }: { board: CoreBoard }) {
 }
 ```
 
-### Toolbar seleksi dan aksi elemen
+### Selection toolbar and element actions
 
-`useSelection(board)` memberi ID terpilih. Aksi kontekstual tiap elemen (bawaan dan dari plugin, BOARD-1205) dibaca dengan `board.getActions(ids)` dan dijalankan dengan `board.runAction(action, element)`, yang memeriksa izin. Posisi toolbar mengikuti kotak seleksi di layar: ubah batas seleksi ke koordinat layar dengan `board.camera.boardToScreen`, lalu perbarui saat kamera berubah (`useCamera`).
+`useSelection(board)` gives the selected IDs. Each element's contextual actions (built-in and from plugins, BOARD-1205) are read with `board.getActions(ids)` and run with `board.runAction(action, element)`, which checks permissions. The toolbar follows the selection box on screen: convert the selection bounds to screen coordinates with `board.camera.boardToScreen`, and update when the camera changes (`useCamera`).
 
-### Menu konteks
+### Context menu
 
-Renderer hanya mengirim data menu (BOARD-912). Tangani lewat opsi `onContextMenu` di `mountRenderer`, atau `useBoardEvent(board, 'contextmenu', handler)`. Event-nya membawa `items` (aksi elemen dan perintah umum), posisi `client` untuk menaruh menu, dan `targetId`.
+The renderer only sends menu data (BOARD-912). Handle it through the `onContextMenu` option of `mountRenderer`, or with `useBoardEvent(board, 'contextmenu', handler)`. The event carries `items` (element actions and general commands), the `client` position to place the menu, and `targetId`.
 
-### Panel bantuan shortcut
+### Shortcut help panel
 
-`buildShortcutHelp(board)` dari `@kujam/ui` mengembalikan `{ tools, commands }`, masing-masing berisi `{ target, label, shortcuts }` yang sudah diformat. Panggil setiap kali panel dibuka, supaya perubahan `board.keybindings.set(...)` ikut tampil. Tanpa `@kujam/ui`, kelompokkan sendiri hasil `board.keybindings.list()`.
+`buildShortcutHelp(board)` from `@kujam/ui` returns `{ tools, commands }`, each holding formatted `{ target, label, shortcuts }` entries. Call it every time the panel opens so changes made with `board.keybindings.set(...)` show up. Without `@kujam/ui`, group the result of `board.keybindings.list()` yourself.
 
-### Aksesibilitas
+### Accessibility
 
-UI bawaan memenuhi `docs/a11y-checklist.md`. Saat mengganti UI sendiri, pertahankan beberapa hal ini:
+The built-in UI meets `docs/a11y-checklist.md`. When you replace it, keep these points:
 
-- tombol tool punya nama yang memuat shortcut (misalnya "Pena (P)") dan `aria-pressed`;
-- toolbar memakai `role="toolbar"` dengan navigasi panah;
-- dialog (palette, bantuan shortcut) memakai `role="dialog"`, `aria-modal`, Esc untuk menutup, dan mengembalikan fokus;
-- area sentuh minimal 24 × 24 px CSS;
-- teks diambil dari `board.t(key)` agar mengikuti `board.locale` dan kamus aplikasi (BOARD-1909).
+- tool buttons have a name that includes the shortcut (for example "Pen (P)") and `aria-pressed`;
+- the toolbar uses `role="toolbar"` with arrow-key navigation;
+- dialogs (palette, shortcut help) use `role="dialog"` and `aria-modal`, close with Esc, and return focus;
+- touch targets are at least 24 × 24 CSS px;
+- text comes from `board.t(key)` so it follows `board.locale` and the app's dictionaries (BOARD-1909).
 
-Pengumuman pembaca layar untuk aksi di papan (elemen dibuat atau dihapus, kolaborator bergabung) sudah dibuat renderer (BOARD-1903). Pesan dari UI sendiri bisa ditambahkan dengan `view.announce(message)`.
+The renderer already makes screen reader announcements for board actions (elements created or deleted, collaborators joining) (BOARD-1903). Add messages from your own UI with `view.announce(message)`.
