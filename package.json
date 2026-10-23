@@ -11,7 +11,8 @@
   "packageManager": "pnpm@10.6.5",
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
+    "dev": "turbo run dev --filter=@tayang/web --filter=@tayang/api",
+    "dev:packages": "turbo run dev --filter=./packages/* --concurrency=15",
     "playground": "pnpm --filter @kujam/playground dev",
     "web": "pnpm --filter @tayang/web dev",
     "api": "pnpm --filter @tayang/api dev",
