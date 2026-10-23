@@ -25,6 +25,22 @@ export interface ActiveStroke {
   readonly color: string;
   readonly thickness: number;
   readonly brush: string;
+  /**
+   * Points predicted by the browser past the last real point (BOARD-911), drawn after `points`
+   * as a preview only. Not sent to collaborators and not stored.
+   */
+  readonly predicted?: readonly (readonly number[])[];
+}
+
+/**
+ * Brush tip previewed under a hovering pen (BOARD-911, ADR-004): stroke color and thickness in
+ * board units. The renderer draws it at the hover position. @public
+ */
+export interface BrushTipPreview {
+  /** Stroke color as a CSS color. */
+  readonly color: string;
+  /** Stroke thickness in board units. */
+  readonly thickness: number;
 }
 
 /** State names for {@link createDrawTool}. @public */
@@ -38,6 +54,8 @@ export interface DrawToolData {
   color: ColorKey;
   thickness: number;
   brush: string;
+  /** Brush tip for a hovering pen (BOARD-911); `null` otherwise. */
+  tip: BrushTipPreview | null;
 }
 
 /**
@@ -83,7 +101,20 @@ function initialData(options?: DrawToolOptions): () => DrawToolData {
     color: options?.color ?? 'black',
     thickness: options?.thickness ?? 4,
     brush: options?.brush ?? 'pen',
+    tip: null,
   });
+}
+
+function toActiveStroke(data: DrawToolData, e?: ToolPointerEvent): ActiveStroke {
+  const predicted = e?.predicted?.map((p) => [p.x, p.y, p.pressure || 0.5]);
+  return {
+    id: data.elementId ?? undefined,
+    points: data.points,
+    color: COLOR_VALUES[data.color] ?? data.color,
+    thickness: data.thickness,
+    brush: data.brush,
+    ...(predicted && predicted.length > 0 ? { predicted } : {}),
+  };
 }
 
 /**
@@ -114,14 +145,19 @@ export function createDrawTool(
           const pressure = e.pressure || 0.5;
           data.points = [[e.point.x, e.point.y, pressure]];
           data.elementId = ctx.board.createId();
-          data.activeStroke = {
-            id: data.elementId,
-            points: data.points,
-            color: COLOR_VALUES[data.color] ?? data.color,
-            thickness: data.thickness,
-            brush: data.brush,
-          };
+          data.tip = null;
+          data.activeStroke = toActiveStroke(data);
           return 'drawing';
+        },
+        // A hovering pen (no button pressed) previews the brush tip (BOARD-911).
+        onPointerMove(ctx, e) {
+          const { data } = ctx;
+          if (e.pointerType !== 'pen' || e.buttons !== 0) {
+            if (data.tip) data.tip = null;
+            return;
+          }
+          applyStyle(ctx.board, toolId, data, options);
+          data.tip = { color: COLOR_VALUES[data.color] ?? data.color, thickness: data.thickness };
         },
         onWheel: (ctx, e) => handleWheel(ctx.board, e),
         onPinch: (ctx, e) => handlePinch(ctx.board, e),
@@ -133,13 +169,7 @@ export function createDrawTool(
           const { data } = ctx;
           const pressure = e.pressure || 0.5;
           data.points.push([e.point.x, e.point.y, pressure]);
-          data.activeStroke = {
-            id: data.elementId ?? undefined,
-            points: data.points,
-            color: COLOR_VALUES[data.color] ?? data.color,
-            thickness: data.thickness,
-            brush: data.brush,
-          };
+          data.activeStroke = toActiveStroke(data, e);
         },
 
         onPointerUp(ctx: ToolContext<DrawToolState, DrawToolData>, e?: ToolPointerEvent) {

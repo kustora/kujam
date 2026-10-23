@@ -12,7 +12,12 @@ import {
   type Point,
   type ToolPointerEvent,
 } from '@kujam/core';
-import { defaultTools, ROTATE_HANDLE_OFFSET_PX, type SelectToolData } from '../index.js';
+import {
+  defaultElements,
+  defaultTools,
+  ROTATE_HANDLE_OFFSET_PX,
+  type SelectToolData,
+} from '../index.js';
 
 const MODS: InputModifiers = { shift: false, alt: false, ctrl: false, meta: false };
 
@@ -72,10 +77,14 @@ function drag(
   points: Point[],
   mods: Partial<InputModifiers> = {},
   release = true,
+  pointerType: ToolPointerEvent['pointerType'] = 'mouse',
 ): void {
-  board.dispatch(pointer(board, 'pointer-down', points[0]!, mods));
-  for (const p of points.slice(1)) board.dispatch(pointer(board, 'pointer-move', p, mods));
-  if (release) board.dispatch(pointer(board, 'pointer-up', points[points.length - 1]!, mods));
+  const extra = { pointerType };
+  board.dispatch(pointer(board, 'pointer-down', points[0]!, mods, extra));
+  for (const p of points.slice(1)) board.dispatch(pointer(board, 'pointer-move', p, mods, extra));
+  if (release) {
+    board.dispatch(pointer(board, 'pointer-up', points[points.length - 1]!, mods, extra));
+  }
 }
 
 function escape(board: Board): void {
@@ -509,6 +518,19 @@ describe('BOARD-502: select tool, handles', () => {
     expect(pos(board, 'a').rotation).toBeCloseTo(30);
   });
 
+  it('grabs handles from at least 24 CSS pixels away for touch, not for the mouse (BOARD-911)', () => {
+    const board = setup();
+    board.select('a');
+    // 8 px right and below the `se` handle at (100, 100): 11.3 px away, outside the element.
+    const near = { x: 108, y: 108 };
+    drag(board, [near, { x: 158, y: 128 }]);
+    expect(pos(board, 'a')).toMatchObject({ w: 100, h: 100 });
+
+    board.select('a');
+    drag(board, [near, { x: 158, y: 128 }], {}, true, 'touch');
+    expect(pos(board, 'a')).toMatchObject({ w: 150, h: 120 });
+  });
+
   it('rolls back a resize on Esc', () => {
     const board = setup();
     board.select('a');
@@ -572,5 +594,62 @@ describe('BOARD-502: navigation', () => {
       deltaY: 0,
     });
     expect(board.camera.get().zoom).toBeCloseTo(Math.min(zoom * 2, 4));
+  });
+});
+
+describe('BOARD-911: pen tool polish', () => {
+  function penBoard(): Board {
+    const board = createBoard({ plugins: [defaultElements, defaultTools] });
+    board.camera.setViewport({ width: 1000, height: 1000 });
+    board.setTool('draw');
+    return board;
+  }
+  const pen = { pointerType: 'pen' as const };
+
+  it('previews the brush tip while a pen hovers, with the remembered style', () => {
+    const board = penBoard();
+    board.toolStyles.set('draw', { thickness: 12, color: 'red' });
+    board.dispatch(pointer(board, 'pointer-move', { x: 10, y: 10 }, {}, { ...pen, buttons: 0 }));
+    const data = board.toolData as { tip: { thickness: number; color: string } | null };
+    expect(data.tip).toMatchObject({ thickness: 12 });
+    expect(data.tip!.color).toMatch(/^#/);
+
+    // Mouse hover, or the pen touching down, has no tip.
+    board.dispatch(pointer(board, 'pointer-move', { x: 10, y: 10 }, {}, { buttons: 0 }));
+    expect((board.toolData as typeof data).tip).toBeNull();
+    board.dispatch(pointer(board, 'pointer-move', { x: 10, y: 10 }, {}, { ...pen, buttons: 0 }));
+    board.dispatch(pointer(board, 'pointer-down', { x: 10, y: 10 }, {}, pen));
+    expect((board.toolData as typeof data).tip).toBeNull();
+  });
+
+  it('draws predicted points as a preview and stores only real points', () => {
+    const board = penBoard();
+    board.dispatch(pointer(board, 'pointer-down', { x: 0, y: 0 }, {}, pen));
+    board.dispatch(
+      pointer(
+        board,
+        'pointer-move',
+        { x: 10, y: 0 },
+        {},
+        {
+          ...pen,
+          predicted: [{ x: 20, y: 0, pressure: 0.4 }],
+        },
+      ),
+    );
+    const data = board.toolData as {
+      points: number[][];
+      activeStroke: { points: number[][]; predicted?: number[][] };
+    };
+    expect(data.activeStroke.predicted).toEqual([[20, 0, 0.4]]);
+    expect(data.points.map((p) => p[0])).toEqual([0, 10]);
+
+    // The next move replaces the prediction with the real path.
+    board.dispatch(pointer(board, 'pointer-move', { x: 15, y: 0 }, {}, pen));
+    expect((board.toolData as typeof data).activeStroke.predicted).toBeUndefined();
+    board.dispatch(pointer(board, 'pointer-up', { x: 15, y: 0 }, {}, pen));
+    const stroke = board.query().find((el) => el.type === 'draw')!;
+    const xs = (stroke.props as { points: number[][] }).points.map((p) => p[0]! + stroke.x);
+    expect(Math.max(...xs)).toBe(15);
   });
 });

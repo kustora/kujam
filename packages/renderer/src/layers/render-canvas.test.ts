@@ -320,6 +320,44 @@ describe('BOARD-802: Viewport Culling', () => {
   });
 });
 
+describe('BOARD-208: only the current page is drawn', () => {
+  it('draws the elements of the current page and follows page switches', () => {
+    const { board } = setupView({ width: 800, height: 600 });
+    const firstPage = board.pages.current;
+    board.pages.create({ id: 'page:2' });
+    board.create({ id: 'on-first', type: 'test-box', x: 100, y: 100, w: 50, h: 50, props: { label: '' } });
+    board.create({
+      id: 'on-second',
+      type: 'test-box',
+      pageId: 'page:2',
+      x: 100,
+      y: 100,
+      w: 50,
+      h: 50,
+      props: { label: '' },
+    });
+
+    drawnLog.length = 0;
+    flushFrames();
+    expect(drawnLog).toContain('on-first');
+    expect(drawnLog).not.toContain('on-second');
+
+    board.pages.setCurrent('page:2');
+    drawnLog.length = 0;
+    flushFrames();
+    expect(drawnLog).toContain('on-second');
+    expect(drawnLog).not.toContain('on-first');
+
+    // Edits on a hidden page do not repaint it.
+    board.pages.setCurrent(firstPage);
+    flushFrames();
+    board.update('on-second', { x: 120 });
+    drawnLog.length = 0;
+    flushFrames();
+    expect(drawnLog).not.toContain('on-second');
+  });
+});
+
 describe('BOARD-802: Dirty Rects and Partial Redraws', () => {
   it('marks old and new bounds dirty on element move and only redraws intersecting elements', () => {
     const { board, view } = setupView({ width: 800, height: 600 });

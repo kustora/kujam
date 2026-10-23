@@ -10,6 +10,7 @@ import { BoardEventMap } from '@kujam/core';
 import { BoardView } from '@kujam/renderer';
 import { CameraState } from '@kujam/core';
 import { Component } from 'vue';
+import { DefineComponent } from 'vue';
 import { ElementA11y } from '@kujam/core';
 import { ElementAction } from '@kujam/core';
 import { ElementActionContext } from '@kujam/core';
@@ -107,6 +108,12 @@ export const Board: vue.DefineComponent<vue.ExtractPropTypes<{
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 // @public
+export const CommandPalette: UiComponent;
+
+// @public
+export const ContextMenu: UiComponent;
+
+// @public
 export type CustomVueComponent<P = Record<string, unknown>, D = unknown> = Component<CustomVueElementProps<P, D>>;
 
 // @public
@@ -153,6 +160,9 @@ export type ElementDataStatus = 'loading' | 'ready' | 'forbidden' | 'not-found' 
 export type EqualityFn<T> = (a: T, b: T) => boolean;
 
 // @public
+export const HistoryControl: UiComponent;
+
+// @public
 export interface HistoryState {
     // (undocumented)
     readonly canRedo: Readonly<Ref<boolean>>;
@@ -162,6 +172,58 @@ export interface HistoryState {
     redo(): void;
     // (undocumented)
     undo(): void;
+}
+
+// @public
+export const Minimap: UiComponent;
+
+// @public
+export const PresenceBar: UiComponent;
+
+// @public
+export const SelectionToolbar: UiComponent;
+
+// @public
+export const ShortcutHelp: UiComponent;
+
+// @public
+export const Toolbar: UiComponent;
+
+// @public
+export interface UiCommandPaletteItem {
+    // (undocumented)
+    readonly category?: string;
+    // (undocumented)
+    readonly disabled?: boolean;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly label: string;
+    // (undocumented)
+    run(board: Board_2): void;
+    // (undocumented)
+    readonly shortcut?: string;
+}
+
+// @public
+export interface UiCommandPaletteSource {
+    // (undocumented)
+    getItems(board: Board_2, query: string): readonly UiCommandPaletteItem[] | Promise<readonly UiCommandPaletteItem[]>;
+}
+
+// @public
+export type UiComponent = DefineComponent<UiComponentProps>;
+
+// @public
+export interface UiComponentProps {
+    readonly board: Board_2 | null;
+    readonly source?: UiCommandPaletteSource;
+}
+
+// @public
+export interface UiElementRef extends HTMLElement {
+    // (undocumented)
+    board: Board_2 | null;
 }
 
 // @public
@@ -190,6 +252,9 @@ export function useSelection<T>(board: MaybeRefOrGetter<Board_2>, selector: (sel
 
 // @public
 export function useTool(board: MaybeRefOrGetter<Board_2>): Readonly<Ref<string | null>>;
+
+// @public
+export const ZoomControl: UiComponent;
 
 // (No @packageDocumentation comment for this package)
 

@@ -118,6 +118,48 @@ function copyFrom(board: Board, root: HTMLElement, ids: string[]) {
   return { event, data };
 }
 
+describe('BOARD-906: events aimed at the page body', () => {
+  // Browsers fire clipboard events at the body when nothing is selected, even while focus is in
+  // the board (seen in Chromium with Cmd+C and execCommand).
+  it('handles copy at the body while the view has focus, and only then', () => {
+    const { board, root } = setup();
+    const a = addNote(board, 'Halo');
+    board.select([a.id]);
+
+    const unfocused = clipboardEvent('copy');
+    document.body.dispatchEvent(unfocused.event);
+    expect(unfocused.event.defaultPrevented).toBe(false);
+
+    root.focus();
+    const focused = clipboardEvent('copy');
+    document.body.dispatchEvent(focused.event);
+    expect(focused.event.defaultPrevented).toBe(true);
+    expect(focused.data.getData('text/plain')).toBe('Halo');
+  });
+
+  it('pastes into the focused view only when several views share the page', () => {
+    const first = setup();
+    const second = setup();
+    const source = addNote(first.board, 'Dari papan satu');
+    const { data } = copyFrom(first.board, first.root, [source.id]);
+
+    second.root.focus();
+    document.body.dispatchEvent(clipboardEvent('paste', data).event);
+    expect(second.board.query({ type: 'note' })).toHaveLength(1);
+    expect(first.board.query({ type: 'note' })).toHaveLength(1);
+  });
+
+  it('leaves events aimed at other page elements alone', () => {
+    const { board, root } = setup();
+    board.select([addNote(board, 'Halo').id]);
+    root.focus();
+    const outside = document.body.appendChild(document.createElement('p'));
+    const { event } = clipboardEvent('copy');
+    outside.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+  });
+});
+
 describe('BOARD-906: copy', () => {
   it('writes board JSON, an HTML fallback, and plain text from export.text', () => {
     const { board, root } = setup();

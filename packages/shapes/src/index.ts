@@ -89,6 +89,7 @@ export { DRAW_THICKNESSES, GEO_STROKE_WIDTHS } from './styles.js';
 export {
   DRAG_THRESHOLD_PX,
   HANDLE_TOLERANCE_PX,
+  TOUCH_HANDLE_TOLERANCE_PX,
   HIT_TOLERANCE_PX,
   ROTATE_HANDLE_OFFSET_PX,
   selectTool,
@@ -148,6 +149,7 @@ export {
   createDrawTool,
   drawTool,
   type ActiveStroke,
+  type BrushTipPreview,
   type DrawToolData,
   type DrawToolOptions,
 } from './tools/draw.js';

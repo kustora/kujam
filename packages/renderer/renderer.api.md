@@ -45,13 +45,19 @@ export interface BoardView {
     readonly mounted: boolean;
     mountEditor(editor: HTMLElement, bounds: EditorBounds, elementId?: string): () => void;
     readonly overlayStats: Readonly<OverlayRenderStats>;
+    // @beta
+    readonly penDetected: boolean;
     readonly pixelRatio: number;
     reducedMotion: boolean;
     requestRender(): void;
     setTheme(theme: ThemeMode | ThemeDefinition): void;
+    // @beta
+    setTouchOptions(options: TouchOptions): void;
     readonly size: Readonly<ViewportSize>;
     readonly stats: Readonly<RenderStats>;
     readonly theme: Readonly<ThemeDefinition>;
+    // @beta
+    readonly touchOptions: Readonly<Required<TouchOptions>>;
     unmount(): void;
 }
 
@@ -249,6 +255,7 @@ export class OverlayRenderer {
     setDropIndicator(point: Point | null): boolean;
     // (undocumented)
     setHovered(id: string | null): boolean;
+    setPenHover(screen: Point | null): void;
     // (undocumented)
     setPresence(presence: PresenceApi | null): void;
     // (undocumented)
@@ -336,6 +343,8 @@ export interface RendererOptions {
     readonly reducedMotion?: boolean;
     readonly shortTextThreshold?: number;
     readonly theme?: ThemeMode | ThemeDefinition;
+    // @beta
+    readonly touch?: TouchOptions;
 }
 
 // @public

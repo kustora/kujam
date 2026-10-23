@@ -170,7 +170,12 @@ const PALETTE_CSS = `
   }
 `;
 
-function getTranslatedLabel(board: Board, key: string): string {
+/**
+ * Label of a command or i18n key in the board locale, or `key` itself when it has no translation.
+ *
+ * @internal
+ */
+export function getTranslatedLabel(board: Board, key: string): string {
   if (board.i18n?.has(key)) return board.i18n.t(key);
   if (typeof board.t === 'function') {
     try {
@@ -181,6 +186,20 @@ function getTranslatedLabel(board: Board, key: string): string {
     }
   }
   return key;
+}
+
+/**
+ * Label of a tool: `tool.<id>` from the dictionary, then `<id>`, then the ID itself.
+ *
+ * @internal
+ */
+export function toolLabel(board: Board, toolId: string): string {
+  const toolKey = `tool.${toolId}`;
+  return board.i18n?.has(toolKey)
+    ? board.i18n.t(toolKey)
+    : board.i18n?.has(toolId)
+      ? board.i18n.t(toolId)
+      : toolId;
 }
 
 function getDefaultItems(board: Board): CommandPaletteItem[] {
@@ -210,12 +229,7 @@ function getDefaultItems(board: Board): CommandPaletteItem[] {
   // 2. Built-in and plugin tools
   if (board.tools?.list) {
     for (const tool of board.tools.list()) {
-      const toolKey = `tool.${tool.id}`;
-      const label = board.i18n?.has(toolKey)
-        ? board.i18n.t(toolKey)
-        : board.i18n?.has(tool.id)
-          ? board.i18n.t(tool.id)
-          : tool.id;
+      const label = toolLabel(board, tool.id);
       const shortcut = shortcutFor(board, `tool:${tool.id}`);
       items.push({
         id: `tool:${tool.id}`,

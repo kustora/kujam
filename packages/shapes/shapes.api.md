@@ -46,6 +46,7 @@ export interface ActiveStroke {
     readonly id?: string;
     // (undocumented)
     readonly points: readonly (readonly number[])[];
+    readonly predicted?: readonly (readonly number[])[];
     // (undocumented)
     readonly thickness: number;
 }
@@ -87,6 +88,12 @@ export interface BoxToolOptions<P = Record<string, unknown>> {
     readonly styleId?: string;
     // (undocumented)
     readonly type: string;
+}
+
+// @public
+export interface BrushTipPreview {
+    readonly color: string;
+    readonly thickness: number;
 }
 
 // @public
@@ -584,6 +591,7 @@ export interface DrawToolData {
     points: number[][];
     // (undocumented)
     thickness: number;
+    tip: BrushTipPreview | null;
 }
 
 // @public
@@ -1250,6 +1258,9 @@ export { ThemeMode }
 export { ThemeSelectionTokens }
 
 export { ThemeTypographyTokens }
+
+// @public
+export const TOUCH_HANDLE_TOLERANCE_PX = 12;
 
 // @public
 export const triangleDownTool: ToolDefinition<BoxToolState, BoxToolData>;

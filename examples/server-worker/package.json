@@ -1,0 +1,25 @@
+{
+  "name": "@kujam/example-server-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Contoh worker server: membaca state Yjs papan, memvalidasi, mengekstrak referensi dengan diff, dan membuat thumbnail lewat @kujam/server (BOARD-1805)",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf *.tsbuildinfo thumbnail.png"
+  },
+  "dependencies": {
+    "@kujam/core": "workspace:*",
+    "@kujam/example-contact-card": "workspace:*",
+    "@kujam/server": "workspace:*",
+    "@kujam/shapes": "workspace:*",
+    "@kujam/sync-yjs": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "tsx": "^4.19.3",
+    "vitest": "^3.0.7"
+  }
+}

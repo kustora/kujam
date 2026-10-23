@@ -300,7 +300,8 @@ describe('BOARD-806: Pointer Events & Drag Thresholds', () => {
 
 describe('BOARD-806: Multi-Pointer & Two-Finger Gestures (ADR-004)', () => {
   it('second finger cancels first finger action and begins 2-finger pinch and pan gesture', () => {
-    const { view } = setup();
+    // Without palm rejection, so the pen's stroke is cancelled like a first finger (BOARD-911).
+    const { view } = setup({ touch: { fingers: 'draw' } });
     const canvas = view.layers.canvas;
 
     // Pointer 1 down (e.g. pen stroke starting)
@@ -711,13 +712,12 @@ describe('BOARD-912: Context menu right-click and long-press', () => {
 
       expect(contextEvents.length).toBe(0);
 
-      // Advance by 500ms
+      // Advance by 500ms: on empty space the menu waits for the release, since a drag would draw
+      // a selection box instead (BOARD-911).
       vi.advanceTimersByTime(500);
+      expect(contextEvents.length).toBe(0);
 
-      expect(contextEvents.length).toBe(1);
-      expect(contextEvents[0].point).toEqual({ x: 50, y: 50 });
-
-      // Touch up afterwards does not trigger click / deselect
+      // Touch up opens the menu and does not trigger click / deselect
       view.layers.canvas.dispatchEvent(
         new PointerEvent('pointerup', {
           pointerId: 10,
@@ -728,6 +728,8 @@ describe('BOARD-912: Context menu right-click and long-press', () => {
           buttons: 0,
         }),
       );
+      expect(contextEvents.length).toBe(1);
+      expect(contextEvents[0].point).toEqual({ x: 50, y: 50 });
     } finally {
       vi.useRealTimers();
     }

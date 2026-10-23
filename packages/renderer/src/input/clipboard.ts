@@ -126,12 +126,27 @@ export function attachClipboard(
   root: HTMLElement,
   options: ClipboardOptions = {},
 ): () => void {
-  const win = root.ownerDocument.defaultView as (Window & typeof globalThis) | null;
+  const doc = root.ownerDocument;
+  const win = doc.defaultView as (Window & typeof globalThis) | null;
   /** Last pointer position over the view, in client coordinates; `null` when outside. */
   let pointer: { clientX: number; clientY: number } | null = null;
 
+  /**
+   * Whether a clipboard event is meant for this view. Browsers fire `copy`, `cut`, and `paste` at
+   * the element holding the text selection, or at the body when nothing is selected, even while
+   * focus is inside the board. So the listeners sit on the document and take events aimed inside
+   * the view, or aimed at the body while this view has focus (several views on a page each own
+   * only their focused one).
+   */
+  function forThisView(e: ClipboardEvent): boolean {
+    const target = e.target as Node | null;
+    if (target && root.contains(target)) return true;
+    const aimedAtPage = target === doc.body || target === doc.documentElement || target === doc;
+    return aimedAtPage && root.contains(doc.activeElement);
+  }
+
   function handles(e: ClipboardEvent): boolean {
-    return !!win && !!e.clipboardData && !isTextInput(e.target);
+    return !!win && !!e.clipboardData && forThisView(e) && !isTextInput(e.target);
   }
 
   function write(e: ClipboardEvent): boolean {
@@ -303,16 +318,16 @@ export function attachClipboard(
     pointer = null;
   }
 
-  root.addEventListener('copy', onCopy);
-  root.addEventListener('cut', onCut);
-  root.addEventListener('paste', onPaste);
+  doc.addEventListener('copy', onCopy);
+  doc.addEventListener('cut', onCut);
+  doc.addEventListener('paste', onPaste);
   root.addEventListener('pointermove', onPointerMove);
   root.addEventListener('pointerleave', onPointerLeave);
 
   return () => {
-    root.removeEventListener('copy', onCopy);
-    root.removeEventListener('cut', onCut);
-    root.removeEventListener('paste', onPaste);
+    doc.removeEventListener('copy', onCopy);
+    doc.removeEventListener('cut', onCut);
+    doc.removeEventListener('paste', onPaste);
     root.removeEventListener('pointermove', onPointerMove);
     root.removeEventListener('pointerleave', onPointerLeave);
   };

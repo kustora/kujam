@@ -58,6 +58,11 @@ import {
 export const DRAG_THRESHOLD_PX = 4;
 /** Screen distance within which a resize or rotate handle is grabbed. @public */
 export const HANDLE_TOLERANCE_PX = 8;
+/**
+ * Handle grab distance for touch, so every handle has a target of at least 24 CSS pixels
+ * (BOARD-911, WCAG 2.5.8). @public
+ */
+export const TOUCH_HANDLE_TOLERANCE_PX = 12;
 /** Screen distance of the rotate handle above the top edge of the selection frame. @public */
 export const ROTATE_HANDLE_OFFSET_PX = 24;
 /** Hit-test tolerance for clicking elements, in screen pixels. @public */
@@ -230,12 +235,22 @@ function clearQuickConnect(ctx: Ctx): void {
   ctx.data.quickConnectHover = null;
 }
 
+/** Handle grab distance for the pointer that pressed: larger for fingers (BOARD-911). */
+function handleTolerance(e: ToolPointerEvent): number {
+  return e.pointerType === 'touch' ? TOUCH_HANDLE_TOLERANCE_PX : HANDLE_TOLERANCE_PX;
+}
+
 /** The resize, rotate, or connector endpoint handle under `screen`, closest first. */
-function handleAt(board: Board, screen: Point): SelectHandle | null {
+function handleAt(
+  board: Board,
+  screen: Point,
+  tolerance = HANDLE_TOLERANCE_PX,
+): SelectHandle | null {
   const items = transformable(board);
   if (items.length === 1 && items[0]!.type === 'line') {
     return (
-      lineHandleAt(board, items[0] as Readonly<ElementRecord<LineProps>>, screen)?.handle ?? null
+      lineHandleAt(board, items[0] as Readonly<ElementRecord<LineProps>>, screen, tolerance)
+        ?.handle ?? null
     );
   }
   if (items.length === 1 && items[0]!.type === 'connector') {
@@ -252,17 +267,17 @@ function handleAt(board: Board, screen: Point): SelectHandle | null {
     const sEnd = board.camera.boardToScreen(endWorld);
     const dStart = Math.hypot(sStart.x - screen.x, sStart.y - screen.y);
     const dEnd = Math.hypot(sEnd.x - screen.x, sEnd.y - screen.y);
-    if (dStart <= HANDLE_TOLERANCE_PX || dEnd <= HANDLE_TOLERANCE_PX) {
+    if (dStart <= tolerance || dEnd <= tolerance) {
       return dStart <= dEnd ? 'connector-start' : 'connector-end';
     }
-    return segmentAt(board, conn, screen) ? 'connector-segment' : null;
+    return segmentAt(board, conn, screen, tolerance) ? 'connector-segment' : null;
   }
 
   const frame = selectionFrame(items, { registry: board.elements });
   if (!frame) return null;
   const zoom = board.camera.get().zoom;
   let best: ResizeHandle | 'rotate' | null = null;
-  let bestDistance = HANDLE_TOLERANCE_PX;
+  let bestDistance = tolerance;
   for (const point of transformHandles(frame, ROTATE_HANDLE_OFFSET_PX / zoom)) {
     const s = board.camera.boardToScreen(point);
     const d = Math.hypot(s.x - screen.x, s.y - screen.y);
@@ -313,6 +328,7 @@ function segmentAt(
   board: Board,
   conn: Readonly<ElementRecord<ConnectorProps>>,
   screen: Point,
+  tolerance = HANDLE_TOLERANCE_PX,
 ): { axis: 'x' | 'y' } | null {
   if (conn.props.style !== 'elbow') return null;
   const route = computeElementConnectorRoute(conn as ElementRecord<ConnectorProps>, board);
@@ -321,7 +337,7 @@ function segmentAt(
     board.camera.boardToScreen({ x: conn.x + p.x, y: conn.y + p.y }),
   );
   for (const handle of segmentHandles(onScreen, SEGMENT_MIN_LENGTH_PX)) {
-    if (Math.hypot(handle.x - screen.x, handle.y - screen.y) <= HANDLE_TOLERANCE_PX + 2) {
+    if (Math.hypot(handle.x - screen.x, handle.y - screen.y) <= tolerance + 2) {
       return { axis: handle.axis };
     }
   }
@@ -336,10 +352,11 @@ function lineHandleAt(
   board: Board,
   line: Readonly<ElementRecord<LineProps>>,
   screen: Point,
+  tolerance = HANDLE_TOLERANCE_PX,
 ): { handle: 'line-point' | 'line-insert'; index: number } | null {
   const onScreen = lineWorldPoints(line).map((p) => board.camera.boardToScreen(p));
   let best = -1;
-  let bestDistance = HANDLE_TOLERANCE_PX;
+  let bestDistance = tolerance;
   onScreen.forEach((p, i) => {
     const d = Math.hypot(p.x - screen.x, p.y - screen.y);
     if (d <= bestDistance) {
@@ -349,7 +366,7 @@ function lineHandleAt(
   });
   if (best >= 0) return { handle: 'line-point', index: best };
   for (const mid of midpointHandles(onScreen, LINE_MIDPOINT_MIN_LENGTH_PX)) {
-    if (Math.hypot(mid.x - screen.x, mid.y - screen.y) <= HANDLE_TOLERANCE_PX) {
+    if (Math.hypot(mid.x - screen.x, mid.y - screen.y) <= tolerance) {
       return { handle: 'line-insert', index: mid.index };
     }
   }
@@ -372,7 +389,7 @@ function startLineEdit(ctx: Ctx, e: ToolPointerEvent): State | undefined {
   const { board, data } = ctx;
   const line = data.originals[0] as Readonly<ElementRecord<LineProps>> | undefined;
   if (!line || line.type !== 'line') return undefined;
-  const hit = lineHandleAt(board, line, e.screen);
+  const hit = lineHandleAt(board, line, e.screen, handleTolerance(e));
   if (!hit) return undefined;
   if (hit.handle === 'line-point' && (e.modifiers.alt || (e.clickCount ?? 1) >= 2)) {
     const inserted = lastInsertedPoint.get(board);
@@ -647,7 +664,7 @@ export const selectTool = defineTool({
         data.startScreen = e.screen;
         data.initialSelection = board.selection;
 
-        const handle = handleAt(board, e.screen);
+        const handle = handleAt(board, e.screen, handleTolerance(e));
         if (handle) {
           data.handle = handle;
           data.originals = transformableForHandles(board);
@@ -661,7 +678,7 @@ export const selectTool = defineTool({
           }
           if (handle === 'connector-segment') {
             const conn = data.originals[0] as ElementRecord<ConnectorProps> | undefined;
-            const segment = conn ? segmentAt(board, conn, e.screen) : null;
+            const segment = conn ? segmentAt(board, conn, e.screen, handleTolerance(e)) : null;
             if (!segment) return;
             data.segmentAxis = segment.axis;
             return 'bending';

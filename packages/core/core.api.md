@@ -2019,6 +2019,14 @@ export interface PolylineGeometry {
 }
 
 // @beta
+export interface PredictedPoint {
+    readonly pressure: number;
+    readonly x: number;
+    // (undocumented)
+    readonly y: number;
+}
+
+// @beta
 export interface PreparedDocument {
     readonly document: BoardDocument;
     readonly rejected: readonly {
@@ -2698,6 +2706,7 @@ export interface ToolPointerEvent {
     readonly pointerId: number;
     // (undocumented)
     readonly pointerType: PointerKind;
+    readonly predicted?: readonly PredictedPoint[];
     readonly pressure: number;
     readonly screen: Point;
     readonly tiltX: number;

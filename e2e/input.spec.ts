@@ -2,7 +2,16 @@
  * BOARD-104: pointer helpers for pens with pressure, checked against the draw tool.
  */
 import { expect, test } from '@playwright/test';
-import { focusBoard, openBoard, pointerStream, press } from './support/board.js';
+import {
+  element,
+  focusBoard,
+  openBoard,
+  pointerStream,
+  press,
+  seed,
+  snapshot,
+  sticky,
+} from './support/board.js';
 
 test('a pen stroke keeps the pressure of each point', async ({ page }) => {
   await openBoard(page);
@@ -22,4 +31,22 @@ test('a pen stroke keeps the pressure of each point', async ({ page }) => {
   expect(pressures.length).toBeGreaterThan(2);
   expect(Math.min(...pressures)).toBeLessThan(0.4);
   expect(Math.max(...pressures)).toBeGreaterThan(0.6);
+});
+
+test('@touch two-finger tap undoes, three-finger tap redoes (BOARD-911)', async ({ page }) => {
+  await openBoard(page);
+  await seed(page, [sticky('a', 96, 96)]);
+  await page.evaluate(() => window.__board!.history.clear());
+  await page.evaluate(() => window.__board!.update('a', { x: 300 }));
+  expect(element(await snapshot(page), 'a').x).toBe(300);
+
+  await pointerStream(page, 'touch', [[{ x: 600, y: 300 }], [{ x: 680, y: 300 }]]);
+  expect(element(await snapshot(page), 'a').x).toBe(96);
+
+  await pointerStream(page, 'touch', [
+    [{ x: 600, y: 300 }],
+    [{ x: 680, y: 300 }],
+    [{ x: 760, y: 300 }],
+  ]);
+  expect(element(await snapshot(page), 'a').x).toBe(300);
 });

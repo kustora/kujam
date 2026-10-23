@@ -1040,3 +1040,66 @@ describe('BOARD-1208: element drop target highlight', () => {
     board.dispose();
   });
 });
+
+describe('BOARD-911: pen hover tip and predicted points', () => {
+  function boardWithToolData(toolData: unknown): Board {
+    const board = createBoard({ plugins: [testPlugin] });
+    board.camera.setViewport({ width: 800, height: 600 });
+    Object.defineProperty(board, 'toolData', { value: toolData, configurable: true });
+    return board;
+  }
+
+  it('draws the brush tip at the hovering pen, sized by thickness and zoom', () => {
+    const board = boardWithToolData({ tip: { color: '#ff0000', thickness: 8 } });
+    board.camera.set({ zoom: 2 });
+    const overlayRenderer = new OverlayRenderer(board);
+    const canvas = document.createElement('canvas');
+
+    // Without a hovering pen nothing is drawn.
+    expect(overlayRenderer.render(canvas, createMockContext() as never, 1).rendered).toBe(false);
+
+    overlayRenderer.setPenHover({ x: 40, y: 50 });
+    const ctx = createMockContext();
+    expect(overlayRenderer.render(canvas, ctx as never, 1).rendered).toBe(true);
+    expect(ctx.arc).toHaveBeenCalledWith(40, 50, 8, 0, Math.PI * 2);
+    expect(ctx.fills.some((f) => f.fillStyle === '#ff0000')).toBe(true);
+
+    overlayRenderer.setPenHover(null);
+    expect(overlayRenderer.render(canvas, createMockContext() as never, 1).rendered).toBe(false);
+    board.dispose();
+  });
+
+  it('ignores the hover when the tool publishes no tip', () => {
+    const board = boardWithToolData({ activeStroke: null });
+    const overlayRenderer = new OverlayRenderer(board);
+    overlayRenderer.setPenHover({ x: 40, y: 50 });
+    const stats = overlayRenderer.render(
+      document.createElement('canvas'),
+      createMockContext() as never,
+      1,
+    );
+    expect(stats.rendered).toBe(false);
+    board.dispose();
+  });
+
+  it('draws predicted points after the real stroke points', () => {
+    const points = [
+      [100, 100, 0.5],
+      [120, 130, 0.5],
+    ];
+    const outline = (toolData: unknown): string[] => {
+      const board = boardWithToolData(toolData);
+      const ctx = createMockContext();
+      new OverlayRenderer(board).render(document.createElement('canvas'), ctx as never, 1);
+      board.dispose();
+      return ctx.calls.filter((c) => c.startsWith('quadraticCurveTo'));
+    };
+    const stroke = { points, color: '#000', thickness: 4, brush: 'pen' };
+    const real = outline({ activeStroke: stroke });
+    const ahead = outline({ activeStroke: { ...stroke, predicted: [[200, 160, 0.5]] } });
+    const same = outline({ activeStroke: { ...stroke, points: [...points, [200, 160, 0.5]] } });
+    // Predicted points are drawn exactly as if they were the next real points.
+    expect(ahead).not.toEqual(real);
+    expect(ahead).toEqual(same);
+  });
+});

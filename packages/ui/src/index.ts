@@ -6,11 +6,13 @@
 
 import type { Board } from '@kujam/core';
 import type { KujamUiElement, UiWindow } from './base.js';
+import type { ShortcutHelpElement } from './shortcut-help.js';
 import { createCommandPaletteClass } from './command-palette.js';
 import { createContextMenuClass, type ContextMenuElement } from './context-menu.js';
 import { createMinimapClass } from './minimap.js';
 import { createPresenceBarClass } from './presence-bar.js';
 import { createSelectionToolbarClass } from './selection-toolbar.js';
+import { createShortcutHelpClass } from './shortcut-help.js';
 import { createToolbarClass } from './toolbar.js';
 import { createHistoryControlClass, createZoomControlClass } from './zoom.js';
 
@@ -26,6 +28,12 @@ export {
 } from './context-menu.js';
 export { createMinimapClass, MINIMAP_SIZE } from './minimap.js';
 export { createPresenceBarClass, type PresenceBarElement } from './presence-bar.js';
+export {
+  buildShortcutHelp,
+  createShortcutHelpClass,
+  type ShortcutHelpElement,
+  type ShortcutHelpEntry,
+} from './shortcut-help.js';
 export {
   buildToolbarItems,
   type ToolbarItem,
@@ -51,6 +59,7 @@ export const UI_TAGS = Object.freeze({
   contextMenu: 'kujam-context-menu',
   minimap: 'kujam-minimap',
   presence: 'kujam-presence-bar',
+  shortcutHelp: 'kujam-shortcut-help',
 } as const);
 
 /**
@@ -77,6 +86,7 @@ export function defineUiElements(win?: Window): void {
     [UI_TAGS.contextMenu]: createContextMenuClass,
     [UI_TAGS.minimap]: createMinimapClass,
     [UI_TAGS.presence]: createPresenceBarClass,
+    [UI_TAGS.shortcutHelp]: createShortcutHelpClass,
   };
   for (const [tag, create] of Object.entries(factories)) {
     if (!target.customElements.get(tag)) target.customElements.define(tag, create(target));
@@ -119,6 +129,8 @@ export interface MountedUi {
   readonly contextMenu: KujamUiElement;
   /** The presence bar element, at the top right (BOARD-1407). */
   readonly presence: KujamUiElement;
+  /** The shortcut help panel, opened with `?` (BOARD-1409). */
+  readonly shortcutHelp: KujamUiElement;
   /** Removes the UI elements. Safe to call more than once. */
   unmount(): void;
 }
@@ -127,8 +139,9 @@ export interface MountedUi {
  * Mounts the default UI over a board: the main toolbar at the bottom center (BOARD-1402), the
  * zoom control at the bottom right, undo/redo at the bottom left (BOARD-1404), the
  * contextual selection toolbar above the active selection (BOARD-1403), the minimap above the
- * zoom control (BOARD-1406), the command palette dialog overlay (BOARD-1405), and the
- * presence bar at the top right (BOARD-1407).
+ * zoom control (BOARD-1406), the command palette dialog overlay (BOARD-1405), the
+ * presence bar at the top right (BOARD-1407), and the shortcut help panel opened with `?`
+ * (BOARD-1409).
  *
  * @example
  * ```ts
@@ -185,6 +198,13 @@ export function mountDefaultUi(options: MountUiOptions): MountedUi {
     right: '20px',
     bottom: 'auto',
   });
+  const shortcutHelp = place(UI_TAGS.shortcutHelp, {
+    position: 'fixed',
+    inset: '0',
+    bottom: 'auto',
+    pointerEvents: 'none',
+    zIndex: '1000',
+  });
 
   return {
     toolbar,
@@ -195,8 +215,19 @@ export function mountDefaultUi(options: MountUiOptions): MountedUi {
     commandPalette,
     contextMenu,
     presence,
+    shortcutHelp,
     unmount() {
-      for (const el of [toolbar, zoom, history, selection, minimap, commandPalette, contextMenu, presence]) {
+      for (const el of [
+        toolbar,
+        zoom,
+        history,
+        selection,
+        minimap,
+        commandPalette,
+        contextMenu,
+        presence,
+        shortcutHelp,
+      ]) {
         el.board = null;
         el.remove();
       }
@@ -213,5 +244,6 @@ declare global {
     'kujam-command-palette': KujamUiElement;
     'kujam-minimap': KujamUiElement;
     'kujam-presence-bar': KujamUiElement;
+    'kujam-shortcut-help': ShortcutHelpElement;
   }
 }

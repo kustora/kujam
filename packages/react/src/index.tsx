@@ -25,3 +25,20 @@ export {
   type EqualityFn,
   type HistoryState,
 } from './hooks.js';
+export {
+  CommandPalette,
+  ContextMenu,
+  HistoryControl,
+  Minimap,
+  PresenceBar,
+  SelectionToolbar,
+  ShortcutHelp,
+  Toolbar,
+  ZoomControl,
+  type CommandPaletteProps,
+  type UiCommandPaletteItem,
+  type UiCommandPaletteSource,
+  type UiComponent,
+  type UiComponentProps,
+  type UiElementRef,
+} from './ui.js';

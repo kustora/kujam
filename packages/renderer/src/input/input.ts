@@ -1,5 +1,8 @@
 /**
- * Input event pipeline for Pointer Events, multi-touch gestures, wheel, and keyboard (BOARD-806, ADR-004).
+ * Input event pipeline for Pointer Events, multi-touch gestures, wheel, and keyboard (BOARD-806,
+ * ADR-004), with the touch and stylus polish of BOARD-911: palm rejection, the "pen draws, fingers
+ * pan" mode, two- and three-finger taps, predicted pen points, pen hover, the long-press selection
+ * box, and pan inertia.
  */
 
 import {
@@ -10,6 +13,7 @@ import {
   type InputModifiers,
   type Point,
   type PointerKind,
+  type PredictedPoint,
   type ToolPointerEvent,
 } from '@kujam/core';
 import type { RendererLayers } from '../mount.js';
@@ -29,6 +33,87 @@ export const LONG_PRESS_MS = 500;
 /** Minimum pressure for the first pen event to prevent lost stroke starts (ADR-004). */
 export const MIN_PEN_PRESSURE = 0.05;
 
+/** Longest touch that still counts as a two- or three-finger tap (BOARD-911). */
+export const TAP_GESTURE_MAX_MS = 300;
+
+/** Pan speed in CSS pixels per millisecond below which a released pan does not glide (BOARD-911). */
+const INERTIA_MIN_SPEED = 0.3;
+/** Glide speed at which the inertia animation stops. */
+const INERTIA_STOP_SPEED = 0.02;
+/** Speed kept per 16 ms frame while gliding. */
+const INERTIA_FRICTION = 0.92;
+/** Window of pan samples used for the release velocity. */
+const INERTIA_SAMPLE_MS = 100;
+/** A pan resting longer than this before release does not glide. */
+const INERTIA_REST_MS = 50;
+/** Shortest sample window for a release velocity; events closer together have unreliable times. */
+const INERTIA_MIN_WINDOW_MS = 8;
+/** Fastest glide start, in CSS pixels per millisecond. */
+const INERTIA_MAX_SPEED = 4;
+
+/**
+ * What one finger does with drawing tools, that is every tool except Select and Hand (BOARD-911,
+ * ADR-004):
+ *
+ * - `auto`: fingers draw until a pen is used on the view. From then on one finger pans the camera,
+ *   and touches while the pen is down are ignored (palm rejection).
+ * - `pan`: "pen draws, fingers pan". One finger always pans; only the pen and the mouse draw.
+ * - `draw`: fingers always draw, without palm rejection.
+ *
+ * Two fingers pinch and pan in every mode.
+ *
+ * @beta
+ */
+export type FingerMode = 'auto' | 'pan' | 'draw';
+
+/**
+ * Touch and stylus behavior of a view (BOARD-911).
+ *
+ * @beta
+ */
+export interface TouchOptions {
+  /** What one finger does with drawing tools. Defaults to `auto`. */
+  readonly fingers?: FingerMode;
+  /** Two-finger tap undoes and three-finger tap redoes. Defaults to `true`. */
+  readonly tapGestures?: boolean;
+  /**
+   * The camera keeps gliding after a touch pan or pinch is released. Defaults to `true`; never
+   * with reduced motion (BOARD-1905).
+   */
+  readonly inertia?: boolean;
+}
+
+/** Touch options with every default filled in. */
+export type ResolvedTouchOptions = Readonly<Required<TouchOptions>>;
+
+const DEFAULT_TOUCH_OPTIONS: ResolvedTouchOptions = Object.freeze({
+  fingers: 'auto',
+  tapGestures: true,
+  inertia: true,
+});
+
+/**
+ * Merges `patch` into `base` (the defaults when omitted).
+ *
+ * @throws `RangeError` when `fingers` is not `auto`, `pan`, or `draw`.
+ * @internal
+ */
+export function resolveTouchOptions(
+  patch: TouchOptions | undefined,
+  base: ResolvedTouchOptions = DEFAULT_TOUCH_OPTIONS,
+): ResolvedTouchOptions {
+  if (patch === undefined) return base;
+  const fingers = patch.fingers ?? base.fingers;
+  if (fingers !== 'auto' && fingers !== 'pan' && fingers !== 'draw') {
+    throw new RangeError('Opsi touch.fingers wajib bernilai auto, pan, atau draw.');
+  }
+  return Object.freeze({
+    fingers,
+    tapGestures: patch.tapGestures === undefined ? base.tapGestures : Boolean(patch.tapGestures),
+    inertia: patch.inertia === undefined ? base.inertia : Boolean(patch.inertia),
+  });
+}
+
 /** Safari macOS gesture event with scale factor. */
 interface SafariGestureEvent extends UIEvent {
   readonly scale: number;
@@ -43,10 +128,36 @@ interface PointerState {
   lastScreen: Point;
   lastPoint: Point;
   isDragging: boolean;
-  /** Whether this touch started on empty space with the select tool (ADR-004 touch pan). */
+  /**
+   * Whether this touch pans the camera instead of reaching the tool: on empty space with the
+   * select tool (ADR-004), or with a drawing tool while fingers pan (BOARD-911).
+   */
   isTouchEmptyPan: boolean;
   /** Whether a long press triggered a context menu for this pointer press (BOARD-912). */
   longPressTriggered?: boolean;
+  /**
+   * A long press on empty space with the select tool (BOARD-911): dragging now draws a selection
+   * box, and releasing without a drag opens the context menu.
+   */
+  marqueeArmed?: boolean;
+}
+
+/** Touches of one multi-finger tap candidate, from the first finger down to the last one up. */
+interface TapSession {
+  readonly start: number;
+  /** Start position of each finger still down. */
+  readonly fingers: Map<number, Point>;
+  /** Most fingers down at once. */
+  max: number;
+  /** A finger moved beyond the touch drag threshold, or the session must not fire. */
+  void: boolean;
+}
+
+/** Camera pan in CSS pixels at a time, for the release velocity. */
+interface PanSample {
+  readonly time: number;
+  readonly dx: number;
+  readonly dy: number;
 }
 
 interface TwoFingerState {
@@ -127,6 +238,22 @@ export interface AttachInputOptions {
   filterKey?: (e: KeyboardEvent) => boolean;
   /** Called after a `keydown` was sent to the board (or skipped), with whether it was handled. */
   afterKey?: (e: KeyboardEvent, handled: boolean) => void;
+  /** Current touch options (BOARD-911); the defaults when omitted. */
+  touch?: () => ResolvedTouchOptions;
+  /** Called with the screen position of a hovering pen, or `null` when it leaves (BOARD-911). */
+  onPenHover?: (screen: Point | null) => void;
+}
+
+/**
+ * Handle returned by {@link attachInput}.
+ *
+ * @internal
+ */
+export interface InputHandle {
+  /** Whether a pen was used on this view, which turns on palm rejection in `auto` mode. */
+  readonly penDetected: boolean;
+  /** Removes every listener and stops a running glide. */
+  detach(): void;
 }
 
 /**
@@ -138,8 +265,9 @@ export function attachInput(
   board: Board,
   layers: RendererLayers,
   options?: AttachInputOptions,
-): () => void {
+): InputHandle {
   const { root, canvas } = layers;
+  const win = root.ownerDocument.defaultView;
 
   function dispatch(event: BoardInputEvent): boolean {
     const handled = board.dispatch(event);
@@ -164,6 +292,204 @@ export function attachInput(
   let clickCount = 1;
   let longPressTimer: ReturnType<typeof setTimeout> | null = null;
   let lastContextMenuTime = 0;
+  /** A pen touched this view; `auto` finger mode then rejects palms (BOARD-911). */
+  let penDetected = false;
+  /** Touches ignored until they lift: palms resting while the pen draws (BOARD-911). */
+  const ignoredTouches = new Set<number>();
+  let tap: TapSession | null = null;
+  let panSamples: PanSample[] = [];
+  let inertiaFrame: number | null = null;
+  let penHovering = false;
+
+  function touchOptions(): ResolvedTouchOptions {
+    return options?.touch?.() ?? DEFAULT_TOUCH_OPTIONS;
+  }
+
+  /** Whether one finger pans instead of drawing (BOARD-911). */
+  function fingersPan(): boolean {
+    const mode = touchOptions().fingers;
+    return mode === 'pan' || (mode === 'auto' && penDetected);
+  }
+
+  /** Whether touches are ignored while a pen is down. */
+  function palmRejection(): boolean {
+    return touchOptions().fingers !== 'draw';
+  }
+
+  function setPenHover(screen: Point | null): void {
+    if (screen === null && !penHovering) return;
+    penHovering = screen !== null;
+    options?.onPenHover?.(screen);
+  }
+
+  // ---------- Inertia (BOARD-911) ----------
+
+  function stopInertia(): void {
+    if (inertiaFrame !== null) {
+      win?.cancelAnimationFrame?.(inertiaFrame);
+      inertiaFrame = null;
+    }
+  }
+
+  function panCamera(dx: number, dy: number): void {
+    const { x, y, zoom } = board.camera.get();
+    board.camera.set({ x: x - dx / zoom, y: y - dy / zoom });
+  }
+
+  function recordPan(time: number, dx: number, dy: number): void {
+    panSamples.push({ time, dx, dy });
+    while (panSamples.length > 0 && time - panSamples[0]!.time > INERTIA_SAMPLE_MS) {
+      panSamples.shift();
+    }
+  }
+
+  /** Starts gliding with the velocity of the last pan samples, then clears them. */
+  function releasePan(time: number): void {
+    const samples = panSamples;
+    panSamples = [];
+    if (!touchOptions().inertia || board.camera.reducedMotion || samples.length < 2) return;
+    const last = samples[samples.length - 1]!;
+    if (time - last.time > INERTIA_REST_MS) return;
+    const first = samples[0]!;
+    const elapsed = last.time - first.time;
+    if (elapsed < INERTIA_MIN_WINDOW_MS) return;
+    // The first sample is the movement before `first.time`, so it is left out of the sum.
+    let dx = 0;
+    let dy = 0;
+    for (let i = 1; i < samples.length; i++) {
+      dx += samples[i]!.dx;
+      dy += samples[i]!.dy;
+    }
+    let vx = dx / elapsed;
+    let vy = dy / elapsed;
+    const speed = Math.hypot(vx, vy);
+    if (speed < INERTIA_MIN_SPEED || typeof win?.requestAnimationFrame !== 'function') return;
+    if (speed > INERTIA_MAX_SPEED) {
+      vx *= INERTIA_MAX_SPEED / speed;
+      vy *= INERTIA_MAX_SPEED / speed;
+    }
+    stopInertia();
+    let previous: number | null = null;
+    const step = (now: number): void => {
+      const dt = previous === null ? 16 : Math.min(64, Math.max(1, now - previous));
+      previous = now;
+      panCamera(vx * dt, vy * dt);
+      const decay = Math.pow(INERTIA_FRICTION, dt / 16);
+      vx *= decay;
+      vy *= decay;
+      inertiaFrame =
+        Math.hypot(vx, vy) < INERTIA_STOP_SPEED ? null : win.requestAnimationFrame(step);
+    };
+    inertiaFrame = win.requestAnimationFrame(step);
+  }
+
+  // ---------- Multi-finger taps (BOARD-911) ----------
+
+  function tapFingerDown(id: number, screen: Point, time: number): void {
+    if (!tap) tap = { start: time, fingers: new Map(), max: 0, void: false };
+    tap.fingers.set(id, screen);
+    tap.max = Math.max(tap.max, tap.fingers.size);
+  }
+
+  function tapFingerMove(id: number, screen: Point): void {
+    const start = tap?.fingers.get(id);
+    if (tap && start && distance(start, screen) >= DRAG_THRESHOLD_TOUCH) tap.void = true;
+  }
+
+  /** Removes a finger; when it was the last one, runs undo (two fingers) or redo (three). */
+  function tapFingerUp(id: number, time: number, cancelled: boolean): void {
+    if (!tap || !tap.fingers.has(id)) return;
+    tap.fingers.delete(id);
+    if (cancelled) tap.void = true;
+    if (tap.fingers.size > 0) return;
+    const session = tap;
+    tap = null;
+    if (session.void || time - session.start > TAP_GESTURE_MAX_MS) return;
+    if (!touchOptions().tapGestures || board.readOnly) return;
+    if (session.max === 2) board.undo();
+    else if (session.max === 3) board.redo();
+  }
+
+  /** Drops every touch in progress (a pen took over): rolls back its action and ignores it. */
+  function dropTouches(e: PointerEvent): void {
+    if (twoFinger) {
+      dispatch({
+        type: 'pinch',
+        phase: 'end',
+        point: board.camera.screenToBoard(twoFinger.lastCenterScreen),
+        screen: twoFinger.lastCenterScreen,
+        scale: 1,
+        deltaX: 0,
+        deltaY: 0,
+      });
+      twoFinger = null;
+    } else if (primaryPointerId !== null) {
+      const primary = activePointers.get(primaryPointerId);
+      if (primary && primary.type === 'touch' && !primary.isTouchEmptyPan) {
+        dispatch(cancelEvent(primary, e));
+      }
+    }
+    for (const [id, state] of activePointers) {
+      if (state.type !== 'touch') continue;
+      activePointers.delete(id);
+      ignoredTouches.add(id);
+      try {
+        canvas.releasePointerCapture(id);
+      } catch {
+        // Ignore
+      }
+    }
+    if (primaryPointerId !== null && !activePointers.has(primaryPointerId)) primaryPointerId = null;
+    clearLongPress();
+    tap = null;
+    panSamples = [];
+  }
+
+  function cancelEvent(state: PointerState, e: PointerEvent | KeyboardEvent): ToolPointerEvent {
+    return {
+      type: 'pointer-cancel',
+      pointerId: state.id,
+      pointerType: state.type,
+      point: state.lastPoint,
+      screen: state.lastScreen,
+      pressure: 0,
+      tiltX: 0,
+      tiltY: 0,
+      button: 0,
+      buttons: 0,
+      modifiers: extractModifiers(e),
+    };
+  }
+
+  /** Selects the element under a press and opens the context menu there (BOARD-912). */
+  function openContextMenu(state: PointerState): void {
+    const hit = board.hitTest(state.lastPoint, { tolerance: dragThreshold(state.type) });
+    if (hit && !hit.locked) {
+      if (!board.selection.includes(hit.id)) {
+        board.select(hit.id);
+      }
+    } else if (!hit) {
+      board.clearSelection();
+    }
+
+    const rect =
+      typeof root.getBoundingClientRect === 'function' ? root.getBoundingClientRect() : null;
+    const client: Point = {
+      x: (rect?.left ?? 0) + state.lastScreen.x,
+      y: (rect?.top ?? 0) + state.lastScreen.y,
+    };
+
+    const ctxEvent = createContextMenuEvent({
+      board,
+      screen: state.lastScreen,
+      point: state.lastPoint,
+      client,
+      targetId: hit?.id ?? null,
+    });
+    lastContextMenuTime = Date.now();
+    board.emit('contextmenu', ctxEvent);
+    options?.onContextMenu?.(ctxEvent);
+  }
 
   function clearLongPress(): void {
     if (longPressTimer !== null) {
@@ -201,6 +527,7 @@ export function attachInput(
     point: Point,
     kind: PointerKind,
     isFirst = false,
+    predicted?: readonly PredictedPoint[],
   ): ToolPointerEvent {
     // Stylus eraser button check: buttons & 32 -> button 5
     let button = e.button;
@@ -208,6 +535,7 @@ export function attachInput(
       button = 5;
     }
     return {
+      ...(predicted && predicted.length > 0 ? { predicted } : {}),
       type,
       pointerId: e.pointerId,
       pointerType: kind,
@@ -227,6 +555,7 @@ export function attachInput(
 
   function onPointerDown(e: PointerEvent): void {
     if (e.target !== canvas && !root.contains(e.target as Node)) return;
+    stopInertia();
 
     if (currentHoverId !== null) {
       currentHoverId = null;
@@ -242,6 +571,23 @@ export function attachInput(
     const kind = pointerKind(e.pointerType);
     const screen = toScreen(e.clientX, e.clientY);
     const point = board.camera.screenToBoard(screen);
+
+    if (kind === 'pen') {
+      setPenHover(null);
+      if (palmRejection()) {
+        penDetected = true;
+        // A palm or finger was down before the pen: the pen wins (BOARD-911).
+        dropTouches(e);
+      }
+    } else if (kind === 'touch') {
+      const penDown = [...activePointers.values()].some((p) => p.type === 'pen');
+      if (penDown && palmRejection()) {
+        ignoredTouches.add(e.pointerId);
+        e.preventDefault();
+        return;
+      }
+      if (e.button !== 2) tapFingerDown(e.pointerId, screen, e.timeStamp);
+    }
 
     if (e.button === 2) {
       // Right-click: hit-test to update selection, prevent starting tool actions (BOARD-912)
@@ -274,6 +620,15 @@ export function attachInput(
       primaryPointerId = e.pointerId;
       countPress(e, screen, kind);
 
+      // Special touch rule with select tool: one-finger drag on empty space pans camera (ADR-004).
+      // With a drawing tool, one finger pans too while fingers do not draw (BOARD-911).
+      const tool = board.tool;
+      const isTouchEmpty =
+        kind === 'touch' &&
+        (tool === 'select'
+          ? !board.hitTest(point, { tolerance: dragThreshold(kind) })
+          : tool !== 'hand' && tool !== null && fingersPan());
+
       // Long press timer for touch or pen (BOARD-912, ADR-004)
       if (kind === 'touch' || kind === 'pen') {
         clearLongPress();
@@ -281,41 +636,17 @@ export function attachInput(
           longPressTimer = null;
           const current = activePointers.get(e.pointerId);
           if (!current || current.isDragging) return;
-          current.longPressTriggered = true;
-
-          const hit = board.hitTest(current.lastPoint, { tolerance: dragThreshold(kind) });
-          if (hit && !hit.locked) {
-            if (!board.selection.includes(hit.id)) {
-              board.select(hit.id);
-            }
-          } else if (!hit) {
-            board.clearSelection();
+          if (current.isTouchEmptyPan && board.tool === 'select') {
+            // Empty space: a drag now draws a selection box; the menu waits for the release
+            // (BOARD-911).
+            current.marqueeArmed = true;
+            return;
           }
-
-          const rect = typeof root.getBoundingClientRect === 'function' ? root.getBoundingClientRect() : null;
-          const client: Point = {
-            x: (rect?.left ?? 0) + current.lastScreen.x,
-            y: (rect?.top ?? 0) + current.lastScreen.y,
-          };
-
-          const ctxEvent = createContextMenuEvent({
-            board,
-            screen: current.lastScreen,
-            point: current.lastPoint,
-            client,
-            targetId: hit?.id ?? null,
-          });
-          lastContextMenuTime = Date.now();
-          board.emit('contextmenu', ctxEvent);
-          options?.onContextMenu?.(ctxEvent);
+          if (current.isTouchEmptyPan) return;
+          current.longPressTriggered = true;
+          openContextMenu(current);
         }, LONG_PRESS_MS);
       }
-
-      // Special touch rule with select tool: one-finger drag on empty space pans camera (ADR-004)
-      const isTouchEmpty =
-        kind === 'touch' &&
-        board.tool === 'select' &&
-        !board.hitTest(point, { tolerance: dragThreshold(kind) });
 
       const state: PointerState = {
         id: e.pointerId,
@@ -333,21 +664,11 @@ export function attachInput(
       }
     } else if (activePointers.size === 1 && primaryPointerId !== null) {
       // Second pointer touched down: cancel primary pointer action and begin 2-finger gesture (ADR-004)
+      clearLongPress();
+      panSamples = [];
       const primary = activePointers.get(primaryPointerId);
       if (primary && !primary.isTouchEmptyPan) {
-        dispatch({
-          type: 'pointer-cancel',
-          pointerId: primary.id,
-          pointerType: primary.type,
-          point: primary.lastPoint,
-          screen: primary.lastScreen,
-          pressure: 0,
-          tiltX: 0,
-          tiltY: 0,
-          button: 0,
-          buttons: 0,
-          modifiers: extractModifiers(e),
-        });
+        dispatch(cancelEvent(primary, e));
       }
 
       const p2State: PointerState = {
@@ -387,16 +708,39 @@ export function attachInput(
     e.preventDefault();
   }
 
-  function handleSinglePointerMove(state: PointerState, e: PointerEvent): void {
+  function handleSinglePointerMove(
+    state: PointerState,
+    e: PointerEvent,
+    predicted?: readonly PredictedPoint[],
+  ): void {
     const screen = toScreen(e.clientX, e.clientY);
     const point = board.camera.screenToBoard(screen);
     const threshold = dragThreshold(state.type);
+    if (state.type === 'touch') tapFingerMove(state.id, screen);
 
     if (!state.isDragging) {
       const travel = distance(state.startScreen, screen);
       if (travel >= threshold) {
         state.isDragging = true;
         clearLongPress();
+        if (state.marqueeArmed) {
+          // Long press, then drag on empty space: a selection box from the press (BOARD-911).
+          state.marqueeArmed = false;
+          state.isTouchEmptyPan = false;
+          const startPoint = board.camera.screenToBoard(state.startScreen);
+          dispatch({
+            ...createPointerEvent(
+              'pointer-down',
+              e,
+              state.startScreen,
+              startPoint,
+              state.type,
+              true,
+            ),
+            button: 0,
+            clickCount: 1,
+          });
+        }
       }
     }
 
@@ -405,11 +749,14 @@ export function attachInput(
         // One-finger touch in empty space pans the camera (ADR-004)
         const dx = screen.x - state.lastScreen.x;
         const dy = screen.y - state.lastScreen.y;
-        const { x, y, zoom } = board.camera.get();
-        board.camera.set({ x: x - dx / zoom, y: y - dy / zoom });
+        panCamera(dx, dy);
+        recordPan(e.timeStamp, dx, dy);
       }
     } else {
-      dispatch(createPointerEvent('pointer-move', e, screen, point, state.type));
+      if (state.type === 'touch' && state.isDragging && board.tool === 'hand') {
+        recordPan(e.timeStamp, screen.x - state.lastScreen.x, screen.y - state.lastScreen.y);
+      }
+      dispatch(createPointerEvent('pointer-move', e, screen, point, state.type, false, predicted));
     }
 
     state.lastScreen = screen;
@@ -432,9 +779,15 @@ export function attachInput(
   }
 
   function onPointerMove(e: PointerEvent): void {
+    if (ignoredTouches.has(e.pointerId)) return;
     publishCursor(e);
     if (!activePointers.has(e.pointerId)) {
+      if (tap?.fingers.has(e.pointerId)) {
+        tapFingerMove(e.pointerId, toScreen(e.clientX, e.clientY));
+        return;
+      }
       if (e.buttons === 0) {
+        const kind = pointerKind(e.pointerType);
         const screen = toScreen(e.clientX, e.clientY);
         const point = board.camera.screenToBoard(screen);
         const hit = board.hitTest(point, { tolerance: 4 });
@@ -444,9 +797,16 @@ export function attachInput(
           options?.onHover?.(nextHover);
         }
         // Tools with hover feedback: connector anchors, the select tool's quick-connect dots, and
-        // the line tool's next segment (BOARD-1106).
-        if (board.tool === 'connector' || board.tool === 'select' || board.tool === 'line') {
-          dispatch(createPointerEvent('pointer-move', e, screen, point, pointerKind(e.pointerType)));
+        // the line tool's next segment (BOARD-1106). A hovering pen reaches every tool, for the
+        // brush tip preview (BOARD-911); devices without pen hover never send these events.
+        if (kind === 'pen') setPenHover(screen);
+        if (
+          kind === 'pen' ||
+          board.tool === 'connector' ||
+          board.tool === 'select' ||
+          board.tool === 'line'
+        ) {
+          dispatch(createPointerEvent('pointer-move', e, screen, point, kind));
         }
       }
       return;
@@ -459,6 +819,7 @@ export function attachInput(
       if (!p1 || !p2) return;
 
       const currentScreen = toScreen(e.clientX, e.clientY);
+      tapFingerMove(e.pointerId, currentScreen);
       if (e.pointerId === twoFinger.id1) {
         p1.lastScreen = currentScreen;
       } else {
@@ -473,6 +834,7 @@ export function attachInput(
 
       twoFinger.lastDistance = dist;
       twoFinger.lastCenterScreen = center;
+      recordPan(e.timeStamp, deltaX, deltaY);
 
       dispatch({
         type: 'pinch',
@@ -490,21 +852,41 @@ export function attachInput(
     const state = activePointers.get(e.pointerId);
     if (!state || e.pointerId !== primaryPointerId) return;
 
-    // Use coalesced events for higher stroke accuracy when available (ADR-004)
+    // Use coalesced events for higher stroke accuracy when available (ADR-004), and predicted
+    // events to draw ahead of the pointer (BOARD-911). Only the last move carries predictions.
     const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : null;
+    const predicted = predictedPoints(e, state.type);
     if (coalesced && coalesced.length > 1) {
-      for (const ce of coalesced) {
-        handleSinglePointerMove(state, ce);
-      }
+      coalesced.forEach((ce, i) => {
+        handleSinglePointerMove(state, ce, i === coalesced.length - 1 ? predicted : undefined);
+      });
     } else {
-      handleSinglePointerMove(state, e);
+      handleSinglePointerMove(state, e, predicted);
     }
 
     e.preventDefault();
   }
 
+  /** Positions from `getPredictedEvents()`, in board coordinates (BOARD-911). */
+  function predictedPoints(e: PointerEvent, kind: PointerKind): PredictedPoint[] | undefined {
+    if (typeof e.getPredictedEvents !== 'function') return undefined;
+    let events: PointerEvent[];
+    try {
+      events = e.getPredictedEvents();
+    } catch {
+      return undefined;
+    }
+    if (!events || events.length === 0) return undefined;
+    return events.map((pe) => {
+      const p = board.camera.screenToBoard(toScreen(pe.clientX, pe.clientY));
+      return { x: p.x, y: p.y, pressure: resolvePressure(pe, kind, false) };
+    });
+  }
+
   function onPointerUp(e: PointerEvent): void {
     clearLongPress();
+    if (ignoredTouches.delete(e.pointerId)) return;
+    if (pointerKind(e.pointerType) === 'touch') tapFingerUp(e.pointerId, e.timeStamp, false);
     if (!activePointers.has(e.pointerId)) return;
 
     try {
@@ -527,6 +909,7 @@ export function attachInput(
       twoFinger = null;
       activePointers.delete(e.pointerId);
       primaryPointerId = null;
+      releasePan(e.timeStamp);
       e.preventDefault();
       return;
     }
@@ -542,13 +925,22 @@ export function attachInput(
       e.preventDefault();
       return;
     }
+    if (state.marqueeArmed) {
+      // Long press on empty space without a drag: the context menu opens on release (BOARD-911).
+      openContextMenu(state);
+      e.preventDefault();
+      return;
+    }
+    if (state.type === 'touch' && (state.isTouchEmptyPan || board.tool === 'hand')) {
+      releasePan(e.timeStamp);
+    }
 
     const screen = toScreen(e.clientX, e.clientY);
     const point = board.camera.screenToBoard(screen);
 
     if (state.isTouchEmptyPan) {
       // Tap on empty space: clear selection
-      if (!state.isDragging) {
+      if (!state.isDragging && board.tool === 'select') {
         board.clearSelection();
       }
     } else {
@@ -560,6 +952,8 @@ export function attachInput(
 
   function onPointerCancel(e: PointerEvent): void {
     clearLongPress();
+    if (ignoredTouches.delete(e.pointerId)) return;
+    tapFingerUp(e.pointerId, e.timeStamp, true);
     if (!activePointers.has(e.pointerId)) return;
 
     try {
@@ -590,26 +984,16 @@ export function attachInput(
       primaryPointerId = null;
     }
 
+    panSamples = [];
     if (state && !state.isTouchEmptyPan) {
-      dispatch({
-        type: 'pointer-cancel',
-        pointerId: state.id,
-        pointerType: state.type,
-        point: state.lastPoint,
-        screen: state.lastScreen,
-        pressure: 0,
-        tiltX: 0,
-        tiltY: 0,
-        button: 0,
-        buttons: 0,
-        modifiers: extractModifiers(e),
-      });
+      dispatch(cancelEvent(state, e));
     }
   }
 
   // ---------- Wheel and Trackpad Handlers ----------
 
   function onWheel(e: WheelEvent): void {
+    stopInertia();
     const screen = toScreen(e.clientX, e.clientY);
     const point = board.camera.screenToBoard(screen);
 
@@ -721,7 +1105,8 @@ export function attachInput(
     }
   }
 
-  function onPointerLeave(): void {
+  function onPointerLeave(e: PointerEvent): void {
+    if (pointerKind(e.pointerType) === 'pen') setPenHover(null);
     publishCursor(null);
     if (currentHoverId !== null) {
       currentHoverId = null;
@@ -776,8 +1161,9 @@ export function attachInput(
   root.addEventListener('keyup', onKeyUp);
   root.addEventListener('contextmenu', onContextMenu);
 
-  return () => {
+  function detach(): void {
     clearLongPress();
+    stopInertia();
     canvas.removeEventListener('pointerdown', onPointerDown);
     canvas.removeEventListener('pointermove', onPointerMove);
     canvas.removeEventListener('pointerup', onPointerUp);
@@ -796,8 +1182,17 @@ export function attachInput(
     root.removeEventListener('contextmenu', onContextMenu);
 
     activePointers.clear();
+    ignoredTouches.clear();
     primaryPointerId = null;
     twoFinger = null;
+    tap = null;
     currentHoverId = null;
+  }
+
+  return {
+    get penDetected() {
+      return penDetected;
+    },
+    detach,
   };
 }

@@ -10,6 +10,12 @@ import { nextZoomStep } from '@kujam/core';
 import { ZOOM_STEPS } from '@kujam/core';
 
 // @public
+export function buildShortcutHelp(board: Board): {
+    readonly tools: readonly ShortcutHelpEntry[];
+    readonly commands: readonly ShortcutHelpEntry[];
+};
+
+// @public
 export function buildToolbarItems(board: Board): ToolbarItem[];
 
 // @public
@@ -53,6 +59,9 @@ export function createMinimapClass(win: UiWindow): new () => KujamUiElement;
 // @internal
 export function createPresenceBarClass(win: UiWindow): new () => KujamUiElement;
 
+// @internal
+export function createShortcutHelpClass(win: UiWindow): new () => KujamUiElement;
+
 // @public
 export function defineUiElements(win?: Window): void;
 
@@ -78,6 +87,7 @@ export interface MountedUi {
     readonly minimap: KujamUiElement;
     readonly presence: KujamUiElement;
     readonly selection: KujamUiElement;
+    readonly shortcutHelp: KujamUiElement;
     readonly toolbar: KujamUiElement;
     unmount(): void;
     readonly zoom: KujamUiElement;
@@ -95,6 +105,20 @@ export { nextZoomStep }
 // @public
 export interface PresenceBarElement extends KujamUiElement {
     update(): void;
+}
+
+// @public
+export interface ShortcutHelpElement extends KujamUiElement {
+    close(): void;
+    readonly isOpen: boolean;
+    open(): void;
+}
+
+// @public
+export interface ShortcutHelpEntry {
+    readonly label: string;
+    readonly shortcuts: readonly string[];
+    readonly target: string;
 }
 
 // @public
@@ -159,6 +183,7 @@ export const UI_TAGS: Readonly<{
     readonly contextMenu: "kujam-context-menu";
     readonly minimap: "kujam-minimap";
     readonly presence: "kujam-presence-bar";
+    readonly shortcutHelp: "kujam-shortcut-help";
 }>;
 
 // @public

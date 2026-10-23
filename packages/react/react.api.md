@@ -25,10 +25,12 @@ import { ElementRenderers } from '@kujam/core';
 import { ElementResize } from '@kujam/core';
 import { ElementResolveContext } from '@kujam/core';
 import { ElementSize } from '@kujam/core';
+import { ForwardRefExoticComponent } from 'react';
 import { Geometry } from '@kujam/core';
 import { InferShape } from '@kujam/core';
 import { ObjectSchema } from '@kujam/core';
 import { ReactElement } from 'react';
+import { RefAttributes } from 'react';
 import { ResolveErrorStatus } from '@kujam/core';
 import { ResolveResult } from '@kujam/core';
 import { SchemaShape } from '@kujam/core';
@@ -53,6 +55,17 @@ export interface BoardProps {
     readonly style?: CSSProperties;
     readonly theme?: ThemeMode | ThemeDefinition;
 }
+
+// @public
+export const CommandPalette: UiComponent<CommandPaletteProps>;
+
+// @public
+export interface CommandPaletteProps extends UiComponentProps {
+    readonly source?: UiCommandPaletteSource;
+}
+
+// @public
+export const ContextMenu: UiComponent;
 
 // @public
 export type CustomElementComponent<P = any, D = any> = ComponentType<CustomElementComponentProps<P, D>>;
@@ -101,6 +114,9 @@ export type ElementDataStatus = 'loading' | 'ready' | 'forbidden' | 'not-found' 
 export type EqualityFn<T> = (a: T, b: T) => boolean;
 
 // @public
+export const HistoryControl: UiComponent;
+
+// @public
 export interface HistoryState {
     // (undocumented)
     readonly canRedo: boolean;
@@ -110,6 +126,63 @@ export interface HistoryState {
     redo(): void;
     // (undocumented)
     undo(): void;
+}
+
+// @public
+export const Minimap: UiComponent;
+
+// @public
+export const PresenceBar: UiComponent;
+
+// @public
+export const SelectionToolbar: UiComponent;
+
+// @public
+export const ShortcutHelp: UiComponent;
+
+// @public
+export const Toolbar: UiComponent;
+
+// @public
+export interface UiCommandPaletteItem {
+    // (undocumented)
+    readonly category?: string;
+    // (undocumented)
+    readonly disabled?: boolean;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly label: string;
+    // (undocumented)
+    run(board: Board_2): void;
+    // (undocumented)
+    readonly shortcut?: string;
+}
+
+// @public
+export interface UiCommandPaletteSource {
+    // (undocumented)
+    getItems(board: Board_2, query: string): readonly UiCommandPaletteItem[] | Promise<readonly UiCommandPaletteItem[]>;
+}
+
+// @public
+export type UiComponent<P extends UiComponentProps = UiComponentProps> = ForwardRefExoticComponent<P & RefAttributes<UiElementRef>>;
+
+// @public
+export interface UiComponentProps {
+    readonly board: Board_2 | null;
+    // (undocumented)
+    readonly className?: string;
+    // (undocumented)
+    readonly id?: string;
+    // (undocumented)
+    readonly style?: CSSProperties;
+}
+
+// @public
+export interface UiElementRef extends HTMLElement {
+    // (undocumented)
+    board: Board_2 | null;
 }
 
 // @public
@@ -138,6 +211,9 @@ export function useSelection<T>(board: Board_2, selector: (selection: readonly s
 
 // @public
 export function useTool(board: Board_2): string | null;
+
+// @public
+export const ZoomControl: UiComponent;
 
 // (No @packageDocumentation comment for this package)
 

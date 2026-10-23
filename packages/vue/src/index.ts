@@ -22,3 +22,19 @@ export {
   type EqualityFn,
   type HistoryState,
 } from './composables.js';
+export {
+  CommandPalette,
+  ContextMenu,
+  HistoryControl,
+  Minimap,
+  PresenceBar,
+  SelectionToolbar,
+  ShortcutHelp,
+  Toolbar,
+  ZoomControl,
+  type UiCommandPaletteItem,
+  type UiCommandPaletteSource,
+  type UiComponent,
+  type UiComponentProps,
+  type UiElementRef,
+} from './ui.js';

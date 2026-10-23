@@ -72,6 +72,25 @@ export interface ToolPointerEvent {
    * double click. Optional; treated as 1 when missing (BOARD-502).
    */
   readonly clickCount?: number;
+  /**
+   * Points the browser predicts the pointer will reach next (`PointerEvent.getPredictedEvents`),
+   * in board coordinates, on `pointer-move` only (BOARD-911). Draw them as a preview to hide input
+   * latency, but never store them: the next event replaces them with the real path.
+   */
+  readonly predicted?: readonly PredictedPoint[];
+}
+
+/**
+ * Pointer position predicted by the browser, for {@link ToolPointerEvent.predicted}.
+ *
+ * @beta
+ */
+export interface PredictedPoint {
+  /** Position in board coordinates. */
+  readonly x: number;
+  readonly y: number;
+  /** Pressure 0–1, resolved the same way as {@link ToolPointerEvent.pressure}. */
+  readonly pressure: number;
 }
 
 /**

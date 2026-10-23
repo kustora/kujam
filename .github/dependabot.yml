@@ -1,0 +1,39 @@
+# BOARD-2007: dependency updates. Security alerts open pull requests immediately, outside this
+# schedule; enable "Dependabot alerts" and "Dependabot security updates" in the repository settings.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Asia/Jakarta
+    open-pull-requests-limit: 10
+    labels: [dependencies]
+    groups:
+      # One pull request for all minor and patch bumps of development tooling.
+      dev-tooling:
+        dependency-type: development
+        update-types: [minor, patch]
+      runtime-minor:
+        dependency-type: production
+        update-types: [minor, patch]
+    ignore:
+      # Workspace packages are versioned together with Changesets (BOARD-110).
+      - dependency-name: '@kujam/*'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Asia/Jakarta
+    labels: [dependencies, ci]
+
+  - package-ecosystem: docker
+    directory: /examples/hocuspocus-server
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Asia/Jakarta
+    labels: [dependencies, examples]

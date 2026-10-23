@@ -43,4 +43,18 @@ test.describe('BOARD-1908: axe-core accessibility audit', () => {
     const serious = await findSeriousViolations(page);
     expect(serious).toEqual([]);
   });
+
+  for (const theme of ['light', 'dark']) {
+    test(`open shortcut help panel has no serious/critical violations (${theme}, BOARD-1409)`, async ({
+      page,
+    }) => {
+      await openBoard(page, { query: { ui: '1', theme } });
+      await click(page, { x: 600, y: 400 });
+      await page.keyboard.press('Shift+Slash');
+      await expect(page.locator('kujam-shortcut-help').getByRole('dialog')).toBeVisible();
+
+      const serious = await findSeriousViolations(page);
+      expect(serious).toEqual([]);
+    });
+  }
 });

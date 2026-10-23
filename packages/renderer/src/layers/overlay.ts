@@ -98,6 +98,14 @@ export interface ActiveStrokeOverlay {
   readonly color: string;
   readonly thickness: number;
   readonly brush?: string;
+  /** Predicted points drawn after `points`, as a preview only (BOARD-911). */
+  readonly predicted?: readonly (readonly number[])[];
+}
+
+/** Brush tip a freehand tool previews under a hovering pen (BOARD-911). */
+interface BrushTipOverlay {
+  readonly color: string;
+  readonly thickness: number;
 }
 
 /** Anchor snap indicator rendered while dragging a connector endpoint. @public */
@@ -159,6 +167,8 @@ interface ToolOverlayData {
   quickConnectHover?: string | null;
   /** Element highlighted as the drop target of the dragged elements (BOARD-1208). */
   dropTargetId?: string | null;
+  /** Brush tip of a freehand tool, drawn at the hovering pen (BOARD-911). */
+  tip?: BrushTipOverlay | null;
 }
 
 function renderStrokeOutline(
@@ -198,7 +208,11 @@ function renderStrokePreview(
   stroke: ActiveStrokeOverlay | PresenceLiveStroke,
   elementContext: Board['elementContext'],
 ): void {
-  const points = stroke.points;
+  const predicted = 'predicted' in stroke ? stroke.predicted : undefined;
+  const points =
+    predicted && predicted.length > 0 && stroke.points
+      ? [...stroke.points, ...predicted]
+      : stroke.points;
   if (!points || points.length === 0) return;
 
   const cam = camera.get();
@@ -288,6 +302,8 @@ export class OverlayRenderer {
   private remoteLiveStrokes: readonly PresenceLiveStroke[] = [];
   private presence: PresenceApi | null = null;
   private dropIndicator: Point | null = null;
+  /** Screen position of a hovering pen (BOARD-911). */
+  private penHover: Point | null = null;
   private lastRenderedWasEmpty = false;
 
   /** Hides the quick-connect handles, for example while an inline text editor is open. */
@@ -314,6 +330,14 @@ export class OverlayRenderer {
 
   getHovered(): string | null {
     return this.hoveredId;
+  }
+
+  /**
+   * Sets the screen position of a hovering pen, or `null` (BOARD-911). A freehand tool that
+   * publishes a brush `tip` in its tool data gets the tip previewed there.
+   */
+  setPenHover(screen: Point | null): void {
+    this.penHover = screen;
   }
 
   setPresence(presence: PresenceApi | null): void {
@@ -511,6 +535,11 @@ export class OverlayRenderer {
     const hasActiveStroke = Boolean(
       activeStroke && activeStroke.points && activeStroke.points.length > 0,
     );
+    const tip = toolData?.tip;
+    const penTip =
+      this.penHover && tip && typeof tip.thickness === 'number' && typeof tip.color === 'string'
+        ? { screen: this.penHover, color: tip.color, thickness: tip.thickness }
+        : null;
     const connectorSnap = toolData?.connectorSnap ?? null;
     const hasConnectorSnap = Boolean(connectorSnap && connectorSnap.point);
     const connectorPreview = toolData?.connectorPreview ?? null;
@@ -664,6 +693,7 @@ export class OverlayRenderer {
       remoteSelectedCount > 0 ||
       hasConnectorSnap ||
       hasConnectorPreview ||
+      penTip !== null ||
       Boolean(this.dropIndicator);
 
     if (!hasContent) {
@@ -1121,6 +1151,23 @@ export class OverlayRenderer {
     // --- F. Active Freehand Stroke Preview (BOARD-1002) ---
     if (activeStroke && activeStroke.points && activeStroke.points.length > 0) {
       renderStrokePreview(ctx, camera, pixelRatio, activeStroke, board.elementContext);
+    }
+
+    // --- F1. Brush Tip Under a Hovering Pen (BOARD-911) ---
+    if (penTip) {
+      const radius = Math.max(1.5, (penTip.thickness * zoom) / 2);
+      ctx.save();
+      ctx.scale(pixelRatio, pixelRatio);
+      ctx.beginPath();
+      ctx.arc(penTip.screen.x, penTip.screen.y, radius, 0, Math.PI * 2);
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = penTip.color;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = selectionStroke;
+      ctx.stroke();
+      ctx.restore();
     }
 
     // --- F2. Remote Ephemeral Live Strokes (BOARD-808) ---

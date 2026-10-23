@@ -14,7 +14,12 @@
 import type { Anchor, Board, ContextMenuEvent, Point, PresenceApi, ThemeDefinition, ThemeMode, ViewportSize } from '@kujam/core';
 import { AnchorLayer, type AnchorPin } from './layers/anchor-layer.js';
 import { HtmlLayer, type EditorBounds } from './layers/html-layer.js';
-import { attachInput } from './input/input.js';
+import {
+  attachInput,
+  resolveTouchOptions,
+  type ResolvedTouchOptions,
+  type TouchOptions,
+} from './input/input.js';
 import { attachClipboard } from './input/clipboard.js';
 import { attachDragDrop } from './input/drag-drop.js';
 import { CanvasRenderer, type RenderStats } from './layers/render-canvas.js';
@@ -30,6 +35,7 @@ export type { OverlayRenderStats } from './layers/overlay.js';
 export type { EditorBounds } from './layers/html-layer.js';
 export type { BoardBackground } from './layers/background.js';
 export type { DragDropOptions } from './input/drag-drop.js';
+export type { FingerMode, TouchOptions } from './input/input.js';
 
 /**
  * Options for {@link mountRenderer}.
@@ -41,7 +47,6 @@ export interface RendererOptions {
    * Device pixel ratio for the canvas backing stores. Defaults to the container window's
    * `devicePixelRatio` (1 when unavailable).
    */
-  // TODO(BOARD-803): follow DPR changes and cap the canvas area (about 16 million pixels, ADR-003).
   readonly pixelRatio?: number;
   /**
    * When `true`, enables visual debug overlays (dirty rectangles and element counts)
@@ -108,6 +113,14 @@ export interface RendererOptions {
    * @beta
    */
   readonly announcements?: boolean;
+  /**
+   * Touch and stylus behavior (BOARD-911): palm rejection and the "pen draws, fingers pan" mode,
+   * two- and three-finger taps for undo and redo, and pan inertia. Change it later with
+   * {@link BoardView.setTouchOptions}.
+   *
+   * @beta
+   */
+  readonly touch?: TouchOptions;
 }
 
 /**
@@ -219,6 +232,27 @@ export interface BoardView {
    */
   reducedMotion: boolean;
   /**
+   * Current touch and stylus options, with defaults filled in (BOARD-911).
+   *
+   * @beta
+   */
+  readonly touchOptions: Readonly<Required<TouchOptions>>;
+  /**
+   * Changes some touch and stylus options; omitted fields keep their value (BOARD-911). For
+   * example `{ fingers: 'pan' }` turns on "pen draws, fingers pan".
+   *
+   * @throws `RangeError` when `fingers` is not `auto`, `pan`, or `draw`.
+   * @beta
+   */
+  setTouchOptions(options: TouchOptions): void;
+  /**
+   * Whether a pen was used on this view (BOARD-911). In the `auto` finger mode, fingers stop
+   * drawing from then on. Useful to offer the "pen draws, fingers pan" switch only to pen users.
+   *
+   * @beta
+   */
+  readonly penDetected: boolean;
+  /**
    * Removes the DOM layers and releases the `ResizeObserver`, board listeners, and any pending
    * animation frame. Safe to call more than once. Also runs automatically when the board is
    * disposed.
@@ -306,6 +340,51 @@ function listenDprChange(win: ViewWindow | null, onChange: (newDpr: number) => v
   update();
   return () => {
     mediaQuery?.removeEventListener?.('change', handleChange);
+  };
+}
+
+/** Space kept between an editor and the virtual keyboard or the top of the visual viewport. */
+const EDITOR_KEYBOARD_MARGIN_PX = 16;
+
+/**
+ * Keeps a mounted editor visible while a virtual keyboard covers part of the page (BOARD-911,
+ * ADR-004): when the visual viewport shrinks or scrolls, or the editor grows while typing, the
+ * camera pans just enough to bring the editor back into the visible area. Returns a function that
+ * stops following. Without `visualViewport` (desktop browsers before 2019) nothing happens.
+ */
+function keepEditorAboveKeyboard(
+  board: Board,
+  win: ViewWindow | null,
+  editor: HTMLElement,
+): () => void {
+  const vv = win?.visualViewport;
+  if (!win || !vv || typeof vv.addEventListener !== 'function') return () => {};
+
+  const follow = (): void => {
+    if (!editor.isConnected || typeof editor.getBoundingClientRect !== 'function') return;
+    // Only while something covers the page (a virtual keyboard, or a pinch-zoomed page); a
+    // desktop editor near the window edge leaves the camera alone.
+    if (vv.height >= win.innerHeight - 1) return;
+    const rect = editor.getBoundingClientRect();
+    const top = vv.offsetTop + EDITOR_KEYBOARD_MARGIN_PX;
+    const bottom = vv.offsetTop + vv.height - EDITOR_KEYBOARD_MARGIN_PX;
+    if (bottom <= top) return;
+    let dy = 0;
+    if (rect.bottom > bottom) dy = rect.bottom - bottom;
+    // The editor's top stays visible even when the editor is taller than the visible area.
+    if (rect.top - dy < top) dy = rect.top - top;
+    if (Math.abs(dy) < 1) return;
+    const camera = board.camera.get();
+    board.camera.set({ y: camera.y + dy / camera.zoom });
+  };
+
+  vv.addEventListener('resize', follow);
+  vv.addEventListener('scroll', follow);
+  editor.addEventListener('input', follow);
+  return () => {
+    vv.removeEventListener('resize', follow);
+    vv.removeEventListener('scroll', follow);
+    editor.removeEventListener('input', follow);
   };
 }
 
@@ -440,8 +519,14 @@ export function mountRenderer(
   }
   syncCursor();
 
-  const detachInput = attachInput(board, layers, {
+  let touchOptions: ResolvedTouchOptions = resolveTouchOptions(options.touch);
+  const input = attachInput(board, layers, {
     onContextMenu: options.onContextMenu,
+    touch: () => touchOptions,
+    onPenHover(screen) {
+      overlayRenderer.setPenHover(screen);
+      scheduleRender();
+    },
     onHover(id) {
       if (overlayRenderer.setHovered(id)) {
         scheduleRender();
@@ -690,7 +775,7 @@ export function mountRenderer(
     presenceUnsubs.length = 0;
     overlayRenderer.setDropIndicator(null);
     overlayRenderer.clearRemotePresence();
-    detachInput();
+    input.detach();
     detachClipboard();
     detachDragDrop();
     a11yTree.dispose();
@@ -760,8 +845,18 @@ export function mountRenderer(
       reducedMotionOverridden = true;
       applyReducedMotion(Boolean(value));
     },
+    get touchOptions() {
+      return touchOptions;
+    },
+    setTouchOptions(next: TouchOptions) {
+      touchOptions = resolveTouchOptions(next, touchOptions);
+    },
+    get penDetected() {
+      return input.penDetected;
+    },
     mountEditor(editor, bounds, elementId) {
       const remove = htmlLayer.mountEditor(editor, bounds);
+      const stopFollowingKeyboard = keepEditorAboveKeyboard(board, win, editor);
       if (elementId !== undefined) {
         canvasRenderer.setEditingText(elementId, true);
       }
@@ -776,6 +871,7 @@ export function mountRenderer(
         // Closing a focused editor (Esc) would drop focus to the page body: keep it on the
         // edited element instead (BOARD-1902).
         const hadFocus = editor.contains(doc.activeElement);
+        stopFollowingKeyboard();
         remove();
         if (hadFocus && mounted) a11yTree.restoreFocus();
       };

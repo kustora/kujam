@@ -254,6 +254,7 @@ export {
   type BoardTools,
   type InputModifiers,
   type PointerKind,
+  type PredictedPoint,
   type ToolContext,
   type ToolDefinition,
   type ToolErrorCode,

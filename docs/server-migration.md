@@ -58,3 +58,7 @@ const png = await renderThumbnail(doc, { width: 400, plugins: [defaultElements] 
 error yang jelas sehingga aplikasi bisa jatuh ke thumbnail klien (BOARD-1708). Untuk canvas
 lain, berikan `canvasFactory(width, height)` yang mengembalikan `{ canvas, ctx }`; `canvas` harus
 punya `toBuffer('image/png')` atau `encode('png')`.
+
+## Worker lengkap (BOARD-1805)
+
+Contoh worker yang menggabungkan validasi, ekstraksi referensi dengan diff penempatan, dan thumbnail setelah perubahan reda ada di [`examples/server-worker`](../examples/server-worker/README.md).

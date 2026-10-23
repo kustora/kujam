@@ -344,6 +344,34 @@ importers:
         specifier: ^6.2.0
         version: 6.4.4(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.15)
 
+  examples/server-worker:
+    dependencies:
+      '@kujam/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@kujam/example-contact-card':
+        specifier: workspace:*
+        version: link:../contact-card
+      '@kujam/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@kujam/shapes':
+        specifier: workspace:*
+        version: link:../../packages/shapes
+      '@kujam/sync-yjs':
+        specifier: workspace:*
+        version: link:../../packages/sync-yjs
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.5
+        version: 22.20.5
+      tsx:
+        specifier: ^4.19.3
+        version: 4.23.15
+      vitest:
+        specifier: ^3.0.7
+        version: 3.2.7(@types/node@22.20.5)(happy-dom@21.0.3)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.15)
+
   examples/vanilla:
     dependencies:
       '@kujam/core':
@@ -7748,7 +7776,7 @@ snapshots:
 
   buffer-image-size@0.6.4:
     dependencies:
-      '@types/node': 22.20.5
+      '@types/node': 24.19.2
 
   buffer@5.7.1:
     dependencies:
@@ -8509,7 +8537,7 @@ snapshots:
 
   happy-dom@21.0.3:
     dependencies:
-      '@types/node': 22.20.5
+      '@types/node': 24.19.2
       '@types/whatwg-mimetype': 3.0.2
       '@types/ws': 8.18.2
       buffer-image-size: 0.6.4

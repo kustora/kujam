@@ -134,6 +134,8 @@ export const contactCard = defineElement({
   geometry: (el) => rect(el.w, el.h),
   lod: { compactBelowZoom: 0.4 },
   resolve: (el, ctx) => ctx.resolvers.contact!(el.props.contactId) as Contact | Promise<Contact>,
+  // Lets the server index which boards show which contact (BOARD-1802, BOARD-1805).
+  references: (el) => (el.props.contactId ? [{ resolver: 'contact', id: el.props.contactId }] : []),
   placeholder: (reason) => ({
     label:
       reason === 'forbidden' ? 'Kontak privat' : reason === 'not-found' ? 'Kontak dihapus' : '',
