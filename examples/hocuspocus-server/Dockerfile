@@ -1,4 +1,4 @@
-FROM node:24-bookworm-slim AS builder
+FROM node:25-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -25,7 +25,7 @@ RUN pnpm --filter @kujam/sync-yjs build
 RUN pnpm --filter @kujam/example-hocuspocus-server build
 
 # Production runtime stage
-FROM node:24-bookworm-slim AS runner
+FROM node:25-bookworm-slim AS runner
 
 WORKDIR /app
 
