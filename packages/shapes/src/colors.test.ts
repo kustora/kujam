@@ -53,12 +53,12 @@ function contrastRatio(hex1: string, hex2: string): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-describe('BOARD-1006: Theme and Color Tokens (DESIGN.md)', () => {
-  it('defines the 6 official sticky colors per DESIGN.md', () => {
+describe('BOARD-1006: Theme and Color Tokens', () => {
+  it('defines the 6 built-in sticky colors', () => {
     expect(STICKY_COLORS).toEqual(['yellow', 'green', 'pink', 'blue', 'purple', 'gray']);
   });
 
-  it('matches exact hex values from DESIGN.md', () => {
+  it('matches the exact default hex values', () => {
     expect(STICKY_COLOR_VALUES.yellow).toBe('#FBE7A1');
     expect(STICKY_COLOR_VALUES.green).toBe('#CDE6D5');
     expect(STICKY_COLOR_VALUES.pink).toBe('#F6D2C6');
@@ -94,7 +94,7 @@ describe('BOARD-1907: Automated WCAG Text Contrast Audit', () => {
       const textHex = DEFAULT_LIGHT_THEME.stickyText;
       const ratio = contrastRatio(bgHex, textHex);
 
-      // DESIGN.md states contrast is above 12:1
+      // Sticky text contrast must stay above 12:1
       expect(ratio).toBeGreaterThanOrEqual(4.5);
       expect(ratio).toBeGreaterThan(12);
     }

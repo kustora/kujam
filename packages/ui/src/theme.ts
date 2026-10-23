@@ -2,13 +2,13 @@
  * UI theme as CSS custom properties (BOARD-1401).
  *
  * Every component styles itself only through `--kujam-ui-*` properties, set with `:host` for light
- * and dark mode from the DESIGN.md tokens. Page styles that target the element itself win over
+ * and dark mode from the theme tokens. Page styles that target the element itself win over
  * `:host` rules, so apps restyle the UI with, for example,
  * `kujam-toolbar { --kujam-ui-surface: #fafafa; }`. Setting the properties on an ancestor has no
  * effect, because the host sets its own values.
  */
 
-/** Light and dark token values, in DESIGN.md order. */
+/** Light and dark token values, in the canonical order. */
 const TOKENS = {
   light: {
     surface: '#FFFFFF',

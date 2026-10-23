@@ -1,6 +1,6 @@
 /**
  * Built-in element color keys and theme tokens (BOARD-1006). Documents store keys, not hex,
- * so the theme can be swapped. Values match the Tayang design system (DESIGN.md).
+ * so the theme can be swapped. Values follow the default kujam palette.
  */
 
 import {
@@ -37,7 +37,7 @@ export {
 };
 
 /**
- * Text color for sticky notes (DESIGN.md sticky-ink, #17191E).
+ * Text color for sticky notes (sticky ink, #17191E).
  * Contrast ratio exceeds 12:1 against all 6 sticky pastel colors (BOARD-1907).
  *
  * @beta
@@ -46,14 +46,14 @@ export const STICKY_TEXT_COLOR = '#17191E';
 
 /**
  * Default color palette values for strokes, text, and geometric shapes.
- * Matches light theme values from DESIGN.md.
+ * Matches the default light theme values.
  *
  * @internal
  */
 export const COLOR_VALUES: Readonly<Record<ColorKey, string>> = DEFAULT_LIGHT_THEME.colors;
 
 /**
- * The six official sticky colors from DESIGN.md:
+ * The six built-in sticky colors:
  * yellow, green, pink, blue, purple, gray.
  *
  * @internal

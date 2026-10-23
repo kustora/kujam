@@ -1,14 +1,12 @@
 # `@kujam/*` — Monorepo Package Whiteboard Agnostik
 
-Keluarga package whiteboard agnostik framework untuk **Jam Tayang** dan ekosistem Kustora: inti TypeScript murni tanpa DOM (`@kujam/core`), renderer tiga lapisan Canvas 2D + HTML + Overlay (`@kujam/renderer`), elemen dan tool bawaan (`@kujam/shapes`), sinkronisasi opsional Yjs (`@kujam/sync-yjs`), serta adapter tipis untuk React dan Vue.
+Keluarga package whiteboard agnostik framework dari Kustora, dipakai pertama kali oleh canvas Jam Tayang: inti TypeScript murni tanpa DOM (`@kujam/core`), renderer tiga lapisan Canvas 2D + HTML + Overlay (`@kujam/renderer`), elemen dan tool bawaan (`@kujam/shapes`), sinkronisasi opsional Yjs (`@kujam/sync-yjs`), serta adapter tipis untuk React dan Vue.
 
 ## Struktur Monorepo
 
 ```text
 .
 ├── apps/
-│   ├── web/                     # @tayang/web — Web app Tayang (Next.js 16 + Tailwind v4 + next-intl, client-first)
-│   ├── api/                     # @tayang/api — API + worker (NestJS 12, Prisma 7/PostgreSQL, BullMQ/Redis)
 │   └── playground/              # @kujam/playground — Aplikasi dev & debug (Vite + HMR langsung dari source)
 ├── packages/
 │   ├── core/                    # @kujam/core — Inti tanpa DOM & 0 dependensi runtime
@@ -29,9 +27,8 @@ Keluarga package whiteboard agnostik framework untuk **Jam Tayang** dan ekosiste
 │   └── vue/                     # Contoh integrasi Vue 3
 └── docs/
     ├── adr/                     # Architecture Decision Records (ADR-001, ADR-002, dst.)
-    ├── PRD Tayang by Kustora.md
-    ├── PRD Package Canvas Jam (Whiteboard Agnostik Tayang).md
-    └── Backlog Canvas Jam (Jira).md
+    ├── MIGRATION.md             # Panduan migrasi antar versi
+    └── *.md                     # CSP, SSR, elemen kustom, UI kustom, aksesibilitas, migrasi server
 ```
 
 ## Prasyarat
@@ -47,14 +44,6 @@ pnpm install
 
 # Build seluruh package (ESM + .d.ts via tsup & Turborepo)
 pnpm build
-
-# Jalankan Postgres + Redis lokal (opsional, docker compose)
-pnpm services
-
-# Jalankan web app Tayang (http://localhost:3000), API (http://localhost:4000), dan worker antrean
-pnpm web
-pnpm api
-pnpm worker
 
 # Jalankan playground pengembangan (http://localhost:5173)
 # Skenario: /s/empty, /s/rich-text, /s/schema-lab. Tambah ?bare=1 atau ?debug=0.
@@ -83,3 +72,7 @@ pnpm lint
    - `@kujam/renderer` hanya bergantung pada `@kujam/core` dan tidak mengimpor lapisan luar (`ui`, `react`, `vue`, `export`, `server`, `sync-yjs`, `storage-*`).
 3. **Agnostik Domain (`BOARD-107`):**
    - ESLint menolak identifier beristilah domain aplikasi (`post`, `task`, `brand`, `approval`, `campaign`, `kampanye`, `tayang`) di dalam `packages/*/src`.
+
+## Lisensi
+
+[Apache License 2.0](./LICENSE). Lihat juga [NOTICE](./NOTICE).

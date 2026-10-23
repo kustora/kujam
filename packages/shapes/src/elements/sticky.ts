@@ -14,7 +14,7 @@ const PADDING = 16;
 
 /**
  * Sticky note element (BOARD-1001): rich text, color from the sticky palette, and author.
- * Uses 0 border radius (sharp rectangle) per DESIGN.md.
+ * Uses 0 border radius (sharp rectangle).
  *
  * @beta
  */
@@ -37,7 +37,7 @@ export const stickyElement = defineElement({
   },
   render: {
     canvas: (g, el, _data, lod, ctx) => {
-      // Sticky notes have sharp corners (radius 0) per DESIGN.md
+      // Sticky notes have sharp corners (radius 0)
       g.beginPath();
       g.rect(0, 0, el.w, el.h);
       g.fillStyle = ctx?.theme?.sticky[el.props.color] ?? STICKY_COLOR_VALUES[el.props.color];

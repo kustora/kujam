@@ -106,7 +106,7 @@ function key(target: Element, k: string, init: KeyboardEventInit = {}): void {
 }
 
 describe('BOARD-1402: buildToolbarItems', () => {
-  it('lists registered built-in tools in DESIGN.md order with shortcuts', () => {
+  it('lists registered built-in tools in the canonical order with shortcuts', () => {
     const items = buildToolbarItems(newBoard());
     expect(items.map((i) => i.id)).toEqual([
       'select',

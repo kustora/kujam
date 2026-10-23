@@ -11,7 +11,7 @@ export function shortcutFor(board: Board, target: string): string | undefined {
   return binding ? board.keybindings.format(binding.shortcut) : undefined;
 }
 
-/** Accessible name: label plus shortcut, as DESIGN.md asks for tool buttons. */
+/** Accessible name: label plus shortcut, as tool buttons require. */
 export function accessibleName(label: string, shortcut: string | undefined): string {
   return shortcut ? `${label} (${shortcut})` : label;
 }

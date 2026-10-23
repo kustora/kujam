@@ -35,7 +35,7 @@ export const A11Y_VIEWPORT_MARGIN_PX = 100;
 /** Minimum time between two reconciliations of the visible set, in milliseconds. */
 export const A11Y_SYNC_INTERVAL_MS = 100;
 
-/** Focus ring width and gap in screen pixels (DESIGN.md: 2px `focus-ring`, 2px apart). */
+/** Focus ring width and gap in screen pixels (2px `focus-ring`, 2px apart). */
 const FOCUS_RING_PX = 2;
 const DEFAULT_FOCUS_RING = '#2F6FDB';
 

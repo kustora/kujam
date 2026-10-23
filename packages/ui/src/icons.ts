@@ -1,6 +1,6 @@
 /**
  * Line icons for the UI (BOARD-1401): 24 × 24 box, stroke 2, round caps and joins, drawn in
- * `currentColor` (DESIGN.md Icons). Drawn for this package in the Lucide style; no third-party
+ * `currentColor`. Drawn for this package in the Lucide style; no third-party
  * artwork is bundled.
  */
 

@@ -11,4 +11,3 @@ test-results/
 # Baseline screenshot Playwright (BOARD-104).
 **/__screenshots__/
 **/*-snapshots/
-apps/api/src/generated

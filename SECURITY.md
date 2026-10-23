@@ -1,6 +1,6 @@
 # Kebijakan Keamanan
 
-Kebijakan ini berlaku untuk package `@kujam/*` di `packages/`, contoh di `examples/` (termasuk server Hocuspocus contoh), dan playground di `apps/playground` (BOARD-2007). Kerentanan di aplikasi Tayang (`apps/web`, `apps/api`) dilaporkan lewat kanal yang sama.
+Kebijakan ini berlaku untuk package `@kujam/*` di `packages/`, contoh di `examples/` (termasuk server Hocuspocus contoh), dan playground di `apps/playground` (BOARD-2007).
 
 ## Versi yang didukung
 
@@ -16,7 +16,7 @@ Sampai `1.0`, perbaikan keamanan hanya dibuat untuk rilis minor terakhir. Setela
 
 **Jangan membuka issue publik, pull request, atau diskusi untuk kerentanan.**
 
-1. Laporkan secara privat lewat GitHub: tab **Security**, lalu **Report a vulnerability** ([buat laporan](https://github.com/kustora/tayang/security/advisories/new)). Laporan hanya terlihat oleh maintainer.
+1. Laporkan secara privat lewat GitHub: tab **Security**, lalu **Report a vulnerability** ([buat laporan](https://github.com/kustora/kujam/security/advisories/new)). Laporan hanya terlihat oleh maintainer.
 2. Bila tidak bisa memakai GitHub, hubungi pemilik teknis package, [@riziq](https://github.com/riziq) (ADR-002), lewat pesan langsung, lalu minta kanal privat. Jangan kirim detail teknis lewat kanal publik.
 
 Sertakan bila ada:

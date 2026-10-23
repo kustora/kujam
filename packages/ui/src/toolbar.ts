@@ -1,7 +1,7 @@
 /**
  * Main toolbar `<kujam-toolbar>` (BOARD-1402).
  *
- * Shows the built-in tools that are registered on the board, in DESIGN.md order, then the
+ * Shows the built-in tools that are registered on the board, in the canonical order, then the
  * `toolbarItems` of installed plugins after a separator. Tools with several variants (shapes) are
  * one button with a popover menu, and so are tools with style choices for their next element
  * (sticky color, pen brush and color, BOARD-1108). The toolbar is a single tab stop with roving
@@ -142,7 +142,7 @@ function brushStyle(board: Board): ToolbarStyleGroup | null {
   };
 }
 
-/** Built-in tools in DESIGN.md toolbar order; missing tools are skipped. */
+/** Built-in tools in toolbar order; missing tools are skipped. */
 const BUILT_INS: readonly BuiltIn[] = [
   { id: 'select', label: 'tool.select', icon: 'select' },
   { id: 'lasso', label: 'tool.lasso', icon: 'lasso' },

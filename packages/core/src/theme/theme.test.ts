@@ -10,7 +10,7 @@ import {
 } from '../index.js';
 
 describe('Theme system (BOARD-1006)', () => {
-  it('default light and dark themes have all required tokens per DESIGN.md', () => {
+  it('default light and dark themes have all required tokens', () => {
     for (const theme of [DEFAULT_LIGHT_THEME, DEFAULT_DARK_THEME]) {
       expect(theme.canvas.background).toBeDefined();
       expect(theme.canvas.gridDot).toBeDefined();
@@ -35,7 +35,7 @@ describe('Theme system (BOARD-1006)', () => {
     expect(DEFAULT_DARK_THEME.canvas.background).toBe('#121317');
     expect(DEFAULT_DARK_THEME.canvas.gridDot).toBe('#353943');
 
-    // Sticky colors are identical in both light and dark modes per DESIGN.md
+    // Sticky colors are identical in both light and dark modes
     for (const color of STICKY_COLORS) {
       expect(DEFAULT_LIGHT_THEME.sticky[color]).toBe(DEFAULT_DARK_THEME.sticky[color]);
     }

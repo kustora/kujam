@@ -1,10 +1,9 @@
 /**
  * Theme definition, color tokens, and built-in light/dark themes (BOARD-1006).
- * Aligned with the official Tayang design system (DESIGN.md).
  */
 
 /**
- * Built-in sticky color keys (BOARD-1006, DESIGN.md).
+ * Built-in sticky color keys (BOARD-1006).
  *
  * @beta
  */
@@ -59,7 +58,7 @@ export interface ThemeCanvasTokens {
   readonly background: string;
   /** Grid dot color. */
   readonly gridDot: string;
-  /** Grid dot spacing in board units (default 24px, DESIGN.md jam-grid). */
+  /** Grid dot spacing in board units (default 24px jam grid). */
   readonly gridSpacing: number;
 }
 
@@ -80,7 +79,7 @@ export interface ThemeSelectionTokens {
   /** Hover outline color. */
   readonly hoverStroke: string;
   /**
-   * Keyboard focus ring color (DESIGN.md `focus-ring`): a 2px ring 2px outside the focused element
+   * Keyboard focus ring color (`focus-ring` token): a 2px ring 2px outside the focused element
    * (BOARD-1902, BOARD-1904). Falls back to `stroke` when omitted.
    *
    * @beta
@@ -116,7 +115,7 @@ export interface ThemeDefinition {
   readonly typography: ThemeTypographyTokens;
   /** Sticky note background colors mapped by StickyColor key. */
   readonly sticky: Readonly<Record<StickyColor, string>>;
-  /** Text color on sticky notes (constant in both light and dark modes per DESIGN.md). */
+  /** Text color on sticky notes (constant in both light and dark modes). */
   readonly stickyText: string;
   /** Stroke, shape, and text colors mapped by ColorKey. */
   readonly colors: Readonly<Record<ColorKey, string>>;
@@ -125,7 +124,7 @@ export interface ThemeDefinition {
 }
 
 /**
- * Default light theme (BOARD-1006, DESIGN.md).
+ * Default light theme (BOARD-1006).
  *
  * @public
  */
@@ -173,7 +172,7 @@ export const DEFAULT_LIGHT_THEME: Readonly<ThemeDefinition> = Object.freeze({
 });
 
 /**
- * Default dark theme (BOARD-1006, DESIGN.md).
+ * Default dark theme (BOARD-1006).
  *
  * @public
  */

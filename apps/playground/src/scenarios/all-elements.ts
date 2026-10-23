@@ -30,7 +30,7 @@ function seedAllElements(board: Board): void {
     },
   });
 
-  // 2. Sticky Notes Palette (6 official pastel colors from DESIGN.md)
+  // 2. Sticky Notes Palette (6 built-in pastel colors)
   const stickyColors = ['yellow', 'green', 'pink', 'blue', 'purple', 'gray'] as const;
   const stickyLabels = [
     'Sticky Kuning\n• Ide utama\n• Prioritas tinggi',

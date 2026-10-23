@@ -7,7 +7,7 @@ import { createBoxTool } from './box-tool.js';
 /**
  * Tool for creating sticky notes.
  *
- * Click creates a default 192×144 sticky (8×6 jam-grid, ratio 4:3, per DESIGN.md), drag creates a sized sticky.
+ * Click creates a default 192×144 sticky (8×6 jam-grid, ratio 4:3), drag creates a sized sticky.
  * Triggers inline text editing immediately after creation.
  * Remains active until Escape.
  *
