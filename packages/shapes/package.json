@@ -2,6 +2,16 @@
   "name": "@kujam/shapes",
   "version": "0.1.0",
   "description": "Elemen dan tool bawaan untuk @kujam/core (sticky, coretan, teks, geometri, konektor, frame, gambar, grup)",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kustora/kujam.git",
+    "directory": "packages/shapes"
+  },
+  "homepage": "https://github.com/kustora/kujam/tree/main/packages/shapes#readme",
+  "bugs": {
+    "url": "https://github.com/kustora/kujam/issues"
+  },
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.js",
@@ -14,7 +24,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "tsup",

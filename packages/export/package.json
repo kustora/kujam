@@ -2,6 +2,16 @@
   "name": "@kujam/export",
   "version": "0.1.0",
   "description": "Ekspor PNG, SVG, PDF, teks polos, dan JSON untuk @kujam/core",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kustora/kujam.git",
+    "directory": "packages/export"
+  },
+  "homepage": "https://github.com/kustora/kujam/tree/main/packages/export#readme",
+  "bugs": {
+    "url": "https://github.com/kustora/kujam/issues"
+  },
   "type": "module",
   "sideEffects": false,
   "main": "./dist/index.js",
@@ -14,7 +24,9 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE",
+    "NOTICE"
   ],
   "scripts": {
     "build": "tsup",
