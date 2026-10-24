@@ -2,8 +2,26 @@
  * BOARD-2413: export lab. The preview follows the format, scope, and options, and the result
  * downloads with a matching file name.
  */
+import { readFileSync } from 'node:fs';
+import { inflateSync } from 'node:zlib';
 import { expect, test } from '@playwright/test';
 import { openBoard } from './support/board.js';
+
+/** Decoded content of every Flate stream of a PDF file, joined. */
+function pdfStreams(bytes: Buffer): string {
+  const raw = bytes.toString('latin1');
+  const out: string[] = [];
+  for (const match of raw.matchAll(/stream\r?\n/g)) {
+    const start = match.index + match[0].length;
+    const end = raw.indexOf('endstream', start);
+    try {
+      out.push(inflateSync(bytes.subarray(start, end)).toString('latin1'));
+    } catch {
+      // Not a Flate stream (for example image data).
+    }
+  }
+  return out.join('\n');
+}
 
 test('previews PNG, SVG, text, and JSON for the board, the selection, and a frame', async ({
   page,
@@ -85,4 +103,26 @@ test('PNG options: transparent background and padding change the image', async (
     return ctx.getImageData(0, 0, 1, 1).data[3];
   });
   expect(corner).toBe(0);
+});
+
+test('BOARD-1705: PDF of every frame with selectable text, downloaded as a file', async ({
+  page,
+}) => {
+  await openBoard(page, { scenario: 'export-lab', query: { bare: '0', format: 'pdf' } });
+  const meta = page.getByTestId('export-meta');
+  const frames = await page.evaluate(() => window.__board!.frames.list().length);
+  expect(frames).toBeGreaterThan(0);
+  await expect(meta).toContainText(new RegExp(`^PDF · .* · ${frames} halaman`));
+  await expect(page.getByTestId('export-preview').locator('iframe')).toBeAttached();
+
+  const download = page.waitForEvent('download');
+  await page.getByTestId('export-download').click();
+  const file = await download;
+  expect(file.suggestedFilename()).toBe('kujam-papan.pdf');
+  const bytes = readFileSync((await file.path())!);
+  expect(bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+  const content = pdfStreams(bytes);
+  // The invisible text layer (render mode 3) holds the frame text in the standard font encoding.
+  expect(content).toContain('3 Tr');
+  expect(content).toContain(Buffer.from('Langkah 1', 'latin1').toString('hex').toUpperCase());
 });

@@ -33,6 +33,7 @@ export {
   type ExportPNGOptions,
   type PngExportResult,
 } from './png.js';
+export { exportPDF, type ExportPDFOptions, type PdfExportResult } from './pdf.js';
 export { exportText, type ExportTextOptions } from './text.js';
 export {
   exportImage,

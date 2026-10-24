@@ -1,14 +1,22 @@
 /**
  * Export lab logic (BOARD-2413): options kept in the query string, the export scope, and one call
- * that runs `@kujam/export` for PNG, SVG, plain text, or JSON and returns a downloadable file.
+ * that runs `@kujam/export` for PNG, SVG, PDF, plain text, or JSON and returns a downloadable
+ * file.
  * The scenario in `scenarios/export-lab.ts` only builds the UI around it.
  */
 
 import type { Board } from '@kujam/core';
-import { exportJSON, exportPNG, exportSVG, exportText, type ExportWarning } from '@kujam/export';
+import {
+  exportJSON,
+  exportPDF,
+  exportPNG,
+  exportSVG,
+  exportText,
+  type ExportWarning,
+} from '@kujam/export';
 import type { ScenarioState } from './scenario.js';
 
-export const LAB_FORMATS = ['png', 'svg', 'text', 'json'] as const;
+export const LAB_FORMATS = ['png', 'svg', 'pdf', 'text', 'json'] as const;
 export type LabFormat = (typeof LAB_FORMATS)[number];
 
 export const LAB_SCOPES = ['board', 'selection', 'frame'] as const;
@@ -22,7 +30,7 @@ export interface LabOptions {
   readonly scope: LabScope;
   /** Frame exported with the `frame` scope. */
   readonly frameId: string | null;
-  /** PNG: 1 to 4 pixels per board unit. SVG: size multiplier. */
+  /** PNG and PDF: 1 to 4 pixels per board unit. SVG: size multiplier. */
   readonly scale: number;
   readonly background: LabBackground;
   /** Space around the content in board units; `null` keeps the package default. */
@@ -97,11 +105,13 @@ export interface LabResult {
   readonly blob: Blob;
   /** Text content for text, JSON, and SVG (its source). */
   readonly text: string | null;
-  /** Pixel size for PNG and SVG. */
+  /** Pixel size for PNG and SVG; page count is in `pages` for PDF. */
   readonly width: number | null;
   readonly height: number | null;
   /** PNG scale actually used; lower than requested when the canvas limits were hit. */
   readonly scale: number | null;
+  /** PDF page count. */
+  readonly pages?: number;
   readonly warnings: readonly ExportWarning[];
   readonly fileName: string;
   readonly ms: number;
@@ -146,7 +156,13 @@ function slug(value: string): string {
   );
 }
 
-const EXTENSION: Record<LabFormat, string> = { png: 'png', svg: 'svg', text: 'txt', json: 'json' };
+const EXTENSION: Record<LabFormat, string> = {
+  png: 'png',
+  svg: 'svg',
+  pdf: 'pdf',
+  text: 'txt',
+  json: 'json',
+};
 
 export function labFileName(format: LabFormat, scopeLabel: string): string {
   return `kujam-${scopeLabel}.${EXTENSION[format]}`;
@@ -156,11 +172,18 @@ export function labFileName(format: LabFormat, scopeLabel: string): string {
 export interface LabExporters {
   exportPNG: typeof exportPNG;
   exportSVG: typeof exportSVG;
+  exportPDF: typeof exportPDF;
   exportText: typeof exportText;
   exportJSON: typeof exportJSON;
 }
 
-const DEFAULT_EXPORTERS: LabExporters = { exportPNG, exportSVG, exportText, exportJSON };
+const DEFAULT_EXPORTERS: LabExporters = {
+  exportPNG,
+  exportSVG,
+  exportPDF,
+  exportText,
+  exportJSON,
+};
 
 /** Runs one export with the lab options. */
 export async function runLabExport(
@@ -208,6 +231,28 @@ export async function runLabExport(
         width: result.width,
         height: result.height,
         scale: null,
+        warnings: result.warnings,
+        fileName,
+        ms: now() - started,
+      };
+    }
+    case 'pdf': {
+      // One page per frame: the whole board gives every frame, the frame scope just that one.
+      if (scope.ids)
+        throw new LabScopeError('PDF diekspor per frame: pilih cakupan papan atau frame.');
+      const result = await exporters.exportPDF(board, {
+        background: image.background,
+        scale: options.scale,
+        ...(scope.frameId ? { frameIds: [scope.frameId] } : {}),
+      });
+      return {
+        format: 'pdf',
+        blob: result.data,
+        text: null,
+        width: null,
+        height: null,
+        scale: null,
+        pages: result.pageCount,
         warnings: result.warnings,
         fileName,
         ms: now() - started,

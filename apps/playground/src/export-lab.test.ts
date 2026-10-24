@@ -92,6 +92,16 @@ function fakeExporters(): LabExporters & { calls: { name: string; options: unkno
         warnings: [],
       };
     }),
+    exportPDF: vi.fn(async (_board, options) => {
+      calls.push({ name: 'pdf', options });
+      return {
+        format: 'pdf' as const,
+        mimeType: 'application/pdf' as const,
+        data: new Blob([new Uint8Array(20)], { type: 'application/pdf' }),
+        pageCount: 2,
+        warnings: [],
+      };
+    }),
     exportText: vi.fn((_board, options) => {
       calls.push({ name: 'text', options });
       return 'halo';
@@ -207,6 +217,28 @@ describe('BOARD-2413: export lab runs', () => {
     expect(text).toMatchObject({ text: 'halo', fileName: 'kujam-papan.txt', width: null });
     expect(json.text).toBe('{\n  "schemaVersion": 1\n}');
     expect(json.fileName).toBe('kujam-frame-zeta-plan.json');
+  });
+
+  it('exports a PDF of every frame, or of one frame; not of a selection (BOARD-1705)', async () => {
+    const board = seed();
+    const exporters = fakeExporters();
+    const all = await runLabExport(board, opts({ format: 'pdf', scale: 3 }), exporters);
+    await runLabExport(
+      board,
+      opts({ format: 'pdf', scope: 'frame', frameId: 'frame:a', background: 'transparent' }),
+      exporters,
+    );
+    expect(exporters.calls).toEqual([
+      { name: 'pdf', options: { background: true, scale: 3 } },
+      { name: 'pdf', options: { background: false, scale: 2, frameIds: ['frame:a'] } },
+    ]);
+    expect(all).toMatchObject({ format: 'pdf', pages: 2, fileName: 'kujam-papan.pdf' });
+    expect(all.blob.type).toBe('application/pdf');
+
+    board.select(['note']);
+    await expect(
+      runLabExport(board, opts({ format: 'pdf', scope: 'selection' }), exporters),
+    ).rejects.toThrow(LabScopeError);
   });
 
   it('rejects an empty selection and an unknown frame', async () => {

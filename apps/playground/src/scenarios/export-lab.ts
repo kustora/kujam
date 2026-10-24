@@ -1,9 +1,9 @@
 /**
- * Export lab (BOARD-2413): the board on the left and a live preview of its PNG, SVG, plain text,
- * or JSON export on the right, for the whole board, the selection, or one frame. Scale,
+ * Export lab (BOARD-2413): the board on the left and a live preview of its PNG, SVG, PDF, plain
+ * text, or JSON export on the right, for the whole board, the selection, or one frame. Scale,
  * background, and padding are adjustable, and the result can be downloaded.
  *
- * Query (kept while switching options): `format=png|svg|text|json`, `scope=board|selection|frame`,
+ * Query (kept while switching options): `format=png|svg|pdf|text|json`, `scope=board|selection|frame`,
  * `frame=<id>`, `scale=1..4`, `bg=theme|transparent|#rrggbb`, `padding=<board units>`.
  */
 
@@ -37,6 +37,7 @@ const kitchenSink = Object.values(
 const FORMAT_LABEL: Record<LabFormat, string> = {
   png: 'PNG',
   svg: 'SVG',
+  pdf: 'PDF',
   text: 'Teks',
   json: 'JSON',
 };
@@ -296,7 +297,12 @@ export default defineScenario({
       revoke();
       latest = result;
       downloadButton.disabled = false;
-      const size = result.width !== null ? ` · ${result.width} × ${result.height} px` : '';
+      const size =
+        result.width !== null
+          ? ` · ${result.width} × ${result.height} px`
+          : result.pages !== undefined
+            ? ` · ${result.pages} halaman`
+            : '';
       const usedScale =
         result.scale !== null && result.scale !== options.scale
           ? ` · skala diturunkan ke ${result.scale.toFixed(2)}×`
@@ -335,6 +341,16 @@ export default defineScenario({
           );
         }
         preview.replaceChildren(...children);
+      } else if (result.format === 'pdf') {
+        // The browser's PDF viewer; a sandboxed frame would block it.
+        objectUrl = URL.createObjectURL(result.blob);
+        preview.replaceChildren(
+          h('iframe', {
+            src: objectUrl,
+            title: 'Pratinjau ekspor PDF',
+            style: 'display:block;width:100%;height:100%;min-height:480px;border:0',
+          }),
+        );
       } else {
         preview.replaceChildren(
           h(

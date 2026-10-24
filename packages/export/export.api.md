@@ -93,6 +93,24 @@ export interface ExportJSONOptions {
 }
 
 // @beta
+export function exportPDF(board: Board, options?: ExportPDFOptions): Promise<PdfExportResult>;
+
+// @beta
+export interface ExportPDFOptions {
+    readonly background?: boolean | string;
+    readonly createCanvas?: ExportCanvasFactory;
+    readonly dataTimeout?: number;
+    readonly fetch?: ExportFetch;
+    readonly frameIds?: readonly string[];
+    readonly maxCanvasPixels?: number;
+    readonly maxCanvasSide?: number;
+    readonly pageId?: string;
+    readonly scale?: number;
+    readonly selectableText?: boolean;
+    readonly title?: string;
+}
+
+// @beta
 export function exportPNG(board: Board, options?: ExportPNGOptions): Promise<PngExportResult>;
 
 // @beta
@@ -148,7 +166,7 @@ export interface ExportWarning {
 }
 
 // @beta
-export type ExportWarningCode = 'image-unavailable' | 'image-cors' | 'font-not-embedded' | 'scale-reduced' | 'render-error' | 'raster-unavailable' | 'tainted' | 'html-only' | 'unknown-type' | 'data-unavailable' | 'sanitized';
+export type ExportWarningCode = 'image-unavailable' | 'image-cors' | 'font-not-embedded' | 'scale-reduced' | 'render-error' | 'raster-unavailable' | 'tainted' | 'html-only' | 'unknown-type' | 'data-unavailable' | 'sanitized' | 'text-not-selectable';
 
 // @public
 export class ImportError extends Error {
@@ -185,6 +203,18 @@ export function listExportFormats(board: Board): readonly ExportFormatInfo[];
 
 // @beta
 export const MAX_EXPORT_CANVAS_SIDE = 16384;
+
+// @beta
+export interface PdfExportResult {
+    readonly data: Blob;
+    // (undocumented)
+    readonly format: 'pdf';
+    // (undocumented)
+    readonly mimeType: 'application/pdf';
+    readonly pageCount: number;
+    // (undocumented)
+    readonly warnings: readonly ExportWarning[];
+}
 
 // @beta
 export interface PluginExportResult {
