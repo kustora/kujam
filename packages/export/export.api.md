@@ -16,6 +16,40 @@ export type BuiltInImageFormat = 'png' | 'svg';
 export function createThumbnail(board: Board, options?: ThumbnailOptions): Promise<ThumbnailResult>;
 
 // @beta
+export interface ExcalidrawConversion {
+    readonly document: BoardDocument;
+    readonly idMap: ReadonlyMap<string, string>;
+    readonly unsupported: readonly ExcalidrawUnsupportedElement[];
+}
+
+// @beta
+export interface ExcalidrawImportResult extends ImportResult {
+    // (undocumented)
+    readonly unsupported: readonly ExcalidrawUnsupportedElement[];
+}
+
+// @beta
+export function excalidrawToDocument(input: unknown, options?: ExcalidrawToDocumentOptions): ExcalidrawConversion;
+
+// @beta
+export interface ExcalidrawToDocumentOptions {
+    readonly createId?: () => string;
+    readonly pageId?: string;
+    readonly pageName?: string;
+}
+
+// @beta
+export interface ExcalidrawUnsupportedElement {
+    readonly id: string;
+    // (undocumented)
+    readonly reason: ExcalidrawUnsupportedReason;
+    readonly type: string;
+}
+
+// @beta
+export type ExcalidrawUnsupportedReason = 'unsupported-type' | 'invalid' | 'empty' | 'too-many-points';
+
+// @beta
 export type ExportCanvasFactory = (width: number, height: number) => ExportCanvasTarget | null;
 
 // @beta
@@ -93,6 +127,24 @@ export interface ExportJSONOptions {
 }
 
 // @beta
+export function exportPDF(board: Board, options?: ExportPDFOptions): Promise<PdfExportResult>;
+
+// @beta
+export interface ExportPDFOptions {
+    readonly background?: boolean | string;
+    readonly createCanvas?: ExportCanvasFactory;
+    readonly dataTimeout?: number;
+    readonly fetch?: ExportFetch;
+    readonly frameIds?: readonly string[];
+    readonly maxCanvasPixels?: number;
+    readonly maxCanvasSide?: number;
+    readonly pageId?: string;
+    readonly scale?: number;
+    readonly selectableText?: boolean;
+    readonly title?: string;
+}
+
+// @beta
 export function exportPNG(board: Board, options?: ExportPNGOptions): Promise<PngExportResult>;
 
 // @beta
@@ -148,7 +200,7 @@ export interface ExportWarning {
 }
 
 // @beta
-export type ExportWarningCode = 'image-unavailable' | 'image-cors' | 'font-not-embedded' | 'scale-reduced' | 'render-error' | 'raster-unavailable' | 'tainted' | 'html-only' | 'unknown-type' | 'data-unavailable' | 'sanitized';
+export type ExportWarningCode = 'image-unavailable' | 'image-cors' | 'font-not-embedded' | 'scale-reduced' | 'render-error' | 'raster-unavailable' | 'tainted' | 'html-only' | 'unknown-type' | 'data-unavailable' | 'sanitized' | 'text-not-selectable';
 
 // @public
 export class ImportError extends Error {
@@ -160,6 +212,9 @@ export class ImportError extends Error {
 
 // @public
 export type ImportErrorCode = 'read-only' | 'document-too-new' | 'limit-exceeded' | 'forbidden';
+
+// @beta
+export function importExcalidraw(board: Board, input: unknown, options?: ImportJSONOptions): ExcalidrawImportResult;
 
 // @public
 export function importJSON(board: Board, json: unknown, options?: ImportJSONOptions): ImportResult;
@@ -185,6 +240,18 @@ export function listExportFormats(board: Board): readonly ExportFormatInfo[];
 
 // @beta
 export const MAX_EXPORT_CANVAS_SIDE = 16384;
+
+// @beta
+export interface PdfExportResult {
+    readonly data: Blob;
+    // (undocumented)
+    readonly format: 'pdf';
+    // (undocumented)
+    readonly mimeType: 'application/pdf';
+    readonly pageCount: number;
+    // (undocumented)
+    readonly warnings: readonly ExportWarning[];
+}
 
 // @beta
 export interface PluginExportResult {

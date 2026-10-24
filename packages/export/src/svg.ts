@@ -698,6 +698,26 @@ export async function exportSVG(
   board: Board,
   options: ExportSVGOptions = {},
 ): Promise<SvgExportResult> {
+  const { data, width, height, warnings } = await renderSvg(board, options);
+  return { format: 'svg', mimeType: 'image/svg+xml', data, width, height, warnings };
+}
+
+/**
+ * Runs the SVG export and also returns the node tree, for exports that read the recorded drawing
+ * (the PDF text layer, BOARD-1705).
+ *
+ * @internal
+ */
+export async function renderSvg(
+  board: Board,
+  options: ExportSVGOptions = {},
+): Promise<{
+  data: string;
+  width: number;
+  height: number;
+  root: SvgNode;
+  warnings: ExportWarning[];
+}> {
   const scale = checkScale(options.scale, 'scale', 0.01, 16, 1);
   const rasterScale = checkScale(options.rasterScale, 'rasterScale', 0.25, 8, 2);
   const dataTimeout = checkScale(options.dataTimeout, 'dataTimeout', 0, 600_000, 3000);
@@ -738,7 +758,7 @@ export async function exportSVG(
     fontFaces: options.fontFaces ?? [],
     title: options.title,
   });
-  return { format: 'svg', mimeType: 'image/svg+xml', ...svg, warnings };
+  return { ...svg, warnings };
 }
 
 /** Options of {@link buildSvgDocument}. */
@@ -757,7 +777,7 @@ interface DocumentOptions {
 async function buildSvgDocument(
   run: Run,
   options: DocumentOptions,
-): Promise<{ data: string; width: number; height: number }> {
+): Promise<{ data: string; width: number; height: number; root: SvgNode }> {
   const { board, scene, warnings } = run;
   const fontFamily = board.theme.typography.fontFamily;
   const images = await prepareImages(
@@ -969,5 +989,5 @@ async function buildSvgDocument(
     },
     [...head, ...body],
   );
-  return { data: serializeSvg(root), width, height };
+  return { data: serializeSvg(root), width, height, root };
 }

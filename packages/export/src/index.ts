@@ -14,6 +14,15 @@ export {
   type ImportResult,
 } from './json.js';
 export {
+  excalidrawToDocument,
+  importExcalidraw,
+  type ExcalidrawConversion,
+  type ExcalidrawImportResult,
+  type ExcalidrawToDocumentOptions,
+  type ExcalidrawUnsupportedElement,
+  type ExcalidrawUnsupportedReason,
+} from './excalidraw.js';
+export {
   ExportError,
   type ExportErrorCode,
   type ExportWarning,
@@ -33,6 +42,7 @@ export {
   type ExportPNGOptions,
   type PngExportResult,
 } from './png.js';
+export { exportPDF, type ExportPDFOptions, type PdfExportResult } from './pdf.js';
 export { exportText, type ExportTextOptions } from './text.js';
 export {
   exportImage,

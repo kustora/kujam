@@ -1,0 +1,38 @@
+{
+  "name": "@kujam/app-sketch",
+  "version": "0.1.0",
+  "private": true,
+  "description": "kujam sketch: an Excalidraw-style whiteboard built on @kujam/*, with shareable realtime rooms",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/server/main.ts",
+    "build": "vite build && tsup",
+    "start": "NODE_ENV=production node dist/server/main.js",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.server.json",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@kujam/example-hocuspocus-server": "workspace:*",
+    "better-sqlite3": "^12.6.2"
+  },
+  "devDependencies": {
+    "@hocuspocus/provider": "^4.7.1",
+    "@kujam/core": "workspace:*",
+    "@kujam/export": "workspace:*",
+    "@kujam/renderer": "workspace:*",
+    "@kujam/shapes": "workspace:*",
+    "@kujam/storage-indexeddb": "workspace:*",
+    "@kujam/sync-yjs": "workspace:*",
+    "@kujam/ui": "workspace:*",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.13.5",
+    "@types/ws": "^8.5.14",
+    "tsup": "^8.4.0",
+    "tsx": "^4.19.3",
+    "vite": "^6.2.0",
+    "ws": "^8.18.1",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.24"
+  }
+}

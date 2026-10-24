@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "@kujam/core": "workspace:*",
-    "@kujam/renderer": "workspace:*"
+    "@kujam/renderer": "workspace:*",
+    "pdf-lib": "^1.17.1"
   }
 }

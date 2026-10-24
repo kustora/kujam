@@ -1,5 +1,6 @@
 /**
- * Errors and warnings of the image and text exports (BOARD-1702, BOARD-1703, BOARD-1707).
+ * Errors and warnings of the image, PDF, and text exports (BOARD-1702, BOARD-1703, BOARD-1705,
+ * BOARD-1707).
  */
 
 /**
@@ -55,6 +56,8 @@ export class ExportError extends Error {
  * - `data-unavailable`: external data was not ready (loading, forbidden, not found, or failed); a
  *   placeholder was drawn.
  * - `sanitized`: unsafe parts of a custom element's `export.svg` were removed.
+ * - `text-not-selectable`: some text uses characters the standard PDF font cannot encode; it is
+ *   visible in the page image but left out of the selectable text layer (BOARD-1705).
  *
  * @beta
  */
@@ -69,7 +72,8 @@ export type ExportWarningCode =
   | 'html-only'
   | 'unknown-type'
   | 'data-unavailable'
-  | 'sanitized';
+  | 'sanitized'
+  | 'text-not-selectable';
 
 /**
  * Non-fatal problem found during an export.
