@@ -852,6 +852,14 @@ export function attachInput(
     const state = activePointers.get(e.pointerId);
     if (!state || e.pointerId !== primaryPointerId) return;
 
+    // A mouse moving with no button down was released without a `pointerup` reaching the canvas
+    // (see `onLostPointerCapture`): end the gesture here instead of dragging on.
+    if (state.type === 'mouse' && e.buttons === 0) {
+      clearLongPress();
+      releasePointer(e, toScreen(e.clientX, e.clientY));
+      return;
+    }
+
     // Use coalesced events for higher stroke accuracy when available (ADR-004), and predicted
     // events to draw ahead of the pointer (BOARD-911). Only the last move carries predictions.
     const coalesced = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : null;
@@ -888,13 +896,28 @@ export function attachInput(
     if (ignoredTouches.delete(e.pointerId)) return;
     if (pointerKind(e.pointerType) === 'touch') tapFingerUp(e.pointerId, e.timeStamp, false);
     if (!activePointers.has(e.pointerId)) return;
+    releasePointer(e, toScreen(e.clientX, e.clientY));
+  }
 
-    try {
-      canvas.releasePointerCapture(e.pointerId);
-    } catch {
-      // Ignore
+  /**
+   * A capture lost with no button pressed is a release whose `pointerup` comes late or never: a
+   * macOS trackpad can report a buttonless move before the button goes up, and Chromium then
+   * drops the capture before `pointerup`. Ending the gesture as a cancel would roll back the drag
+   * and the selection box, so it ends as a release at the last position. A capture lost while a
+   * button is still down (taken by another element, canvas removed) still cancels.
+   */
+  function onLostPointerCapture(e: PointerEvent): void {
+    const state = activePointers.get(e.pointerId);
+    if (state && e.buttons === 0 && !twoFinger) {
+      clearLongPress();
+      releasePointer(e, state.lastScreen);
+      return;
     }
+    onPointerCancel(e);
+  }
 
+  /** Ends the gesture of an active pointer as a release at `screen`. */
+  function releasePointer(e: PointerEvent, screen: Point): void {
     if (twoFinger && (e.pointerId === twoFinger.id1 || e.pointerId === twoFinger.id2)) {
       const center = twoFinger.lastCenterScreen;
       dispatch({
@@ -909,6 +932,7 @@ export function attachInput(
       twoFinger = null;
       activePointers.delete(e.pointerId);
       primaryPointerId = null;
+      releaseCapture(e.pointerId);
       releasePan(e.timeStamp);
       e.preventDefault();
       return;
@@ -919,6 +943,8 @@ export function attachInput(
     if (primaryPointerId === e.pointerId) {
       primaryPointerId = null;
     }
+    // Released only now: a `lostpointercapture` fired by the release finds no active pointer.
+    releaseCapture(e.pointerId);
 
     if (!state) return;
     if (state.longPressTriggered) {
@@ -935,7 +961,6 @@ export function attachInput(
       releasePan(e.timeStamp);
     }
 
-    const screen = toScreen(e.clientX, e.clientY);
     const point = board.camera.screenToBoard(screen);
 
     if (state.isTouchEmptyPan) {
@@ -948,6 +973,14 @@ export function attachInput(
     }
 
     e.preventDefault();
+  }
+
+  function releaseCapture(pointerId: number): void {
+    try {
+      canvas.releasePointerCapture(pointerId);
+    } catch {
+      // Browsers or test environments without capture support
+    }
   }
 
   function onPointerCancel(e: PointerEvent): void {
@@ -1149,7 +1182,7 @@ export function attachInput(
   canvas.addEventListener('pointerup', onPointerUp);
   canvas.addEventListener('pointercancel', onPointerCancel);
   canvas.addEventListener('pointerleave', onPointerLeave);
-  canvas.addEventListener('lostpointercapture', onPointerCancel as EventListener);
+  canvas.addEventListener('lostpointercapture', onLostPointerCapture as EventListener);
   canvas.addEventListener('contextmenu', onContextMenu);
 
   root.addEventListener('wheel', onWheel, { passive: false });
@@ -1169,7 +1202,7 @@ export function attachInput(
     canvas.removeEventListener('pointerup', onPointerUp);
     canvas.removeEventListener('pointercancel', onPointerCancel);
     canvas.removeEventListener('pointerleave', onPointerLeave);
-    canvas.removeEventListener('lostpointercapture', onPointerCancel as EventListener);
+    canvas.removeEventListener('lostpointercapture', onLostPointerCapture as EventListener);
     canvas.removeEventListener('contextmenu', onContextMenu);
 
     root.removeEventListener('wheel', onWheel);
