@@ -203,6 +203,33 @@ describe('line tool (BOARD-1106)', () => {
     expect(board.tool).toBe('select');
   });
 
+  it('switching tools finishes the unfinished line as one undo step', () => {
+    const board = setup();
+    board.setTool('line');
+    click(board, { x: 0, y: 0 });
+    click(board, { x: 40, y: 0 });
+    click(board, { x: 40, y: 30 });
+    board.setTool('select');
+
+    const [line] = lines(board);
+    expect(line && lineWorldPoints(line)).toEqual([
+      { x: 0, y: 0 },
+      { x: 40, y: 0 },
+      { x: 40, y: 30 },
+    ]);
+    expect(board.selection).toEqual([line!.id]);
+    board.undo();
+    expect(lines(board)).toHaveLength(0);
+  });
+
+  it('switching tools after a single point creates nothing', () => {
+    const board = setup();
+    board.setTool('line');
+    click(board, { x: 0, y: 0 });
+    board.setTool('draw');
+    expect(lines(board)).toHaveLength(0);
+  });
+
   it('creates nothing on a read-only board', () => {
     const board = setup();
     board.setTool('line');

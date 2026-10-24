@@ -13,8 +13,10 @@
  *   commits it as a single undo step, while `cancel` rolls it back.
  * - A `cancel` transition exists in every state without being written: triggered by the primary pointer's
  *   `pointer-cancel`, Esc, `ctx.cancel()`, switching tools, undo, or a throwing handler.
- * - Esc while the tool is in its initial state returns to the default tool. A `oneShot` tool returns to the default tool
- *   after one interaction finishes.
+ * - Esc while the tool is in its initial state returns to the default tool and drops the tool's data. A `oneShot`
+ *   tool returns to the default tool after one interaction finishes.
+ * - Switching tools any other way lets the initial state's `onExit` keep unfinished work (a line being placed) with
+ *   `ctx.change`; that change is committed as its own undo step.
  * - Holding Space temporarily activates the `hand` tool (when registered), then switches back on release.
  */
 
@@ -492,6 +494,8 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
   }
 
   let active: Active | null = null;
+  /** Tool whose `onExit` runs after it was switched away from; it may still save changes. */
+  let exiting: Active | null = null;
   /** Tool restored when Space is released, or `null` when the hand tool is not temporary. */
   let springFrom: string | null = null;
   /** Tool restored when stylus eraser interaction finishes, or `null`. */
@@ -536,7 +540,9 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
           a.data = value;
         },
         change(fn, changeOptions) {
-          if (active !== a) throw new Error(`Tool "${definition.id}" sudah tidak aktif.`);
+          if (active !== a && exiting !== a) {
+            throw new Error(`Tool "${definition.id}" sudah tidak aktif.`);
+          }
           interaction.change(fn, changeOptions?.label);
         },
         commit() {
@@ -648,7 +654,14 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
       cancelActive();
       if (active === current) {
         active = null;
-        call(current, 'onExit');
+        exiting = current;
+        try {
+          call(current, 'onExit');
+          if (interaction.active) interaction.commit(current.definition.id);
+        } finally {
+          exiting = null;
+          if (interaction.active) interaction.discard();
+        }
       }
     }
     if (next) {
@@ -686,6 +699,8 @@ export function createToolRuntime(options: ToolRuntimeOptions): ToolRuntime {
     if (cancelActive()) return true;
     if (active.definition.id !== defaultTool && byId.has(defaultTool)) {
       springFrom = null;
+      // Esc drops unfinished work kept in the tool's data instead of letting `onExit` save it.
+      active.data = makeData(active.definition);
       switchTo(defaultTool);
       return true;
     }
