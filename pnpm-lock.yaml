@@ -157,6 +157,67 @@ importers:
         specifier: ^6.2.0
         version: 6.4.4(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.15)
 
+  apps/sketch:
+    dependencies:
+      '@kujam/example-hocuspocus-server':
+        specifier: workspace:*
+        version: link:../../examples/hocuspocus-server
+      better-sqlite3:
+        specifier: ^12.6.2
+        version: 12.11.1
+    devDependencies:
+      '@hocuspocus/provider':
+        specifier: ^4.7.1
+        version: 4.7.1(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33)
+      '@kujam/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@kujam/export':
+        specifier: workspace:*
+        version: link:../../packages/export
+      '@kujam/renderer':
+        specifier: workspace:*
+        version: link:../../packages/renderer
+      '@kujam/shapes':
+        specifier: workspace:*
+        version: link:../../packages/shapes
+      '@kujam/storage-indexeddb':
+        specifier: workspace:*
+        version: link:../../packages/storage-indexeddb
+      '@kujam/sync-yjs':
+        specifier: workspace:*
+        version: link:../../packages/sync-yjs
+      '@kujam/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      '@types/better-sqlite3':
+        specifier: ^7.6.12
+        version: 7.6.13
+      '@types/node':
+        specifier: ^22.13.5
+        version: 22.20.5
+      '@types/ws':
+        specifier: ^8.5.14
+        version: 8.18.2
+      tsup:
+        specifier: ^8.4.0
+        version: 8.5.1(@microsoft/api-extractor@7.59.4(@types/node@22.20.5))(@swc/core@1.16.20(@swc/helpers@0.5.23))(jiti@2.7.0)(postcss@8.5.30)(tsx@4.23.15)(typescript@6.0.3)
+      tsx:
+        specifier: ^4.19.3
+        version: 4.23.15
+      vite:
+        specifier: ^6.2.0
+        version: 6.4.4(@types/node@22.20.5)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.15)
+      ws:
+        specifier: ^8.18.1
+        version: 8.22.0
+      y-protocols:
+        specifier: ^1.0.6
+        version: 1.0.7(yjs@13.6.33)
+      yjs:
+        specifier: ^13.6.24
+        version: 13.6.33
+
   examples/contact-card:
     dependencies:
       '@kujam/core':
@@ -4474,7 +4535,7 @@ snapshots:
 
   '@types/better-sqlite3@7.6.13':
     dependencies:
-      '@types/node': 22.20.5
+      '@types/node': 24.19.2
 
   '@types/chai@5.2.3':
     dependencies:
@@ -4513,7 +4574,7 @@ snapshots:
 
   '@types/ws@8.18.2':
     dependencies:
-      '@types/node': 22.20.5
+      '@types/node': 24.19.2
 
   '@typescript-eslint/eslint-plugin@8.71.2(@typescript-eslint/parser@8.71.2(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)':
     dependencies:

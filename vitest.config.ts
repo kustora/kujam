@@ -60,6 +60,14 @@ export default defineConfig({
       },
       {
         test: {
+          name: 'sketch',
+          include: ['apps/sketch/src/**/*.test.ts'],
+          environment: 'node',
+          testTimeout: 20_000,
+        },
+      },
+      {
+        test: {
           name: 'examples',
           include: ['examples/*/src/**/*.test.ts'],
           environment: 'node',

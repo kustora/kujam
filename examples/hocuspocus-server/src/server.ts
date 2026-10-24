@@ -13,7 +13,7 @@
  * @packageDocumentation
  */
 
-import { Server, type onChangePayload } from '@hocuspocus/server';
+import { Server, type Extension, type onChangePayload } from '@hocuspocus/server';
 import {
   type DocumentPropsValidator,
   type ValidateDocumentOptions,
@@ -93,6 +93,12 @@ export interface CollaborationServerOptions {
    * garbage-collected `Y.Doc` on every store. `0` (default) turns the periodic job off.
    */
   compactIntervalMs?: number;
+
+  /**
+   * Extra Hocuspocus extensions, for example an `onRequest` hook that serves an HTTP API next to
+   * the WebSocket endpoint. They run after the built-in hooks of this server.
+   */
+  extensions?: Extension[];
 
   /**
    * Suppress console startup banners and logs.
@@ -183,6 +189,7 @@ export function createCollaborationServer(
     port: activePort,
     debounce: options.debounceMs ?? 2000,
     quiet: options.quiet ?? false,
+    extensions: options.extensions ?? [],
 
     /**
      * Authentication Hook:
