@@ -3,8 +3,9 @@
  *
  * - Each click adds a point; pressing, dragging, and releasing adds the release point too, so a
  *   single drag draws a two-point line.
- * - Double click or Enter finishes the line and selects it (lines need at least 2 points).
- *   Backspace or Delete removes the last placed point. Esc drops the unfinished line.
+ * - Double click or Enter finishes the line and selects it (lines need at least 2 points), and so
+ *   does switching to another tool. Backspace or Delete removes the last placed point. Esc drops
+ *   the unfinished line.
  * - Shift snaps the next segment to 45 degree steps.
  * - While placing, `ctx.data.connectorPreview` holds the placed points plus the pointer, drawn by
  *   the renderer overlay like a connector preview.
@@ -246,6 +247,8 @@ export const lineTool = defineTool<LineToolState, LineToolData>({
         }
         return false;
       },
+      // Switching tools (toolbar, shortcut) keeps the line placed so far; Esc clears it first.
+      onExit: finish,
       onWheel: (ctx, e) => handleWheel(ctx.board, e),
       onPinch: (ctx, e) => handlePinch(ctx.board, e),
     },
