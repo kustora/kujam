@@ -12,10 +12,14 @@ export interface ImportResult {
   readonly errors?: string[];
   /** Non-fatal notes, such as Excalidraw elements that were left out. */
   readonly warnings?: string[];
+  /** Number of elements added, for Excalidraw imports. */
+  readonly imported?: number;
 }
 
-/** File extensions and MIME types the picker and drop target accept. */
-const ACCEPTED_FILES = '.json,.excalidraw,application/json';
+/** File extensions and MIME types of the document picker. */
+const JSON_FILES = '.json,application/json';
+/** Excalidraw files are JSON too; some systems report them as `application/json`. */
+const EXCALIDRAW_FILES = '.excalidraw,application/json';
 
 function isAcceptedFile(file: File): boolean {
   return (
@@ -40,11 +44,29 @@ function importExcalidrawFile(board: Board, parsed: unknown): ImportResult {
     );
     for (const item of result.rejected)
       warnings.push(`Record "${item.id}" ditolak: ${item.errors.join('; ')}`);
-    return { success: true, warnings };
+    return { success: true, warnings, imported: result.ids.length };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { success: false, errors: [`Gagal mengimpor berkas Excalidraw: ${message}`] };
   }
+}
+
+/**
+ * Imports Excalidraw JSON text into the current page of the board (BOARD-1706), as one undo step.
+ * Unlike {@link importDocumentFromJson}, the board content is kept.
+ */
+export function importExcalidrawFromText(board: Board, text: string): ImportResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { success: false, errors: [`Format file bukan JSON yang valid: ${message}`] };
+  }
+  if (!isExcalidraw(parsed)) {
+    return { success: false, errors: ['Berkas bukan berkas Excalidraw (.excalidraw).'] };
+  }
+  return importExcalidrawFile(board, parsed);
 }
 
 /**
@@ -102,19 +124,20 @@ export function importDocumentFromJson(board: Board, jsonString: string): Import
   return { success: true };
 }
 
-/**
- * Opens a native file picker to select a JSON document and load it into the board.
- */
-export function openDocumentFromFilePicker(
-  board: Board,
-  callbacks?: {
-    onSuccess?: (warnings?: readonly string[]) => void;
-    onError?: (errors: string[]) => void;
-  },
+interface ImportCallbacks {
+  onSuccess?: (result: ImportResult) => void;
+  onError?: (errors: string[]) => void;
+}
+
+/** Opens a native file picker and passes the chosen file's text to `load`. */
+function pickFile(
+  accept: string,
+  load: (text: string) => ImportResult,
+  callbacks: ImportCallbacks | undefined,
 ): void {
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = ACCEPTED_FILES;
+  input.accept = accept;
   input.style.display = 'none';
 
   input.onchange = async () => {
@@ -122,10 +145,9 @@ export function openDocumentFromFilePicker(
     if (!file) return;
 
     try {
-      const text = await file.text();
-      const result = importDocumentFromJson(board, text);
+      const result = load(await file.text());
       if (result.success) {
-        callbacks?.onSuccess?.(result.warnings);
+        callbacks?.onSuccess?.(result);
       } else {
         callbacks?.onError?.(result.errors ?? ['Gagal memvalidasi dokumen.']);
       }
@@ -142,15 +164,26 @@ export function openDocumentFromFilePicker(
 }
 
 /**
+ * Opens a native file picker to select a JSON document and load it into the board.
+ */
+export function openDocumentFromFilePicker(board: Board, callbacks?: ImportCallbacks): void {
+  pickFile(JSON_FILES, (text) => importDocumentFromJson(board, text), callbacks);
+}
+
+/**
+ * Opens a native file picker to select an Excalidraw file and add it to the current page.
+ */
+export function openExcalidrawFromFilePicker(board: Board, callbacks?: ImportCallbacks): void {
+  pickFile(EXCALIDRAW_FILES, (text) => importExcalidrawFromText(board, text), callbacks);
+}
+
+/**
  * Attaches drag-and-drop listener to the stage element to import dropped JSON documents.
  */
 export function attachDragAndDropImport(
   stage: HTMLElement,
   getBoard: () => Board,
-  callbacks?: {
-    onSuccess?: (warnings?: readonly string[]) => void;
-    onError?: (errors: string[]) => void;
-  },
+  callbacks?: ImportCallbacks,
 ): () => void {
   let dragCounter = 0;
 
@@ -196,7 +229,7 @@ export function attachDragAndDropImport(
       const text = await file.text();
       const result = importDocumentFromJson(getBoard(), text);
       if (result.success) {
-        callbacks?.onSuccess?.(result.warnings);
+        callbacks?.onSuccess?.(result);
       } else {
         callbacks?.onError?.(result.errors ?? ['Dokumen JSON tidak lolos validasi.']);
       }
@@ -220,17 +253,14 @@ export function attachDragAndDropImport(
   };
 }
 
+const TIP = 'Tip: Anda juga dapat menjatuhkan berkas .json atau .excalidraw langsung ke kanvas.';
+
 /**
  * Creates File I/O control buttons with localized UI labels.
  */
-const TIP = 'Tip: Anda juga dapat menjatuhkan berkas .json atau .excalidraw langsung ke kanvas.';
-
 export function createFileIoControls(
   getBoard: () => Board,
-  callbacks?: {
-    onSuccess?: (warnings?: readonly string[]) => void;
-    onError?: (errors: string[]) => void;
-  },
+  callbacks?: ImportCallbacks,
 ): HTMLElement {
   const statusNotice = h(
     'div',
@@ -241,33 +271,62 @@ export function createFileIoControls(
     TIP,
   );
 
+  function notify(text: string, color: string): void {
+    statusNotice.textContent = text;
+    statusNotice.style.color = color;
+  }
+
+  function resetLater(): void {
+    setTimeout(() => notify(TIP, ''), 3000);
+  }
+
+  const onError = (errors: string[]): void => {
+    notify(`❌ ${errors[0]}`, 'var(--error)');
+    callbacks?.onError?.(errors);
+  };
+
   const importBtn = h(
     'button',
     {
       type: 'button',
       onclick: () => {
         openDocumentFromFilePicker(getBoard(), {
-          onSuccess: (warnings) => {
-            statusNotice.textContent = warnings?.length
-              ? `✅ Dokumen diimpor; ${warnings.length} elemen dilewati (lihat konsol).`
-              : '✅ Dokumen berhasil diimpor!';
-            statusNotice.style.color = 'var(--ok)';
-            if (warnings?.length) console.warn('[kujam] Impor:', warnings);
-            callbacks?.onSuccess?.(warnings);
-            setTimeout(() => {
-              statusNotice.textContent = TIP;
-              statusNotice.style.color = '';
-            }, 3000);
+          onSuccess: (result) => {
+            notify('✅ Dokumen berhasil diimpor!', 'var(--ok)');
+            callbacks?.onSuccess?.(result);
+            resetLater();
           },
-          onError: (errors) => {
-            statusNotice.textContent = `❌ ${errors[0]}`;
-            statusNotice.style.color = 'var(--error)';
-            callbacks?.onError?.(errors);
-          },
+          onError,
         });
       },
     },
-    '📥 Impor Dokumen (.json, .excalidraw)',
+    '📥 Impor Dokumen (.json)',
+  );
+
+  const excalidrawBtn = h(
+    'button',
+    {
+      type: 'button',
+      dataset: { testid: 'import-excalidraw' },
+      title: 'Menambahkan isi berkas Excalidraw ke halaman aktif (satu langkah undo).',
+      onclick: () => {
+        openExcalidrawFromFilePicker(getBoard(), {
+          onSuccess: (result) => {
+            const skipped = result.warnings?.length ?? 0;
+            notify(
+              `✅ ${result.imported ?? 0} elemen Excalidraw diimpor` +
+                (skipped > 0 ? `; ${skipped} dilewati (lihat konsol).` : '.'),
+              'var(--ok)',
+            );
+            if (skipped > 0) console.warn('[kujam] Impor Excalidraw:', result.warnings);
+            callbacks?.onSuccess?.(result);
+            resetLater();
+          },
+          onError,
+        });
+      },
+    },
+    '🧩 Impor Excalidraw (.excalidraw)',
   );
 
   const exportBtn = h(
@@ -276,12 +335,8 @@ export function createFileIoControls(
       type: 'button',
       onclick: () => {
         exportDocumentToJson(getBoard());
-        statusNotice.textContent = '✅ Dokumen berhasil diekspor!';
-        statusNotice.style.color = 'var(--ok)';
-        setTimeout(() => {
-          statusNotice.textContent = TIP;
-          statusNotice.style.color = '';
-        }, 3000);
+        notify('✅ Dokumen berhasil diekspor!', 'var(--ok)');
+        resetLater();
       },
     },
     '📤 Ekspor Dokumen (.json)',
@@ -290,7 +345,7 @@ export function createFileIoControls(
   return h(
     'div',
     { class: 'column' },
-    h('div', { class: 'row wrap' }, importBtn, exportBtn),
+    h('div', { class: 'row wrap' }, importBtn, excalidrawBtn, exportBtn),
     statusNotice,
   );
 }
