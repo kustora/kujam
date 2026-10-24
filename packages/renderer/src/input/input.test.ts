@@ -433,6 +433,114 @@ describe('BOARD-806: Multi-Pointer & Two-Finger Gestures (ADR-004)', () => {
   });
 });
 
+describe('Release without a pointerup (macOS trackpad)', () => {
+  function press(canvas: HTMLCanvasElement): void {
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        pointerId: 1,
+        pointerType: 'mouse',
+        clientX: 40,
+        clientY: 40,
+        buttons: 1,
+      }),
+    );
+    canvas.dispatchEvent(
+      new PointerEvent('pointermove', {
+        pointerId: 1,
+        pointerType: 'mouse',
+        clientX: 120,
+        clientY: 90,
+        buttons: 1,
+      }),
+    );
+    dispatchedEvents.length = 0;
+  }
+
+  it('ends the gesture as a release at the last position when the capture is lost with no button down', () => {
+    const { view } = setup();
+    const canvas = view.layers.canvas;
+    press(canvas);
+
+    canvas.dispatchEvent(
+      new PointerEvent('lostpointercapture', { pointerId: 1, pointerType: 'mouse', buttons: 0 }),
+    );
+    // The late `pointerup` belongs to a gesture that already ended.
+    canvas.dispatchEvent(
+      new PointerEvent('pointerup', {
+        pointerId: 1,
+        pointerType: 'mouse',
+        clientX: 130,
+        clientY: 95,
+        buttons: 0,
+      }),
+    );
+
+    expect(dispatchedEvents.map((e) => e.type)).toEqual(['pointer-up']);
+    expect(dispatchedEvents[0]).toMatchObject({ screen: { x: 120, y: 90 } });
+  });
+
+  it('still cancels when the capture is lost while a button is down', () => {
+    const { view } = setup();
+    const canvas = view.layers.canvas;
+    press(canvas);
+
+    canvas.dispatchEvent(
+      new PointerEvent('lostpointercapture', { pointerId: 1, pointerType: 'mouse', buttons: 1 }),
+    );
+
+    expect(dispatchedEvents.map((e) => e.type)).toEqual(['pointer-cancel']);
+  });
+
+  it('ends the gesture as a release when the mouse moves with no button down', () => {
+    const { view } = setup();
+    const canvas = view.layers.canvas;
+    press(canvas);
+
+    canvas.dispatchEvent(
+      new PointerEvent('pointermove', {
+        pointerId: 1,
+        pointerType: 'mouse',
+        clientX: 125,
+        clientY: 92,
+        buttons: 0,
+      }),
+    );
+    canvas.dispatchEvent(
+      new PointerEvent('pointerup', {
+        pointerId: 1,
+        pointerType: 'mouse',
+        clientX: 125,
+        clientY: 92,
+        buttons: 0,
+      }),
+    );
+
+    expect(dispatchedEvents.map((e) => e.type)).toEqual(['pointer-up']);
+    expect(dispatchedEvents[0]).toMatchObject({ screen: { x: 125, y: 92 } });
+  });
+
+  it('does not cancel a released gesture when the capture is lost after the pointerup', () => {
+    const { view } = setup();
+    const canvas = view.layers.canvas;
+    press(canvas);
+
+    canvas.dispatchEvent(
+      new PointerEvent('pointerup', {
+        pointerId: 1,
+        pointerType: 'mouse',
+        clientX: 120,
+        clientY: 90,
+        buttons: 0,
+      }),
+    );
+    canvas.dispatchEvent(
+      new PointerEvent('lostpointercapture', { pointerId: 1, pointerType: 'mouse', buttons: 0 }),
+    );
+
+    expect(dispatchedEvents.map((e) => e.type)).toEqual(['pointer-up']);
+  });
+});
+
 describe('BOARD-806: Wheel and Safari Gesture Events', () => {
   it('dispatches wheel event with delta and modifiers', () => {
     const { view } = setup();
