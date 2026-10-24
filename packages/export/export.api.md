@@ -16,6 +16,40 @@ export type BuiltInImageFormat = 'png' | 'svg';
 export function createThumbnail(board: Board, options?: ThumbnailOptions): Promise<ThumbnailResult>;
 
 // @beta
+export interface ExcalidrawConversion {
+    readonly document: BoardDocument;
+    readonly idMap: ReadonlyMap<string, string>;
+    readonly unsupported: readonly ExcalidrawUnsupportedElement[];
+}
+
+// @beta
+export interface ExcalidrawImportResult extends ImportResult {
+    // (undocumented)
+    readonly unsupported: readonly ExcalidrawUnsupportedElement[];
+}
+
+// @beta
+export function excalidrawToDocument(input: unknown, options?: ExcalidrawToDocumentOptions): ExcalidrawConversion;
+
+// @beta
+export interface ExcalidrawToDocumentOptions {
+    readonly createId?: () => string;
+    readonly pageId?: string;
+    readonly pageName?: string;
+}
+
+// @beta
+export interface ExcalidrawUnsupportedElement {
+    readonly id: string;
+    // (undocumented)
+    readonly reason: ExcalidrawUnsupportedReason;
+    readonly type: string;
+}
+
+// @beta
+export type ExcalidrawUnsupportedReason = 'unsupported-type' | 'invalid' | 'empty' | 'too-many-points';
+
+// @beta
 export type ExportCanvasFactory = (width: number, height: number) => ExportCanvasTarget | null;
 
 // @beta
@@ -160,6 +194,9 @@ export class ImportError extends Error {
 
 // @public
 export type ImportErrorCode = 'read-only' | 'document-too-new' | 'limit-exceeded' | 'forbidden';
+
+// @beta
+export function importExcalidraw(board: Board, input: unknown, options?: ImportJSONOptions): ExcalidrawImportResult;
 
 // @public
 export function importJSON(board: Board, json: unknown, options?: ImportJSONOptions): ImportResult;

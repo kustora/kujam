@@ -14,6 +14,15 @@ export {
   type ImportResult,
 } from './json.js';
 export {
+  excalidrawToDocument,
+  importExcalidraw,
+  type ExcalidrawConversion,
+  type ExcalidrawImportResult,
+  type ExcalidrawToDocumentOptions,
+  type ExcalidrawUnsupportedElement,
+  type ExcalidrawUnsupportedReason,
+} from './excalidraw.js';
+export {
   ExportError,
   type ExportErrorCode,
   type ExportWarning,
