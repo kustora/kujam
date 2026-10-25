@@ -1,6 +1,6 @@
 {
   "name": "@kujam/example-contact-card",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Contoh elemen kustom generik \"kartu kontak\" dengan resolver dari API palsu yang bisa lambat, gagal, atau forbidden (BOARD-1207)",
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "@kujam/react",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Adapter komponen <Board> dan hooks reaktif React untuk @kujam/core",
   "license": "Apache-2.0",
   "repository": {

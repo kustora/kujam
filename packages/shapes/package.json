@@ -1,6 +1,6 @@
 {
   "name": "@kujam/shapes",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Elemen dan tool bawaan untuk @kujam/core (sticky, coretan, teks, geometri, konektor, frame, gambar, grup)",
   "license": "Apache-2.0",
   "repository": {

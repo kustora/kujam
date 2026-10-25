@@ -1,6 +1,6 @@
 {
   "name": "@kujam/server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Utilitas Node.js untuk @kujam/core (validasi dokumen, migrasi, ekstraksi referensi, dan render thumbnail)",
   "license": "Apache-2.0",
   "repository": {

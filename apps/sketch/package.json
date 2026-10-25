@@ -1,6 +1,6 @@
 {
   "name": "@kujam/app-sketch",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "kujam sketch: an Excalidraw-style whiteboard built on @kujam/*, with shareable realtime rooms",
   "license": "Apache-2.0",

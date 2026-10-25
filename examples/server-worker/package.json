@@ -1,6 +1,6 @@
 {
   "name": "@kujam/example-server-worker",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Contoh worker server: membaca state Yjs papan, memvalidasi, mengekstrak referensi dengan diff, dan membuat thumbnail lewat @kujam/server (BOARD-1805)",
   "type": "module",

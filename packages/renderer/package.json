@@ -1,6 +1,6 @@
 {
   "name": "@kujam/renderer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Renderer Canvas 2D, lapisan HTML untuk elemen kustom, dan overlay interaktif untuk @kujam/core",
   "license": "Apache-2.0",
   "repository": {

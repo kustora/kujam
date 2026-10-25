@@ -1,6 +1,6 @@
 {
   "name": "@kujam/example-hocuspocus-server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Contoh server kolaborasi Hocuspocus dengan otorisasi, mode baca-saja, persistensi SQLite, dan validasi dokumen",
   "type": "module",

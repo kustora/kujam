@@ -1,0 +1,169 @@
+# @kujam/sync-yjs
+
+## 0.2.0
+
+### Minor Changes
+
+- 796a735: Validasi data dari peer dan update Yjs yang tidak tepercaya (BOARD-2004).
+
+  - Record dari peer kini divalidasi dengan aturan yang sama seperti `loadDocument`: struktur lengkap, props terhadap skema tipe terdaftar di `board.elements`, dan batas titik coretan `board.limits.maxDrawPoints`. Record tidak valid dibuang dan dilaporkan sebagai `invalid-record` (dengan daftar masalah di `cause.errors`); papan mempertahankan nilai valid terakhir. Record yang disimpan di kunci yang berbeda dari `id`-nya juga ditolak.
+  - Elemen baru dari peer yang melebihi `board.limits.maxElements` dibuang dan dilaporkan sebagai `limit-exceeded`; pembaruan elemen yang sudah ada tetap diterapkan.
+  - Satu record yang ditolak store tidak lagi membatalkan seluruh update remote.
+  - `updateToYDoc` dan `updateToDocument`: opsi `maxUpdateBytes` (bawaan 10 MB) diperiksa sebelum decoding, dan update rusak ditolak dengan `InvalidUpdateError` (error Yjs asli di `cause`). `updateToDocument` juga menolak hasil yang melebihi `limits.maxElements` atau `limits.maxDocumentBytes` dengan `InvalidDocumentError`.
+  - `yDocToDocument` dan `updateToDocument` menerima opsi `registry` dan `limits`; bila diberikan, record yang gagal `validateBoardRecord` dibuang.
+
+### Patch Changes
+
+- 2b2f16a: Anchor komentar, snapshot versi, dan pengendalian ukuran dokumen Yjs (BOARD-1211, BOARD-1511, BOARD-1515):
+
+  - `@kujam/core` (BOARD-1211): Tipe `Anchor` (`{ kind: 'point', x, y, pageId? }` atau `{ kind: 'element', elementId, offset }`) dan API `board.anchors`: `resolve`, `toScreen`, `fromPoint`, `forElement`, `track`/`untrack`/`get`/`list`, serta mode "tempatkan anchor" `place()` (satu klik di papan mengembalikan anchor, Esc/ganti tool membatalkan, tool sebelumnya dipulihkan, juga berjalan di papan baca saja). Event `anchor` (`move`, `remove`, `restore`) untuk anchor yang dilacak saat elemennya berpindah, dihapus, atau kembali (lokal, remote, undo, `loadDocument`). Helper `isAnchor` dan konstanta `ANCHOR_PLACE_TOOL_ID`. Package tetap tidak membuat sistem komentar.
+  - `@kujam/renderer` (BOARD-1211): Lapisan slot `layers.anchors` di atas overlay dan `view.mountAnchor(element, anchor)` untuk pin aplikasi yang ikut kamera dan elemen, tetap berukuran layar, serta tersembunyi saat elemennya hilang atau berada di halaman lain.
+  - `@kujam/sync-yjs` (BOARD-1511): `adapter.encodeSnapshot()`, `adapter.previewSnapshot(bytes)` (pratinjau baca saja tanpa memulihkan), dan `adapter.restoreSnapshot(bytes)` yang memulihkan papan sebagai satu perubahan lokal baru: tersinkron ke semua peer, satu langkah undo, tidak menghapus riwayat orang lain, dan ditolak pada klien baca saja. Helper mandiri `encodeSnapshot` dan `decodeSnapshot`.
+  - `@kujam/sync-yjs` (BOARD-1515): `compactUpdate(updates)` memadatkan log update Yjs dengan encode ulang state pada `Y.Doc` ber-GC tanpa mengubah identitas CRDT. Dokumentasi garbage collection dan pemadatan berkala di server contoh, plus benchmark 10.000 operasi edit.
+
+- d50bfa6: Implementasi camera.follow(userId) dengan animasi transisi halus dan auto-unfollow (BOARD-1506):
+  - `@kujam/core`:
+    - Menambahkan method `camera.follow(userId, options?)` dan `camera.unfollow()` serta properti `camera.following: string | null`.
+    - Pelacakan kamera kolaborator yang berpusat pada layar (_center-compensated viewport tracking_) yang menyelaraskan titik tengah papan secara akurat lintas ukuran layar/resolusi perangkat yang berbeda.
+    - Dukungan transisi perpindahan halus (_smooth camera transition animation_) dengan opsi `animate` dan opsi penyamaan zoom `syncZoom`.
+    - Otomatis berhenti mengikuti (_auto-unfollow_) saat pengguna lokal melakukan interaksi manual (pan, zoom, fit) atau saat peer terputus/keluar.
+    - Memancarkan event `'camera-follow'` dan `'follow'` (`CameraFollowEvent`) saat status target follow berubah.
+  - `@kujam/sync-yjs`:
+    - Menyertakan dimensi viewport pada state kamera ephemeral awareness sehingga adapter follower dapat mengompensasi perbedaan rasio dan resolusi layar secara presisi.
+- 1a1cffd: Offline Singkat dengan y-indexeddb (BOARD-1508):
+  - `BOARD-1508`: Dukungan persistensi IndexedDB browser berbasis `y-indexeddb` (`IndexeddbPersistence`).
+    - Pembaruan dokumen selama offline disimpan secara lokal di IndexedDB dan disinkronkan otomatis saat koneksi pulih via CRDT Yjs.
+    - Memuat ulang tab browser memulihkan state dokumen secara instan tanpa menunggu koneksi remote.
+    - Opsi konfigurasi `indexeddb?: boolean | YjsIndexedDbOptions` (aktif secara default jika browser mendukung IndexedDB, dinonaktifkan di Node/SSR atau saat `indexeddb: false`).
+    - Interface callable dan thenable `whenLoaded` (`await adapter.whenLoaded` atau `await adapter.whenLoaded()`) untuk menunggu pemulihan data lokal.
+    - Siklus status (`offline` -> `connecting` -> `synced`) dengan pelacakan perubahan tertunda (`pendingUpdates`).
+    - Hook opsional `isOnlineRequired(action)` untuk memvalidasi aksi yang memerlukan jaringan.
+    - Teardown bersih saat disconnect (`persistence.destroy()`) dan dukungan rekoneksi bersih.
+- 99e743c: Open source di bawah lisensi Apache-2.0: setiap package menyertakan `LICENSE` dan `NOTICE` di tarball npm, serta `license`, `repository`, `homepage`, dan `bugs` di `package.json`. Package dipublikasikan dengan akses publik. Komentar JSDoc tema dan warna tidak lagi merujuk dokumen design system internal; nilai token tidak berubah.
+- 0643637: State presence dari peer kini divalidasi sebelum dipakai (BOARD-2009, ADR-009 T2). `sanitizePresenceState` memeriksa setiap field: nama dipotong menjadi 64 karakter tanpa karakter kontrol atau bidi, warna harus hex, koordinat kursor dan kamera harus berhingga, seleksi maksimal 1.000 ID, coretan live maksimal 5.000 titik, dan avatar harus URL yang aman. Field tidak valid diabaikan satu per satu tanpa menyembunyikan peer, dan metadata tambahan dipertahankan hanya bila berupa nilai primitif kecil. Batasnya bisa diatur lewat `presenceLimits` di `createYjsSyncAdapter` (atau `limits` di `createYjsPresence`). Ekspor baru: `sanitizePresenceState`, `DEFAULT_PRESENCE_LIMITS`, `PresenceLimits`.
+- 32fe211: Implementasi Goresan Live Lewat Awareness (BOARD-1505):
+  - `BOARD-1505`: Streaming titik goresan aktif bebas via Yjs Awareness (ephemeral) tanpa mencemari dokumen Y.Doc.
+    - Streaming goresan live dengan throttling ~30 Hz (33ms) dan pengiriman seketika pada sapuan awal (_instant leading-edge flush_).
+    - Satu kali commit permanen ke Y.Doc saat goresan selesai (`pointerUp`) dan pembersihan seketika dari awareness (`setLiveStroke(null)`).
+    - Alokasi ID elemen di muka (`data.elementId` pada `DrawTool`) dan helper `getLiveStrokes` dengan eliminasi duplikasi visual saat elemen permanen tiba di store remote (_zero-flicker deduplication_).
+    - Pembersihan seketika saat pembatalan sapuan (tombol Escape).
+- fcc4ef9: Implementasi Realtime Collaboration Foundation (Epic BOARD-E15: BOARD-1501 & BOARD-1502):
+  - `BOARD-1501`: Antarmuka sinkronisasi dan kolaborasi terpadu di `@kujam/core`.
+    - Definisi tipe `SyncStatus` ('offline' | 'connecting' | 'synced' | 'error'), `PresenceUser`, `PresencePeerState`, `PresenceApi`, `HistoryApi`, `SyncEventMap`, dan `SyncAdapter`.
+    - Fungsi `attachSync(board, adapter)` yang mengelola siklus hidup adapter, mengarahkan delegasi `board.undo()`, `board.redo()`, `board.history.canUndo`, `board.history.canRedo` ke `adapter.history`, dan mengembalikan `SyncAttachment` dengan `disconnect()`.
+    - Implementasi in-memory sync bus (`createMemorySyncBus`) dan adapter (`createMemorySyncAdapter`) untuk pengujian konvergensi multi-papan tanpa server/backend eksternal. Perubahan remote diterapkan dengan `{ origin: 'remote', label: 'sync.remote' }` yang dilewati oleh undo lokal.
+  - `BOARD-1502`: Binding store ke `Y.Doc` (record sebagai `Y.Map`) di `@kujam/sync-yjs`.
+    - Pemetaan dua arah `BoardRecord` (elemen, page, binding, asset) ke `Y.Map<unknown>` di dalam peta dokumen `records`. Properti elemen `props` disimpan sebagai child `Y.Map` sehingga pembaruan concurrent pada properti berbeda menyatu di tingkat properti.
+    - Penulisan perubahan lokal ke `Y.Doc` dalam satu transaksi atomik per transaksi papan dengan origin klien unik.
+    - Penerimaan pembaruan remote via `observeDeep` dengan pencegahan echo (mengabaikan transaksi dari origin klien sendiri), validasi skema peer, dan penolakan record korup dengan pelaporan event error.
+    - Inisialisasi dokumen kosong vs berpenghuni yang deterministik dan idempoten tanpa duplikasi record saat dibuka bersamaan oleh banyak klien.
+- ed73de0: Implementasi Kolaborasi Teks Realtime dan Presence Awareness (Epic BOARD-E15: BOARD-1503 & BOARD-1504):
+  - `BOARD-1503`: Teks sticky dan teks sebagai `Y.Text` dengan format attributes di `@kujam/sync-yjs` dan `@kujam/shapes`.
+    - Pemetaan properti teks (`props.text` pada sticky/text dan `props.label` pada geo/connector) ke instance `Y.Text` dengan diffing awalan/akhiran karakter (`syncRichTextToYText`) dan sinkronisasi atribut format (tebal, miring, tautan).
+    - Kolaborasi teks realtime: dua pengguna dapat mengetik bersamaan pada catatan sticky atau teks yang sama tanpa saling menimpa karakter.
+    - Editor inline (`attachTextEditor` di `@kujam/shapes`): sinkronisasi langsung input lokal (`mergeKey: edit:<id>`) dan preservasi posisi kursor/caret (`getCaretCharacterOffset` & `setCaretCharacterOffset`) saat pembaruan teks remote tiba.
+  - `BOARD-1504`: Presence lewat awareness (kursor, seleksi, kamera, pengguna) di `@kujam/sync-yjs` dan `@kujam/core`.
+    - Penyebaran state awareness pengguna (`user`), kursor (`cursor` dengan throttling ~30 Hz / 33ms), seleksi elemen (`selection`), kamera (`camera`), dan tool aktif (`tool`).
+    - Event `peer-join`, `peer-leave`, dan `change` untuk pelacakan kolaborator aktif.
+    - Expose `board.presence` di instance `Board` melalui pendelegasian otomatis saat `attachSync`.
+- 500dc1f: Utilitas Konversi Y.Doc ke JSON Dokumen dan Sebaliknya (BOARD-1513):
+  - `BOARD-1513`: Utilitas konversi `documentToYDoc` dan `yDocToDocument`.
+    - Mengonversi `BoardDocument` kanonikal ke `Y.Doc` dengan pemetaan records (`recordsMap`) dan rich text Y.Text yang lengkap serta metadata dokumen (`schemaVersion`, `meta`, `pluginVersions`).
+    - Mengonversi `Y.Doc` kembali menjadi `BoardDocument` valid dengan pembersihan record malformed dan dukungan opsi filter `validateRecord`.
+    - Konversi dua arah _lossless roundtrip_ berakurasi 100%.
+    - Utilitas biner: `documentToUpdate`, `updateToDocument`, `yDocToUpdate`, dan `updateToYDoc` untuk mendukung penyimpanan blob database dan skrip migrasi massal di Node.js.
+- 111e811: Mode Baca Saja per Klien di Sinkronisasi (BOARD-1512):
+  - `BOARD-1512`: Klien mode _read-only_ pada adapter sinkronisasi.
+    - Klien dengan `readOnly: true` (pada `createYjsSyncAdapter` maupun `createMemorySyncAdapter`) menerima seluruh pembaruan dokumen jarak jauh (remote updates) dan menyiarkan presence awareness (posisi kursor, kamera, seleksi).
+    - Mencegah inisialisasi/seeding `recordsMap` kosong pada Y.Doc saat koneksi awal pengguna baca saja.
+    - Memblokir pengiriman perubahan dokumen lokal ke Y.Doc (`recordsMap`) dan menonaktifkan streaming goresan live.
+    - Mengatur `board.setReadOnly(true)` secara otomatis saat adapter terhubung ke papan tulis.
+    - Menyediakan getter `adapter.readOnly` dan metode `adapter.setReadOnly(readOnly: boolean)` untuk mengganti mode secara dinamis saat runtime.
+- 4536acf: Status Koneksi, Backoff Eksponensial, dan Isolasi Error Autentikasi (BOARD-1509):
+  - `BOARD-1509`: Kontrol siklus status koneksi dan event rekoneksi pada adapter sinkronisasi.
+    - Implementasi retry rekoneksi dengan backoff eksponensial (`calculateBackoffDelay` & `ReconnectController`) yang mendukung `initialDelayMs`, `maxDelayMs`, `backoffFactor`, serta random jitter.
+    - Pembedaan event error autentikasi (`SyncAuthError`, status/kode 401/403/4401/4403, `{ reason: 'auth' }`) vs terputusnya jaringan (`{ reason: 'network' }`).
+    - Kegagalan autentikasi memancarkan event `auth-error` dan membatalkan auto-retry untuk mencegah flood request ke server.
+    - Putus jaringan beralih ke status `'connecting'` dan secara otomatis menjadwalkan rekoneksi bertahap.
+    - Menambahkan tipe `SyncErrorDetail` pada `@kujam/core` dan event `'auth-error'` pada `SyncEventMap`.
+- 5f94a1f: Implementasi Undo per orang dengan Yjs UndoManager (BOARD-1507):
+  - `@kujam/sync-yjs`:
+    - Menambahkan modul `createYjsHistory` yang mengimplementasikan `HistoryApi` berbasis `Y.UndoManager`.
+    - Pelacakan origin terbatas pada origin klien sendiri (`trackedOrigins: new Set([clientOrigin])`) sehingga operasi undo/redo kolaborator hanya membalik perubahannya sendiri tanpa membatalkan perubahan kolaborator lain.
+    - Preservasi penggabungan langkah (_coalescing_) berkelanjutan menggunakan `mergeKey` dan `captureTimeout` (1000ms), serta pemisahan langkah yang tepat dengan `stopCapturing()`.
+    - Dukungan pelabelan transaksi pada `undoStack` dan `redoStack`.
+    - Dukungan callback `tx.onUndo` dan `tx.onRedo` (BOARD-303) dengan konteks transaksi saat langkah dibatalkan atau diterapkan ulang.
+    - Pemulihan seleksi elemen (_selection restoration_) setelah undo bila elemen yang terdampak masih ada di dokumen.
+  - `@kujam/core`:
+    - Menambahkan method `tx.onUndo(hook)` dan `tx.onRedo(hook)` pada antarmuka `Transaction`.
+    - Memperluas `HistoryApi` dengan dukungan opsional untuk `batch`, `undoStack`, dan `redoStack`.
+    - Mendelegasikan pemanggilan `board.history.batch()`, `board.history.undoStack`, dan `board.history.redoStack` ke adapter history yang terpasang.
+- Updated dependencies [2b2f16a]
+- Updated dependencies [d50bfa6]
+- Updated dependencies [67cb589]
+- Updated dependencies [6348589]
+- Updated dependencies [c197881]
+- Updated dependencies [903766d]
+- Updated dependencies [0d85a42]
+- Updated dependencies [c49d99c]
+- Updated dependencies [bd12697]
+- Updated dependencies [b51d845]
+- Updated dependencies [5efe9cd]
+- Updated dependencies [5ac555e]
+- Updated dependencies [0106e46]
+- Updated dependencies [e20dbd7]
+- Updated dependencies [3a8d206]
+- Updated dependencies [01285d2]
+- Updated dependencies [51b29c9]
+- Updated dependencies [3a8d206]
+- Updated dependencies [ef8e020]
+- Updated dependencies [7adf898]
+- Updated dependencies [bc07ee4]
+- Updated dependencies [efaf321]
+- Updated dependencies [e95a3cd]
+- Updated dependencies [a83b660]
+- Updated dependencies [0b11ca5]
+- Updated dependencies [f927d7a]
+- Updated dependencies [b73f4a4]
+- Updated dependencies [b3442b8]
+- Updated dependencies [2eb9463]
+- Updated dependencies [4266b56]
+- Updated dependencies [ee9a96c]
+- Updated dependencies [f43f589]
+- Updated dependencies [ca67ac1]
+- Updated dependencies [f44ed04]
+- Updated dependencies [38bbf01]
+- Updated dependencies [796a735]
+- Updated dependencies [9628238]
+- Updated dependencies [45f4392]
+- Updated dependencies [0f37059]
+- Updated dependencies [2b2f16a]
+- Updated dependencies [47f4815]
+- Updated dependencies [9099554]
+- Updated dependencies [45efc0d]
+- Updated dependencies [4c8f116]
+- Updated dependencies [25afdd9]
+- Updated dependencies [2b2f16a]
+- Updated dependencies [afb001d]
+- Updated dependencies [374e083]
+- Updated dependencies [99e743c]
+- Updated dependencies [0a31d08]
+- Updated dependencies [32fe211]
+- Updated dependencies [fcc4ef9]
+- Updated dependencies [ed73de0]
+- Updated dependencies [20679c8]
+- Updated dependencies [253a82c]
+- Updated dependencies [1413dfd]
+- Updated dependencies [434e8ad]
+- Updated dependencies [d224253]
+- Updated dependencies [374785f]
+- Updated dependencies [c8ff07c]
+- Updated dependencies [111e811]
+- Updated dependencies [4536acf]
+- Updated dependencies [374785f]
+- Updated dependencies [4536acf]
+- Updated dependencies [14a905d]
+- Updated dependencies [9632069]
+- Updated dependencies [202a842]
+- Updated dependencies [5f94a1f]
+  - @kujam/core@0.2.0
