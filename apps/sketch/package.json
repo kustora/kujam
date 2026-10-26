@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@kujam/example-hocuspocus-server": "workspace:*",
-    "better-sqlite3": "^12.6.2"
+    "better-sqlite3": "^13.0.3"
   },
   "devDependencies": {
     "@hocuspocus/provider": "^4.7.1",
