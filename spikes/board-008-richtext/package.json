@@ -23,7 +23,7 @@
     "prosemirror-model": "^1.25.12",
     "prosemirror-schema-list": "^1.5.1",
     "prosemirror-state": "^1.4.4",
-    "prosemirror-view": "^1.42.6",
+    "prosemirror-view": "^1.42.7",
     "quill": "^2.0.3",
     "quill-delta": "^5.1.0",
     "y-quill": "^1.0.0",
