@@ -38,6 +38,6 @@
     "@kujam/core": "workspace:*"
   },
   "devDependencies": {
-    "fake-indexeddb": "^6.2.6"
+    "fake-indexeddb": "^6.2.7"
   }
 }
