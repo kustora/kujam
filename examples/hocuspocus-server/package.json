@@ -23,14 +23,14 @@
     "clean": "rm -rf dist *.tsbuildinfo"
   },
   "dependencies": {
-    "@hocuspocus/server": "^4.7.1",
+    "@hocuspocus/server": "^4.8.0",
     "@kujam/core": "workspace:*",
     "@kujam/sync-yjs": "workspace:*",
     "better-sqlite3": "^12.6.2",
     "yjs": "^13.6.24"
   },
   "devDependencies": {
-    "@hocuspocus/provider": "^4.7.1",
+    "@hocuspocus/provider": "^4.8.0",
     "@types/better-sqlite3": "^7.6.12",
     "@types/node": "^22.13.5",
     "@types/ws": "^8.5.14",
